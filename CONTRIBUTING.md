@@ -54,7 +54,10 @@ Every PR runs these as separate jobs, and all of them are required status checks
 Every required job runs on the Node version in `.nvmrc`, which is the `engines` floor.
 
 CodeQL (`Analyze (javascript-typescript)`) and `gitleaks` run as well. A separate, non-required
-`node-latest` workflow tests Node 24, including installation of the packed package.
+`node-latest` workflow tests Node 24, including installation of the packed package. The same
+workflow's `Platform smoke` jobs run `npm ci`, build, `check:exports` and `npm test` on
+`windows-latest` and `macos-latest` on the `.nvmrc` floor; they are not required, and their names
+must not match a required check.
 `check:install` uses temporary consumer projects and installs lockfile-pinned TypeScript, Node
 types and `isolated-vm`; it needs registry access and the native addon build prerequisites. The job names are a contract with the branch ruleset:
 renaming one means updating the ruleset too.

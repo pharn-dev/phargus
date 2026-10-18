@@ -101,6 +101,11 @@ All notable changes to Phargus are recorded here. The format follows
   Release notes are that version's section of this file. `NPM_PUBLISH_ENABLED` still has to be
   `true` for the publish and release jobs to run. Checks for the release notes, the version files
   and the workflow run under `npm test`.
+- CI: the non-required `node-latest` workflow now also runs `Platform smoke` jobs on
+  `windows-latest` and `macos-latest` (review finding F21). On the `.nvmrc` Node floor they run
+  `npm ci`, build, `check:exports` and `npm test`, so platform-specific code paths (plugin child
+  script paths, the symbolizer worker, process groups) get some CI coverage. The required checks
+  still run on Linux only.
 
 ## [0.1.0] - 2026-10-12
 
