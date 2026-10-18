@@ -239,6 +239,35 @@ ignored without a warning. An invalid value disables the agent with one
 
 [`FEATURES.md`](./FEATURES.md) lists the full scope with the status of each item.
 
+### OpenTelemetry metrics
+
+`createOtlpMetricsExporter` (or `toOtlpMetrics`) turns each collector window into one data point
+per metric, as integer `asInt` values. Gauges are stamped at the window end. Sums are delta and
+monotonic, and their interval is the window.
+
+| Metric                             | Type  | Unit           | Window field              |
+| ---------------------------------- | ----- | -------------- | ------------------------- |
+| `phargus.event_loop.lag.max`       | gauge | `ns`           | `eventLoop.max`           |
+| `phargus.event_loop.lag.p99`       | gauge | `ns`           | `eventLoop.p99`           |
+| `phargus.event_loop.lag.mean`      | gauge | `ns`           | `eventLoop.mean`          |
+| `phargus.memory.heap_used.last`    | gauge | `By`           | `memory.heapUsedLast`     |
+| `phargus.memory.heap_used.max`     | gauge | `By`           | `memory.heapUsedMax`      |
+| `phargus.memory.rss.last`          | gauge | `By`           | `memory.rssLast`          |
+| `phargus.memory.rss.max`           | gauge | `By`           | `memory.rssMax`           |
+| `phargus.gc.pause.max`             | gauge | `ns`           | `gc.maxPause`             |
+| `phargus.backpressure.stall.max`   | gauge | `ns`           | `backpressure.maxStall`   |
+| `phargus.gc.count`                 | sum   | `{collection}` | `gc.count`                |
+| `phargus.gc.pause.total`           | sum   | `ns`           | `gc.totalPause`           |
+| `phargus.backpressure.events`      | sum   | `{event}`      | `backpressure.events`     |
+| `phargus.backpressure.stall.total` | sum   | `ns`           | `backpressure.totalStall` |
+| `phargus.window.samples`           | sum   | `{sample}`     | `count`                   |
+| `phargus.window.late_samples`      | sum   | `{sample}`     | `late`                    |
+
+The resource carries `service.name` (option `serviceName`, default `phargus`),
+`service.instance.id` (option `serviceInstanceId`, default a random UUID generated once per
+process), `host.name` and `process.pid`, so several instances of one service stay separate series.
+The trace exporter's resource still carries `service.name` only.
+
 ---
 
 ## How it fits together
