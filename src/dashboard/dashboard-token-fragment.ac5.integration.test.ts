@@ -72,7 +72,7 @@ function send(
 
 /** Every <script> element of the HTML: its start tag's attributes and its inline content. */
 function scriptElements(html: string): { attributes: string; content: string }[] {
-  return Array.from(html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi), (match) => ({
+  return Array.from(html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi), (match) => ({
     attributes: match[1] ?? '',
     content: match[2] ?? '',
   }));
