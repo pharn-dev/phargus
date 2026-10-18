@@ -30,18 +30,26 @@ let server: Server | undefined;
 let api: HttpTracingApi | undefined;
 
 async function loadApi(): Promise<HttpTracingApi> {
-  const mod = (await import('./index.js')) as unknown as Partial<HttpTracingApi>;
+  const index = (await import('./index.js')) as unknown as Partial<HttpTracingApi>;
+  const tracing = (await import('./http-tracing.js')) as unknown as Partial<HttpTracingApi>;
+  if (typeof index.currentTraceId !== 'function') {
+    throw new Error('currentTraceId is not exported from src/agent/index.ts');
+  }
   if (
-    typeof mod.currentTraceId !== 'function' ||
-    typeof mod.enable !== 'function' ||
-    typeof mod.disable !== 'function' ||
-    typeof mod.drainSpans !== 'function'
+    typeof tracing.enable !== 'function' ||
+    typeof tracing.disable !== 'function' ||
+    typeof tracing.drainSpans !== 'function'
   ) {
     throw new Error(
-      'currentTraceId / enable / disable / drainSpans are not exported from src/agent/index.ts',
+      'enable / disable / drainSpans are not exported from src/agent/http-tracing.ts',
     );
   }
-  return mod as HttpTracingApi;
+  return {
+    currentTraceId: index.currentTraceId,
+    enable: tracing.enable,
+    disable: tracing.disable,
+    drainSpans: tracing.drainSpans,
+  };
 }
 
 function send(port: number, method: string, requestPath: string): Promise<Sent> {

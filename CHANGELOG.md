@@ -58,6 +58,10 @@ All notable changes to Phargus are recorded here. The format follows
   `createOtlpMetricsExporter` and `toOtlpMetrics` overrides it, and an empty or non-string value
   throws a `TypeError`. The trace exporter is unchanged.
 
+- `docs/API.md`, a reference of every supported export per subpath. `npm run check:exports` now
+  also compares each subpath's runtime export names with an exact expected list, through `import`
+  and `require`, and fails on a name added or missing.
+
 ### Fixed
 
 - `summarizeHeapSnapshot` and `diffHeapSnapshots` (`@pharn-dev/phargus/analyzer`) no longer time
@@ -138,6 +142,20 @@ All notable changes to Phargus are recorded here. The format follows
   directory, the packed bin's execute bit and the release-workflow check are skipped;
   `docs/LIMITS.md` records these limits. The idle event loop tests now bound p50 by the sampler's
   resolution instead of 5 ms, because Windows timers leave an idle loop at about 5 ms.
+
+### Removed
+
+- The public entry points of `@pharn-dev/phargus/agent`, `/collector`, `/dashboard` and
+  `/plugin-runner` no longer export internals and scaffold placeholders (review findings F18,
+  F19). This is **breaking** for 0.x consumers that imported them. What is left is the list in
+  [`docs/API.md`](./docs/API.md). Removed:
+  - `agent`: `encodeNdjsonLine`, `createSpanExport`, `SpanExport`, `enable`, `disable`,
+    `drainSpans`, `DEFAULT_SPAN_BUFFER_SIZE`, `HttpTracingOptions`, `SpanDrain`, `toSpanRecord`,
+    `isSpanRecord`, `PhargusAgentPlaceholder`
+  - `collector`: `createWindowAggregator`, `WindowAggregatorOptions`, `createSpanRouter`,
+    `parseWindowLine`, `serializeWindow`, `CollectorPlaceholder`
+  - `dashboard`: `DashboardPlaceholder`
+  - `plugin-runner`: `PluginRunnerPlaceholder`
 
 ## [0.1.0] - 2026-10-12
 

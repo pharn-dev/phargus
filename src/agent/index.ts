@@ -1,6 +1,3 @@
-/** Scaffold placeholder, still imported by the collector. */
-export type PhargusAgentPlaceholder = void;
-
 export { createEventLoopSampler } from './event-loop-sampler.js';
 export type {
   EventLoopSample,
@@ -32,7 +29,6 @@ export type {
 } from './backpressure-probe.js';
 export { createSamplerController } from './sampler-controller.js';
 export type { AgentSample, SamplerController } from './sampler-controller.js';
-export { encodeNdjsonLine } from './ndjson-encoder.js';
 export { createNdjsonExporter } from './ndjson-exporter.js';
 export type { NdjsonExporter, NdjsonExporterOptions } from './ndjson-exporter.js';
 export { loadAgentConfig } from './config.js';
@@ -45,10 +41,6 @@ export { isPermissionModelEnabled, checkPermission, assertPermission } from './p
 export type { PermissionCheck, PermissionScope } from './permission.js';
 export { PhargusPermissionError } from './permission-error.js';
 export { currentTraceId, runWithTrace } from './context.js';
-export { enable, disable, drainSpans, DEFAULT_SPAN_BUFFER_SIZE } from './http-tracing.js';
-export type { HttpTracingOptions } from './http-tracing.js';
-export type { TraceSpan, SpanDrain } from './span-buffer.js';
-export { toSpanRecord, isSpanRecord, SPAN_RECORD_TYPE } from './span-record.js';
+export type { TraceSpan } from './span-buffer.js';
+export { SPAN_RECORD_TYPE } from './span-record.js';
 export type { SpanRecord, AgentLossCounters, AgentSampleLine } from './span-record.js';
-export { createSpanExport } from './span-export.js';
-export type { SpanExport } from './span-export.js';

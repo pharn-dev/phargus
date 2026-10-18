@@ -1,5 +1,5 @@
 import { Transform } from 'node:stream';
-import { isSpanRecord } from '../agent/index.js';
+import { isSpanRecord } from '../agent/span-record.js';
 
 /** Why a record was skipped: not agent data at all, or agent-shaped but unusable. */
 export type IgnoredReason = 'foreign' | 'malformed';

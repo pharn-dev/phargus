@@ -1,5 +1,5 @@
 import { Transform } from 'node:stream';
-import { isSpanRecord } from '../agent/index.js';
+import { isSpanRecord } from '../agent/span-record.js';
 import type { SpanRecord } from '../agent/index.js';
 
 /** Divert span records to `onSpan`; forward every other chunk unchanged. */

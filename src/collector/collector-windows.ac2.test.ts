@@ -34,10 +34,10 @@ type EmittedWindow = { start: number; count: number; late: number };
 
 describe('collector windows — AC-2', () => {
   it('AC-2: late samples are counted on the open window and dropped; a closed window is never re-opened or re-emitted', async () => {
-    const collectorModule = (await import('./index.js')) as unknown as {
+    const aggregatorModule = (await import('./window-aggregator.js')) as unknown as {
       createWindowAggregator: (options: { windowMs: number }) => Transform;
     };
-    const aggregator = collectorModule.createWindowAggregator({ windowMs: 1000 });
+    const aggregator = aggregatorModule.createWindowAggregator({ windowMs: 1000 });
 
     const windows: EmittedWindow[] = [];
     aggregator.on('data', (window: EmittedWindow) => {

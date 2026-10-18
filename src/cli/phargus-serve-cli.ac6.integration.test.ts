@@ -414,7 +414,7 @@ const BASE_MS = 1_700_000_000_000;
 
 /** Agent sample lines spanning three 1000 ms windows, encoded the way the agent writes them. */
 async function captureContent(): Promise<string> {
-  const { encodeNdjsonLine } = await import('../agent/index.js');
+  const { encodeNdjsonLine } = await import('../agent/ndjson-encoder.js');
   return [
     makeSample(BASE_MS + 100, 40),
     makeSample(BASE_MS + 700, 60),
