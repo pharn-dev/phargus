@@ -9,6 +9,10 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Security
 
+- Behavior change: `symbolizeStackFrames` now confines reads to the working directory when `roots`
+  is left out. Frames whose built file or source map lies outside the working directory are no
+  longer read; they come back unchanged unless you pass `roots` naming the directories to read
+  from, or `roots: null` for the old unconfined behavior.
 - Dashboard login no longer puts the token in a request line. Open `/login#token=<token>`: the
   token is in the URL fragment, which the browser never sends; the public login page removes it
   from the address bar and history, then posts it as JSON to the new `POST /session` (4096-byte

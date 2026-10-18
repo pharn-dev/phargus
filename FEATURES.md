@@ -54,7 +54,7 @@ Status legend:
 - ✅ Allocation sampling profiler capture (`sampleAllocations`, library API).
 - 🟡 Deoptimization detection: a bounded parser for `node --trace-deopt` output
   (`createDeoptParser`). Nothing in Phargus starts or captures that output; you feed the parser lines.
-- ✅ Stack-trace symbolization in a Worker Thread, with optional directory confinement (`roots`).
+- ✅ Stack-trace symbolization in a Worker Thread, with directory confinement (`roots`; default the working directory, `roots: null` to turn it off).
 
 ## 4. Data pipeline & export
 

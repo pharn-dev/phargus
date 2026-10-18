@@ -14,7 +14,7 @@ type SymbolizedFrame = StackFrame & {
 type SymbolizeModule = {
   symbolizeStackFrames: (
     frames: readonly StackFrame[],
-    options?: { timeoutMs?: number },
+    options?: { timeoutMs?: number; roots?: readonly string[] },
   ) => Promise<SymbolizedFrame[]>;
   MalformedSourceMapError: abstract new (...args: never[]) => Error;
 };
@@ -97,7 +97,10 @@ describe('analyzer stack symbolization', () => {
       const goodFrame: StackFrame = { url: pathToFileURL(goodFile).href, line: 2, column: 1 };
 
       const mod = (await import('./index.js')) as unknown as SymbolizeModule;
-      const result = await mod.symbolizeStackFrames([badFrame, goodFrame], { timeoutMs: 60_000 });
+      const result = await mod.symbolizeStackFrames([badFrame, goodFrame], {
+        timeoutMs: 60_000,
+        roots: [dir],
+      });
 
       expect(result).toHaveLength(2);
 

@@ -1,0 +1,82 @@
+{
+  "schema": "ac-tests-lock/5",
+  "feature": "symbolizer-default-roots",
+  "mode": "test-first",
+  "spec": {
+    "spec_id": "symbolizer-default-roots",
+    "spec_content_hash": "476bfd89889fa33979f3d7ad9a069ce50a56937e737a40537e07107eb75a9fb3"
+  },
+  "mapping": {
+    "path": "pharn/features/symbolizer-default-roots/AC-TESTS.md",
+    "sha256": "bdf2825159f218718478ae4da6bbfa47a0d207ee0b64c919fb3b78aa73070800"
+  },
+  "files": [
+    {
+      "path": "src/analyzer/symbolizer-default-roots.ac1.integration.test.ts",
+      "sha256": "bac35b49a89a4e24cdac2821ccc24fdc679f462529134037c008536efdd9179f"
+    },
+    {
+      "path": "src/analyzer/symbolizer-default-roots.ac2.integration.test.ts",
+      "sha256": "cabe0144255b3515dd03716c40641ae437519e4916ce3ef8caafa27a3e38b5a2"
+    },
+    {
+      "path": "src/analyzer/symbolizer-default-roots.ac3.integration.test.ts",
+      "sha256": "ad50836f2f48eef140d7c408b5c94673b54e3e32350cd1407b3900847210899d"
+    }
+  ],
+  "bootstrap": null,
+  "red_run": {
+    "stamp_sha256": "385a2d224ef9c90c3e4c9460fc57320a46ed44b402908bfd9289156a092c2137",
+    "files_sha256": "754578130b67e1c7802d52eb2ccce3dfa4e149e22f37adf07fb67c6c57a555d8",
+    "gates": [
+      {
+        "gate": "test",
+        "results_sha256": "ad21bb663c72bd2d828897717768d0be8fc02d5972fa9787b9f5bdf2bae66ff0"
+      }
+    ],
+    "acs": [
+      {
+        "id": "AC-1",
+        "tests": [
+          "src/analyzer/symbolizer-default-roots.ac1.integration.test.ts::symbolizer default roots: confined to the working directory when roots is left out › AC-1: leaves frames outside the working directory unchanged and maps a frame inside it, with no roots option"
+        ]
+      },
+      {
+        "id": "AC-2",
+        "tests": [
+          "src/analyzer/symbolizer-default-roots.ac2.integration.test.ts::symbolizer default roots: a source map outside the working directory is not read › AC-2: leaves a frame unchanged when its built file is inside the working directory but its sourceMappingURL names a map outside, with no roots option"
+        ]
+      },
+      {
+        "id": "AC-3",
+        "tests": [
+          "src/analyzer/symbolizer-default-roots.ac3.integration.test.ts::symbolizer default roots: roots: null opts into unconfined reads › AC-3: maps a frame outside the working directory and reports a malformed map there, with roots: null"
+        ]
+      }
+    ]
+  },
+  "test_infra": {
+    "levels": [
+      "integration"
+    ],
+    "gates": [
+      {
+        "id": "test",
+        "script": "vitest run",
+        "pre": null,
+        "post": null,
+        "results": "vitest-json"
+      }
+    ],
+    "chained": [],
+    "configs": [
+      {
+        "path": "vitest.config.mts",
+        "sha256": "ae812b81b31f5320f8486226aeef87e3767e7851772d1a845cdeb5b881a17421"
+      }
+    ],
+    "script_files": [],
+    "jest": null,
+    "exclude": []
+  }
+}
