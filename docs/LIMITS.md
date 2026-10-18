@@ -14,19 +14,19 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 - **Tracing is where the per-request cost is.** Each traced request runs inside an
   `AsyncLocalStorage` context and keeps a small record until its response finishes. The samplers
   and the backpressure probe add a fixed cost per interval and a few nanoseconds per stream write.
-- **Tracing overhead is not negligible yet (unresolved).** A stable full run of
-  `bench/overhead.mjs` on Node 22.18.0 (Apple M2, rps CV at most 3.0%, 2026-10-18) measured
-  `tracing` against `none` at +33% CPU per request on `trivial`, +48% on `promise`, and −16% and
-  −12% throughput on the saturated `cpu` and `stream` workloads; samplers alone stayed within about
-  1%. Cutting trace and span ids from a pooled CSPRNG buffer roughly halved the per-request CPU
-  in a later run (`promise` +29%, `cpu` −7% throughput), but that run had one disturbed round, and
-  its repeat on the same host was noisier, so the after numbers are indicative, not a verdict.
-  Memory did not improve: under about 50 000 requests/s, RSS stays 17–19 MiB (+23–26%) higher on
-  `trivial` and 35–37 MiB (+47–49%) on `promise`. That is not a leak. The 1024-span drop-oldest buffer keeps
-  recent spans alive long enough to survive young-generation collections, so V8 grows its young
-  generation to the maximum; a 16-span buffer brings RSS back to what `AsyncLocalStorage` alone
-  costs. Changing the buffer's size or drop policy trades away retained spans, so it is left as an
-  open decision. No overhead budget is defined yet.
+- **What tracing costs, measured.** Full `bench/overhead.mjs` runs on Node 22.18.0 GitHub runners
+  (4 vCPU, rps CV under 5% in 19 of 20 cells, 2026-10-18): `tracing` against `none` costs about
+  10–13% more CPU per request and about 10% throughput when the server is CPU-bound (`cpu`,
+  `stream`). Samplers alone stay within about 2%. On the same day's runs the tracer was cut from
+  20–40% more CPU per request (trace and span ids now come from a pooled CSPRNG buffer) and from
+  20–50% more RSS (buffered spans are now kept as bytes, so they no longer churn V8's old
+  generation). Most of the remaining CPU cost on Node 22 is `AsyncLocalStorage` (next item). No
+  overhead budget is defined yet; run the benchmark on your own workload.
+- **Memory: a few MiB at steady state.** The span buffer preallocates about 280 KiB for its 1024
+  spans. With tracing on, heap after GC is unchanged and RSS after a minute of load matches the
+  agent-off process within run-to-run noise. In short benchmark cells RSS can still read up to
+  about 25% higher on `promise`: V8 grows its young generation to the same maximum either way,
+  only sooner under tracing (see "Reading the tables" in [`bench/README.md`](../bench/README.md)).
 - **Node 22 makes tracing more expensive.** On Node 22, `AsyncLocalStorage` is built on
   `async_hooks` promise hooks, so once tracing is on every promise in the process pays for it, and
   promise-heavy handlers can lose a large share of their throughput. Node 22's
