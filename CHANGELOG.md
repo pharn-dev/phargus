@@ -29,6 +29,14 @@ All notable changes to Phargus are recorded here. The format follows
   IP or hostname instead of getting `421`. A bare name matches on any port; `host:port` matches
   exactly. An empty value, or one with whitespace or `/`, is a usage error (exit code 2). It does
   not lift the token requirement for a non-loopback `--host`.
+- Webhook alert sinks take an optional `headers` option, for example
+  `{ authorization: 'Bearer …' }`, sent with every request (review finding F23). It works on
+  `createWebhookSink` and on a `{ type: 'webhook' }` sink config. Headers are copied and checked
+  when the sink is created: a name must be an HTTP token, a value must be a string with no control
+  characters (tab aside) and nothing above U+00FF, and the same name twice in different case is
+  rejected. `content-type` is reserved for the sink's own `application/json`, so supplying it is a
+  `TypeError` rather than a silent override. `__proto__` is rejected too, because Node's `fetch`
+  drops it. Errors name the header, never its value.
 
 ### Fixed
 

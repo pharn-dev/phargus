@@ -11,6 +11,7 @@ export type SinkConfig =
       type: 'webhook';
       name?: string;
       url: string;
+      headers?: Record<string, string>;
       timeoutMs?: number;
       retries?: number;
       backoffMs?: number;
@@ -49,6 +50,7 @@ function build(config: SinkConfig, onError: SinkErrorHandler | undefined): Alert
       return createWebhookSink({
         ...common,
         url: config.url,
+        ...(config.headers !== undefined ? { headers: config.headers } : {}),
         ...(config.timeoutMs !== undefined ? { timeoutMs: config.timeoutMs } : {}),
         ...(config.retries !== undefined ? { retries: config.retries } : {}),
         ...(config.backoffMs !== undefined ? { backoffMs: config.backoffMs } : {}),

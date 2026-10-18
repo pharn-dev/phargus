@@ -102,7 +102,9 @@ Status legend:
 - ✅ Window-based alerts emitted from the pipeline.
 - ✅ Alert thresholds configurable per metric (`>` or `>=`, optionally for N consecutive windows).
 - ✅ Alert sinks: stdout / file / webhook. Webhook uses Node core `fetch` only, never follows
-  redirects, and has a bounded `close()`.
+  redirects, and has a bounded `close()`. Its optional `headers` (for example
+  `{ authorization: 'Bearer …' }`) go on every request; they are checked when the sink is created,
+  `content-type` is reserved, and header values never appear in an error.
 
 ## 9. Persistence
 
