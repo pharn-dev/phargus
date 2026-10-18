@@ -1,3 +1,10 @@
+import {
+  MAX_RESPONSE_BODY_BYTES,
+  createRequestSignal,
+  discardResponseBody,
+  isRedirect,
+} from '../collector/http-response.js';
+
 export type OtlpTarget = {
   url: string;
   /** Scheme, host and port only; the sole part of the URL ever put in an error message. */
@@ -5,65 +12,6 @@ export type OtlpTarget = {
   headers: Record<string, string>;
   timeoutMs: number;
 };
-
-/** Response body bytes read (and discarded) before the rest of the body is cancelled. */
-const MAX_RESPONSE_BODY_BYTES = 64 * 1024;
-
-/**
- * Consumes a response body without buffering it: reads and discards at most `maxBytes`, then
- * cancels the rest, so a large or endless body costs no memory and the connection is released.
- * Rejects if reading fails (for example when the request signal aborts mid-body).
- */
-async function discardResponseBody(response: Response, maxBytes: number): Promise<void> {
-  const body = response.body;
-  if (body === null) return;
-  const reader = body.getReader();
-  let read = 0;
-  try {
-    for (;;) {
-      const chunk = await reader.read();
-      if (chunk.done) return;
-      // fetch body chunks are Uint8Array; the platform typings declare the stream untyped, so
-      // anything else is treated as over the cap and cancels the body.
-      const value: unknown = chunk.value;
-      read += value instanceof Uint8Array ? value.byteLength : maxBytes + 1;
-      if (read > maxBytes) {
-        await reader.cancel();
-        return;
-      }
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-type RequestSignal = { readonly signal: AbortSignal; dispose(): void };
-
-/**
- * A per-request signal that aborts with a `TimeoutError` after `timeoutMs`, or as soon as
- * `parent` aborts. Call `dispose()` once the request (including its body) is done. Built by hand
- * rather than with `AbortSignal.any`, so a long-lived `parent` never accumulates dependents.
- */
-function createRequestSignal(timeoutMs: number, parent?: AbortSignal): RequestSignal {
-  const controller = new AbortController();
-  const timer = setTimeout(() => {
-    controller.abort(new DOMException('The operation was aborted due to timeout', 'TimeoutError'));
-  }, timeoutMs);
-  const onParentAbort = (): void => {
-    controller.abort(parent?.reason);
-  };
-  if (parent !== undefined) {
-    if (parent.aborted) onParentAbort();
-    else parent.addEventListener('abort', onParentAbort, { once: true });
-  }
-  return {
-    signal: controller.signal,
-    dispose(): void {
-      clearTimeout(timer);
-      parent?.removeEventListener('abort', onParentAbort);
-    },
-  };
-}
 
 /**
  * Sends one OTLP JSON body with a single POST. Never throws or rejects: it resolves `undefined`
@@ -88,7 +36,7 @@ export async function postOtlpJson(
     });
     await discardResponseBody(response, MAX_RESPONSE_BODY_BYTES);
     if (response.status >= 200 && response.status < 300) return undefined;
-    if (response.type === 'opaqueredirect' || (response.status >= 300 && response.status < 400)) {
+    if (isRedirect(response)) {
       return new Error(
         `OTLP export to ${target.origin} failed: redirect (status ${String(response.status)}) not followed`,
       );
