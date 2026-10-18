@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -55,6 +55,32 @@ describe('agent config — unknown PHARGUS_* variables (F-09)', () => {
     );
     expect(config).toEqual(defaultAgentConfig);
     expect(warnings).toEqual(['ignoring unknown environment variable PHARGUS_FOO']);
+  });
+
+  it('treats PHARGUS_CONFIG as a known variable: no warning, no config key', async () => {
+    const cwd = await makeTempDir();
+    await writeFile(path.join(cwd, 'pinned.json'), JSON.stringify({ intervalMs: 250 }));
+    const warnings: string[] = [];
+    const config = await loadAgentConfig(
+      cwd,
+      { PHARGUS_CONFIG: 'pinned.json' },
+      { onWarning: (message) => warnings.push(message) },
+    );
+    expect(config).toEqual({ ...defaultAgentConfig, intervalMs: 250 });
+    expect(warnings).toEqual([]);
+  });
+
+  it('suggests PHARGUS_CONFIG for a likely typo of it', async () => {
+    const cwd = await makeTempDir();
+    const warnings: string[] = [];
+    await loadAgentConfig(
+      cwd,
+      { PHARGUS_CONFG: 'pinned.json' },
+      { onWarning: (message) => warnings.push(message) },
+    );
+    expect(warnings).toEqual([
+      'ignoring unknown environment variable PHARGUS_CONFG (did you mean PHARGUS_CONFIG?)',
+    ]);
   });
 
   it('still fails on an invalid value for a known variable', async () => {

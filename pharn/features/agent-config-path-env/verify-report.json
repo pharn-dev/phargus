@@ -1,0 +1,111 @@
+{
+  "feature": "agent-config-path-env",
+  "gates": {
+    "build": 0,
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "reconcile": 0,
+    "test": 0,
+    "typecheck": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "cb7d6fc7e0a71442be4b9bc7bcd7d54a8b85dea6a9c279b93b3c81321f7ac338",
+    "source": "discover",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/2+sha256",
+      "final": "dffef0e91c41d9f47361e1878f1b90eef58ae23c18601071e90c1d4fe9ac0f1c"
+    }
+  },
+  "ac_gate": {
+    "mode": "test-first",
+    "verdict": "PASS",
+    "reason": null,
+    "evidence": [],
+    "acs": [
+      {
+        "id": "AC-1",
+        "level": "integration",
+        "tests": [
+          "src/agent/config-path-env.ac1.integration.test.ts::agent config path env — AC-1 › AC-1: PHARGUS_CONFIG pins a .json file whose values win over the cwd file, with a relative output resolved against the cwd, no PHARGUS_CONFIG key and no warning"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-2",
+        "level": "integration",
+        "tests": [
+          "src/agent/config-path-env.ac2.integration.test.ts::agent config path env — AC-2 › AC-2: PHARGUS_CONFIG pins a .js file and resolves even though the cwd holds both phargus.config.json and phargus.config.js"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-3",
+        "level": "integration",
+        "tests": [
+          "src/agent/config-path-env.ac3.integration.test.ts::agent config path env — AC-3 › AC-3: a PHARGUS_CONFIG path that does not exist rejects with a PhargusConfigError naming PHARGUS_CONFIG",
+          "src/agent/config-path-env.ac3.integration.test.ts::agent config path env — AC-3 › AC-3: a PHARGUS_CONFIG path that is a directory (dir.json) rejects with a PhargusConfigError naming PHARGUS_CONFIG",
+          "src/agent/config-path-env.ac3.integration.test.ts::agent config path env — AC-3 › AC-3: a PHARGUS_CONFIG path with an unsupported extension (settings.yaml) rejects with a PhargusConfigError naming PHARGUS_CONFIG",
+          "src/agent/config-path-env.ac3.integration.test.ts::agent config path env — AC-3 › AC-3: an empty PHARGUS_CONFIG rejects with a PhargusConfigError naming PHARGUS_CONFIG"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      }
+    ],
+    "unmapped_anomalies": [],
+    "note": "an AC is delivered = a locked, once-red test titled AC-<n>:, in a file mapped to AC-<n>, passed on this head run. PHARN does not judge whether that test fully captures the AC's intent."
+  },
+  "completeness": {
+    "plan": "pharn/features/agent-config-path-env/PLAN.md",
+    "repoDir": ".",
+    "declared": [
+      "src/agent/config-env.ts",
+      "src/agent/config-file.ts",
+      "src/agent/config.ts",
+      "src/agent/config-env.unknown.test.ts",
+      "docs/THREAT-MODEL.md",
+      "docs/PERMISSIONS.md",
+      "README.md",
+      "FEATURES.md",
+      "CHANGELOG.md"
+    ],
+    "skipped": [],
+    "missing": [],
+    "complete": true,
+    "verdict": "complete"
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  },
+  "gate_reuse": {
+    "reused": []
+  },
+  "head_install": {
+    "state": "clean",
+    "why": null,
+    "family": "npm",
+    "lockfile": "package-lock.json",
+    "counts": {
+      "changed": 0,
+      "missing": 0,
+      "extraneous": 0,
+      "missing_unchecked": 24
+    }
+  },
+  "reconcile_detail": {
+    "state": "parsed",
+    "exit": 0,
+    "verdict": "CLEAN",
+    "escapes": [],
+    "escapes_total": 0,
+    "merged_count": 0
+  }
+}
