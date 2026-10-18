@@ -47,6 +47,29 @@ export function newSpanId(): string {
 }
 
 /**
+ * Write a fresh span id as its 8 raw bytes at `target[offset]`, never all zeros: the same id
+ * `newSpanId()` would make, without creating its hex string.
+ */
+export function writeSpanId(target: Uint8Array, offset: number): void {
+  for (;;) {
+    if (poolOffset + 8 > POOL_BYTES) {
+      randomFillSync(pool);
+      poolOffset = 0;
+    }
+    let nonZero = 0;
+    for (let i = 0; i < 8; i += 1) {
+      const byte = pool[poolOffset + i] ?? 0;
+      target[offset + i] = byte;
+      nonZero |= byte;
+    }
+    poolOffset += 8;
+    if (nonZero !== 0) {
+      return;
+    }
+  }
+}
+
+/**
  * Extract the trace id from a W3C `traceparent` header value. Returns the lowercased
  * trace id, or undefined when the value is absent, duplicated, malformed, or carries an
  * all-zero trace-id or parent-id.
