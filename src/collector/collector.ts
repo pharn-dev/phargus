@@ -42,7 +42,7 @@ export type WindowPersistence = {
   readonly bytes: number;
   /** Windows dropped from a full persistence queue (integer, saturating). */
   readonly dropped: number;
-  /** Windows whose append to the file failed (integer, saturating). */
+  /** Windows whose append failed, or that arrived after `close()` (integer, saturating). */
   readonly failed: number;
 };
 
@@ -222,8 +222,9 @@ export function createCollector(options: CollectorOptions): Collector {
     },
     async close(): Promise<void> {
       await dispatcher.close();
-      // Queued appends finish first, so no window is lost to the latch below.
-      await queue?.drained();
+      // Stops accepting windows, then lets the queued appends finish, so no queued window is lost
+      // to the latch below and a still-running consume() cannot keep the drain open.
+      await queue?.close();
       // Latches the store: a consume() still running cannot reopen the file after close().
       await store?.close();
     },

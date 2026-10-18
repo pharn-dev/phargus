@@ -13,17 +13,23 @@ export type PersistQueueOptions = {
 export type PersistQueue = {
   /** Windows dropped from a full queue (integer, saturating). */
   readonly dropped: number;
-  /** Windows whose append rejected (integer, saturating). */
+  /** Windows whose append rejected, or that were pushed after `close()` (integer, saturating). */
   readonly failed: number;
   /**
    * Queues one window and returns at once. When the queue is full the oldest queued window is
-   * dropped and counted. Never throws and never waits for the disk.
+   * dropped and counted. Never throws and never waits for the disk. After `close()` the window is
+   * not queued: it is counted in `failed` and reported to the failure listeners on a later tick.
    */
   push(window: AggregatedWindow): void;
   /** Registers a callback for each failed append; returns its unsubscribe. */
   onFailure(listener: (error: Error) => void): () => void;
   /** Resolves when nothing is queued and no append is in flight. Never rejects. */
   drained(): Promise<void>;
+  /**
+   * Stops accepting windows, then resolves once the windows already queued and the append in
+   * flight are done. Windows pushed later cannot hold it open. Never rejects; idempotent.
+   */
+  close(): Promise<void>;
 };
 
 function increment(value: number): number {
@@ -60,6 +66,7 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
   let dropped = 0;
   let failed = 0;
   let running = false;
+  let closed = false;
   let waiters: Array<() => void> = [];
   const listeners = new Set<(error: Error) => void>();
 
@@ -88,6 +95,15 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
     }
   }
 
+  function drained(): Promise<void> {
+    if (!running && size() === 0) {
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      waiters.push(resolve);
+    });
+  }
+
   async function drain(): Promise<void> {
     while (size() > 0) {
       const window = take();
@@ -113,6 +129,13 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
       return failed;
     },
     push(window: AggregatedWindow): void {
+      if (closed) {
+        // Deferred so the caller's synchronous step (a stream transform) is never re-entered.
+        queueMicrotask(() => {
+          fail(new Error('window persistence is closed; the window was not persisted'));
+        });
+        return;
+      }
       if (size() >= limit) {
         take();
         dropped = increment(dropped);
@@ -133,13 +156,10 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
         listeners.delete(listener);
       };
     },
-    drained(): Promise<void> {
-      if (!running && size() === 0) {
-        return Promise.resolve();
-      }
-      return new Promise<void>((resolve) => {
-        waiters.push(resolve);
-      });
+    drained,
+    close(): Promise<void> {
+      closed = true;
+      return drained();
     },
   };
 }

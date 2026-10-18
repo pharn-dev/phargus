@@ -85,7 +85,7 @@ with an alert rule.
    emission order, and alerts go to the sinks. A slow disk drops the oldest queued windows, counted
    in `collector.persistence.dropped`, instead of slowing the pipeline; a failed append is counted
    in `failed` and rejects `consume()`; `close()` and the end of `consume()` wait for the queue to
-   drain. Ring buffers bound windows, alerts and spans. The wiring is
+   drain, and `close()` stops accepting windows first. Ring buffers bound windows, alerts and spans. The wiring is
    `pipeline(input, createNdjsonDecoder(), (records) => collector.consume(records))`.
 4. **Delivery (dashboard).** `createDashboardServer({ collector, host, port })` subscribes to the
    collector and serves the UI and an SSE endpoint. Each SSE client has its own bounded queue; a
