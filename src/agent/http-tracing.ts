@@ -4,13 +4,13 @@ import { Server as HttpsServer } from 'node:https';
 import { runInTrace } from './context.js';
 import { createSpanBuffer } from './span-buffer.js';
 import type { SpanBuffer, SpanDrain } from './span-buffer.js';
-import { newSpanId, newTraceId, parseTraceparent } from './trace-id.js';
+import { newTraceId, parseTraceparent } from './trace-id.js';
 
 export const DEFAULT_SPAN_BUFFER_SIZE = 1024;
 
 export type HttpTracingOptions = { spanBufferSize?: number };
 
-type Inflight = { traceId: string; spanId: string; startTimeMs: number; startNs: bigint };
+type Inflight = { traceId: string; startTimeMs: number; startNs: bigint };
 
 const START_CHANNEL = 'http.server.request.start';
 const FINISH_CHANNEL = 'http.server.response.finish';
@@ -51,7 +51,6 @@ function onStart(message: unknown): void {
     const traceId = parseTraceparent(headerValue(request.headers)) ?? newTraceId();
     inflight.set(request, {
       traceId,
-      spanId: newSpanId(),
       startTimeMs: Date.now(),
       startNs: process.hrtime.bigint(),
     });
@@ -76,16 +75,15 @@ function onFinish(message: unknown): void {
     const elapsed = Number(process.hrtime.bigint() - entry.startNs);
     const method = typeof request.method === 'string' ? request.method : '';
     const path = queryAt === -1 ? url : url.slice(0, queryAt);
-    buffer.push({
-      traceId: entry.traceId,
-      spanId: entry.spanId,
-      name: `${method} ${path}`,
+    // The span id is made here, as bytes in the buffer: nothing reads it while the request runs.
+    buffer.record(
+      entry.traceId,
       method,
       path,
-      statusCode: typeof message.response.statusCode === 'number' ? message.response.statusCode : 0,
-      startTimeMs: entry.startTimeMs,
-      durationNs: Math.min(Math.max(elapsed, 0), Number.MAX_SAFE_INTEGER),
-    });
+      typeof message.response.statusCode === 'number' ? message.response.statusCode : 0,
+      entry.startTimeMs,
+      Math.min(Math.max(elapsed, 0), Number.MAX_SAFE_INTEGER),
+    );
   } catch (error) {
     warn(error);
   }

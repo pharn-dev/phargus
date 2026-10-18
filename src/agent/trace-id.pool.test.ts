@@ -81,6 +81,20 @@ describe('trace and span ids — pooled CSPRNG bytes', () => {
     expect(randomFillSync.mock.calls.length).toBe(2);
   });
 
+  it('writeSpanId writes 8 non-zero bytes in place, skipping an all-zero draw', async () => {
+    const { writeSpanId } = await load();
+    randomFillSync.mockImplementationOnce((target: FillTarget): FillTarget => {
+      bytesOf(target).fill(0);
+      return target;
+    });
+    const target = new Uint8Array(12).fill(0xee);
+    writeSpanId(target, 2);
+    expect(target.slice(2, 10).some((byte) => byte !== 0)).toBe(true);
+    // Bytes outside the 8-byte window are untouched.
+    expect([target[0], target[1], target[10], target[11]]).toEqual([0xee, 0xee, 0xee, 0xee]);
+    expect(randomFillSync.mock.calls.length).toBe(2);
+  });
+
   it('never reuses pool bytes: consecutive ids are disjoint slices of the random stream', async () => {
     const { newSpanId, newTraceId } = await load();
     let counter = 0;

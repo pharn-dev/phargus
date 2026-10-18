@@ -74,6 +74,13 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- Lower memory cost of HTTP tracing under load. The tracer's span buffer kept each of its 1024
+  most recent spans as an object plus four strings, and under load each lived long enough to be
+  promoted by V8 and die in the old generation (about 3× the agent-off promotion rate on a
+  promise-heavy server, and about 25 MiB more RSS after a minute). Spans are now stored as bytes
+  in preallocated slots, which take about 280 KiB for the default 1024 spans. Promotion and
+  steady-state RSS now match the agent-off run. What is buffered, dropped and exported is
+  unchanged.
 - Lower per-request CPU cost of HTTP tracing. Trace and span ids are now cut from a 4 KiB buffer
   of CSPRNG bytes refilled as it runs out, instead of one `randomBytes()` call (and Buffer) per
   id; a CPU profile of the overhead benchmark put those calls at about 16% of the busy time of a
