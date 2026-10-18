@@ -20,15 +20,19 @@ let server: Server | undefined;
 let api: HttpTracingApi | undefined;
 
 async function loadApi(): Promise<HttpTracingApi> {
-  const mod = (await import('./index.js')) as unknown as Partial<HttpTracingApi>;
-  if (
-    typeof mod.currentTraceId !== 'function' ||
-    typeof mod.enable !== 'function' ||
-    typeof mod.disable !== 'function'
-  ) {
-    throw new Error('currentTraceId / enable / disable are not exported from src/agent/index.ts');
+  const index = (await import('./index.js')) as unknown as Partial<HttpTracingApi>;
+  const tracing = (await import('./http-tracing.js')) as unknown as Partial<HttpTracingApi>;
+  if (typeof index.currentTraceId !== 'function') {
+    throw new Error('currentTraceId is not exported from src/agent/index.ts');
   }
-  return mod as HttpTracingApi;
+  if (typeof tracing.enable !== 'function' || typeof tracing.disable !== 'function') {
+    throw new Error('enable / disable are not exported from src/agent/http-tracing.ts');
+  }
+  return {
+    currentTraceId: index.currentTraceId,
+    enable: tracing.enable,
+    disable: tracing.disable,
+  };
 }
 
 function get(port: number, headers: OutgoingHttpHeaders = {}): Promise<string> {

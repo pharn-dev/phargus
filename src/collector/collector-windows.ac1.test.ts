@@ -70,10 +70,10 @@ function writeAndWait(stream: Transform, chunk: unknown): Promise<void> {
 
 describe('collector windows — AC-1', () => {
   it('AC-1: groups three samples into the aligned 1000 window, emits it on the 2500 sample, and emits the 2000 window on end, all integers', async () => {
-    const collectorModule = (await import('./index.js')) as unknown as {
+    const aggregatorModule = (await import('./window-aggregator.js')) as unknown as {
       createWindowAggregator: (options: { windowMs: number }) => Transform;
     };
-    const aggregator = collectorModule.createWindowAggregator({ windowMs: 1000 });
+    const aggregator = aggregatorModule.createWindowAggregator({ windowMs: 1000 });
 
     const windows: Array<Record<string, unknown>> = [];
     aggregator.on('data', (window: Record<string, unknown>) => {

@@ -325,6 +325,7 @@ the data flow and module boundaries.
 | ------------------------------------------------ | ------------------------------------------------- |
 | [`FEATURES.md`](./FEATURES.md)                   | Full feature scope and status                     |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md)           | Data flow and who may import what                 |
+| [`docs/API.md`](./docs/API.md)                   | Every supported export, per subpath               |
 | [`docs/PERMISSIONS.md`](./docs/PERMISSIONS.md)   | Node permission-model flags per module            |
 | [`docs/LIMITS.md`](./docs/LIMITS.md)             | Cost, overhead and known limits                   |
 | [`docs/THREAT-MODEL.md`](./docs/THREAT-MODEL.md) | What Phargus defends against and what it does not |

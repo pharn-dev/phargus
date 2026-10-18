@@ -1,0 +1,85 @@
+{
+  "schema": "ac-tests-lock/5",
+  "feature": "trim-public-api",
+  "mode": "test-first",
+  "spec": {
+    "spec_id": "trim-public-api",
+    "spec_content_hash": "a046bbb4474181efca54426a886dd3ea228ecd9b7e090a4c27a88c4954782732"
+  },
+  "mapping": {
+    "path": "pharn/features/trim-public-api/AC-TESTS.md",
+    "sha256": "29e28dd94de28dc6a1fbfc99f8ae9a89884ccaf170ca13d7bc48a42d4e743361"
+  },
+  "files": [
+    {
+      "path": "src/release/public-api-surface.ac1.integration.test.ts",
+      "sha256": "ef1900dd80000a9099309a3ed559e51d43f4fdc5fe179eab134648adcd145833"
+    },
+    {
+      "path": "src/release/public-api-surface.ac2.integration.test.ts",
+      "sha256": "93a85f57685d8e6920c3918171255e35ba0f51dabba33b151de603c25bd2f798"
+    },
+    {
+      "path": "src/release/public-api-surface.ac3.integration.test.ts",
+      "sha256": "40bb9f87edeec4d4b331a4f7ae0c527e5d4cd018cd793ec3600ff6b081892450"
+    }
+  ],
+  "bootstrap": null,
+  "red_run": {
+    "stamp_sha256": "e0e3f5bd2f24a05a2fa4d865f7f281d057f157096f248d679fb3544290c78af6",
+    "files_sha256": "2ff0a6ae0edca1db75d68a6cfd20ddb49f0611c3a79b10aee85a5cb87e0deb5a",
+    "gates": [
+      {
+        "gate": "test",
+        "results_sha256": "e71e9d42cdfb96e79319bb9f31e1899afd766315569f166dd5117c51cbbbf64f"
+      }
+    ],
+    "acs": [
+      {
+        "id": "AC-1",
+        "tests": [
+          "src/release/public-api-surface.ac1.integration.test.ts::the public API surface of the built package › AC-1: every subpath loads through import and require, exposes no removed runtime name, and keeps the supported ones",
+          "src/release/public-api-surface.ac1.integration.test.ts::the public API surface of the built package › AC-1: no subpath's declarations export a removed type, and the agent's keep the wire-format types"
+        ]
+      },
+      {
+        "id": "AC-2",
+        "tests": [
+          "src/release/public-api-surface.ac2.integration.test.ts::npm run check:exports › AC-2: passes on the built package and names added and missing runtime exports per subpath and format on a drifted copy"
+        ]
+      },
+      {
+        "id": "AC-3",
+        "tests": [
+          "src/release/public-api-surface.ac3.integration.test.ts::the public API documentation › AC-3: CHANGELOG [Unreleased] has a Removed subsection naming every removed name and calling it breaking",
+          "src/release/public-api-surface.ac3.integration.test.ts::the public API documentation › AC-3: docs/API.md has a section per subpath naming every runtime export and declared type, and says the rest is internal",
+          "src/release/public-api-surface.ac3.integration.test.ts::the public API documentation › AC-3: the README Documentation table links docs/API.md"
+        ]
+      }
+    ]
+  },
+  "test_infra": {
+    "levels": [
+      "integration"
+    ],
+    "gates": [
+      {
+        "id": "test",
+        "script": "vitest run",
+        "pre": null,
+        "post": null,
+        "results": "vitest-json"
+      }
+    ],
+    "chained": [],
+    "configs": [
+      {
+        "path": "vitest.config.mts",
+        "sha256": "ae812b81b31f5320f8486226aeef87e3767e7851772d1a845cdeb5b881a17421"
+      }
+    ],
+    "script_files": [],
+    "jest": null,
+    "exclude": []
+  }
+}

@@ -32,8 +32,11 @@ type TraceSpan = {
   durationNs: number;
 };
 
-type AgentModule = {
+type EncoderModule = {
   encodeNdjsonLine: (record: unknown) => string;
+};
+
+type SpanRecordModule = {
   toSpanRecord: (span: TraceSpan) => Record<string, unknown>;
 };
 
@@ -81,8 +84,11 @@ function chunked(bytes: Buffer, size: number): Buffer[] {
 describe('collector over mixed stdout — AC-3', () => {
   it('AC-3: pipeline(bytes, decoder, consume) over mixed stdout resolves; windows and spans equal a clean run, collector.ignored counts the pino lines, the decoder counts text, truncated and over-long lines', async () => {
     const collectorModule = (await import('./index.js')) as unknown as CollectorModule;
-    const agentModule = (await import('../agent/index.js')) as unknown as AgentModule;
-    const { encodeNdjsonLine, toSpanRecord } = agentModule;
+    const encoderModule = (await import('../agent/ndjson-encoder.js')) as unknown as EncoderModule;
+    const spanRecordModule =
+      (await import('../agent/span-record.js')) as unknown as SpanRecordModule;
+    const { encodeNdjsonLine } = encoderModule;
+    const { toSpanRecord } = spanRecordModule;
 
     const samples = [
       makeSample(100, 50),
