@@ -2,7 +2,11 @@
 export type PhargusAgentPlaceholder = void;
 
 export { createEventLoopSampler } from './event-loop-sampler.js';
-export type { EventLoopSample, EventLoopSampler } from './event-loop-sampler.js';
+export type {
+  EventLoopSample,
+  EventLoopSampler,
+  EventLoopSamplerOptions,
+} from './event-loop-sampler.js';
 export { createGcSampler } from './gc-sampler.js';
 export type { GcSample, GcSampler } from './gc-sampler.js';
 export { sampleMemory } from './memory-sampler.js';

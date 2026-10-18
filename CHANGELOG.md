@@ -67,6 +67,18 @@ All notable changes to Phargus are recorded here. The format follows
   rejecting `consume()`. Malformed agent records are skipped rather than thrown. The new
   `createNdjsonDecoder` export turns the byte stream into objects with bounded line memory and
   counts non-object (`invalid`) and over-long (`oversized`) lines.
+- Event loop figures no longer include the 10 ms timer interval (review finding F16). The
+  sampler's histogram records the whole interval on every tick, so an idle process reported a min
+  of about 10 ms and a p50 of about 11 ms, the dashboard showed that as lag, and any alert
+  threshold below about 12 ms always fired. `createEventLoopSampler` now passes an explicit
+  `resolution` to `monitorEventLoopDelay` and subtracts it from min, max, mean, p50 and p99,
+  clamped at 0 in integer nanoseconds, so the values are delay beyond the timer interval and an
+  idle loop reads close to 0. It takes an optional `{ resolution }` (whole milliseconds, default
+  10; anything else throws a `RangeError`), and the agent exports the `EventLoopSamplerOptions`
+  type. Behaviour change: every event loop value, and every window and OTLP metric built from it,
+  is about 10 ms lower. The bundled `phargus/event-loop-lag` rule (100 ms default) and the
+  example app's 50 ms alert are unchanged; a threshold you set close to 10 ms now fires only on
+  real delay.
 
 ### Changed
 
