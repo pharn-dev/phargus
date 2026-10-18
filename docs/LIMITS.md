@@ -50,7 +50,9 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   and records the whole interval on every tick, so the agent subtracts 10 ms from min, max, mean, p50
   and p99 and clamps at 0. An idle loop therefore reads close to 0, not exactly 0: the remainder is
   real timer and scheduling overhead. Delays shorter than the interval are not resolved, and the
-  subtracted amount is the configured interval, not a measured idle baseline.
+  subtracted amount is the configured interval, not a measured idle baseline. On Windows, an idle
+  loop reads a few milliseconds (about 5 ms on CI runners) rather than close to 0, because Windows
+  timers are coarser.
 - **Phargus cannot protect itself from the host.** Code running in the same process can read or alter
   Phargus's data. It is a diagnostic tool, not a tamper-evident audit log.
 
@@ -113,5 +115,15 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   any order, leaves `write` and `emit` working and restores the prototypes when the last one is
   disabled. Each copy still keeps its own samples, spans and trace context. Pick one format per
   process.
-- **Platform.** Phargus is developed and tested on Linux and macOS. Other platforms are not covered
-  by CI.
+- **Platform.** Phargus is developed on Linux and macOS. The required CI checks run on Linux; a
+  non-required smoke job runs the build, the exports check and the test suite on Windows and macOS.
+  The packed-package install check and the release-workflow check run on Linux only, and releases
+  are packed on Linux: a tarball packed on Windows has no execute bit on the `phargus` bin.
+- **No graceful shutdown from a signal on Windows.** On Windows, `process.kill()` with `SIGTERM` or
+  `SIGINT` ends the process without running its signal handlers. So `phargus serve` and
+  `examples/express-app` stop without closing the dashboard, flushing the collector or printing the
+  `counts:` line. Ctrl+C in a console window still delivers `SIGINT` and shuts down gracefully. The
+  tests for signal-driven shutdown are skipped on Windows.
+- **Windows does not apply POSIX directory modes.** A directory made read-only with `chmod` stays
+  writable on Windows, so the test that a heap snapshot into a non-writable directory is refused is
+  skipped there.

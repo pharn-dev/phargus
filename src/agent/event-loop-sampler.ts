@@ -28,7 +28,7 @@ export type EventLoopSamplerOptions = {
   resolution?: number;
 };
 
-const DEFAULT_RESOLUTION_MS = 10;
+export const DEFAULT_RESOLUTION_MS = 10;
 const NS_PER_MS = 1_000_000;
 
 function validateResolution(value: unknown): number {

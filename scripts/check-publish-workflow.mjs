@@ -316,7 +316,10 @@ function checkGateDecision() {
       continue;
     }
     const wantsZero = scenario.expect.status === 0;
-    if (wantsZero && result.status !== 0) fail(`${label}: expected exit 0, got ${result.status}`);
+    if (wantsZero && result.status !== 0) {
+      const said = `${result.stdout}\n${result.stderr}`.trim().replace(/\s*\n\s*/g, ' | ');
+      fail(`${label}: expected exit 0, got ${result.status}${said ? ` (output: ${said})` : ''}`);
+    }
     if (!wantsZero && result.status === 0) fail(`${label}: expected a non-zero exit, got 0`);
     if (gitCalls.length !== scenario.expect.calls) {
       fail(`${label}: expected ${scenario.expect.calls} git call(s), got ${gitCalls.length}`);

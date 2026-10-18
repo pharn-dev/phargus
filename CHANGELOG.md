@@ -108,6 +108,15 @@ All notable changes to Phargus are recorded here. The format follows
   Release notes are that version's section of this file. `NPM_PUBLISH_ENABLED` still has to be
   `true` for the publish and release jobs to run. Checks for the release notes, the version files
   and the workflow run under `npm test`.
+- CI: the non-required `node-latest` workflow now also runs `Platform smoke` jobs on
+  `windows-latest` and `macos-latest` (review finding F21). On the `.nvmrc` Node floor they run
+  `npm ci`, build, `check:exports` and `npm test`, so platform-specific code paths (plugin child
+  script paths, the symbolizer worker, process groups) get some CI coverage. The required checks
+  still run on Linux only. `.gitattributes` now checks text files out with LF on every platform.
+  On Windows, the tests for signal-driven graceful shutdown, a non-writable heap snapshot
+  directory, the packed bin's execute bit and the release-workflow check are skipped;
+  `docs/LIMITS.md` records these limits. The idle event loop tests now bound p50 by the sampler's
+  resolution instead of 5 ms, because Windows timers leave an idle loop at about 5 ms.
 
 ## [0.1.0] - 2026-10-12
 

@@ -2,6 +2,12 @@ name: node-latest
 
 # Not a required check: confirms the package still builds, tests and loads (ESM and CJS) on the
 # newest Node, while the required gates in ci.yml run on the Node floor from .nvmrc.
+#
+# The `platform-smoke` job runs the same checks on Windows and macOS on the Node floor, because
+# ci.yml runs on Linux only and some code paths are platform-specific (plugin child script paths,
+# the symbolizer worker, process groups in check:install). Its job names must never equal a
+# required check name in the `main` ruleset (Format check, Lint, Typecheck, Test, Build,
+# Action pins, ...), or a failure here would block every PR.
 
 on:
   pull_request:
@@ -43,3 +49,27 @@ jobs:
         env:
           TARBALL: ${{ steps.pack.outputs.tarball }}
         run: npm run check:install -- "$RUNNER_TEMP/pkg/$TARBALL"
+
+  platform-smoke:
+    name: Platform smoke (${{ matrix.os }}, node floor)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Check exports (ESM + CJS)
+        run: npm run check:exports
+      - name: Test
+        run: npm test

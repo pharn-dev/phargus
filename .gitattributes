@@ -1,3 +1,9 @@
+# Check out text files with LF line endings on every platform, Windows included. Tests pin
+# SHA-256 digests of text fixtures and parse workflow files line by line, so a CRLF checkout
+# would change what they read.
+* text=auto eol=lf
+*.gif binary
+
 # PHARN development tooling: the owner's build pipeline, not part of Phargus. Marked so GitHub leaves it
 # out of the language statistics and collapses it in pull request diffs. None of it is published:
 # package.json "files" ships dist/ only, and `npm run check:package` fails if anything else ships.
