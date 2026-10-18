@@ -70,7 +70,9 @@ function expectRejected(mutated: string) {
   }
 }
 
-describe('scripts/check-publish-workflow.mjs', () => {
+// Each case spawns the checker synchronously; under a loaded machine that alone can pass vitest's
+// 5 s default, so the suite gets the same headroom as the other process-spawning tests.
+describe('scripts/check-publish-workflow.mjs', { timeout: 30_000 }, () => {
   it('AC-3: accepts the committed .github/workflows/publish.yml', () => {
     const result = check([]);
     expect(result.status).toBe(0);

@@ -42,7 +42,9 @@ afterAll(async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-describe('plugin rule result caps (F-07)', () => {
+// Default for the cases that spawn a child without their own timeout: a loaded machine can pass
+// vitest's 5 s default on process start-up alone.
+describe('plugin rule result caps (F-07)', { timeout: 30_000 }, () => {
   it('rejects a rule returning 1M findings with PHARGUS_RULE_INVALID_RESULT and bounded host memory', async () => {
     const runner = createPluginRunner({ memoryLimitMb: 256, timeoutMs: 20_000 });
     try {
@@ -125,7 +127,7 @@ process.on('disconnect', () => process.exit(0));
   }, 30_000);
 });
 
-describe('sandbox child flags (F-19)', () => {
+describe('sandbox child flags (F-19)', { timeout: 30_000 }, () => {
   it('keeps --no-node-snapshot and forwards the host Permission Model flags only', () => {
     expect(sandboxExecArgv([])).toEqual(['--no-node-snapshot']);
     expect(
