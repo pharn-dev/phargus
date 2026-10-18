@@ -149,9 +149,16 @@ function buildDist(): void {
 async function packFreshTarball(destination: string): Promise<string> {
   await withBuildLock(() => {
     if (!distIsFresh()) buildDist();
+    // Under `npm test`, npm_execpath is npm's own CLI script: running it with this Node avoids
+    // resolving an `npm` shim, which on Windows is npm.cmd and needs a shell.
+    const npmCli = process.env['npm_execpath'];
+    const [command, prefix] =
+      npmCli !== undefined && /\.c?js$/.test(npmCli)
+        ? [process.execPath, [npmCli]]
+        : ['npm', [] as string[]];
     const result = spawnSync(
-      'npm',
-      ['pack', '--ignore-scripts', '--pack-destination', destination],
+      command,
+      [...prefix, 'pack', '--ignore-scripts', '--pack-destination', destination],
       {
         cwd: repoRoot,
         encoding: 'utf8',

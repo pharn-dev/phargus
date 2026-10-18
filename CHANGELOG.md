@@ -105,7 +105,9 @@ All notable changes to Phargus are recorded here. The format follows
   `windows-latest` and `macos-latest` (review finding F21). On the `.nvmrc` Node floor they run
   `npm ci`, build, `check:exports` and `npm test`, so platform-specific code paths (plugin child
   script paths, the symbolizer worker, process groups) get some CI coverage. The required checks
-  still run on Linux only.
+  still run on Linux only. `.gitattributes` now checks text files out with LF on every platform.
+  On Windows, the tests for signal-driven graceful shutdown and for a non-writable heap snapshot
+  directory are skipped; `docs/LIMITS.md` records both limits.
 
 ## [0.1.0] - 2026-10-12
 

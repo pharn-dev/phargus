@@ -109,5 +109,14 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   any order, leaves `write` and `emit` working and restores the prototypes when the last one is
   disabled. Each copy still keeps its own samples, spans and trace context. Pick one format per
   process.
-- **Platform.** Phargus is developed and tested on Linux and macOS. Other platforms are not covered
-  by CI.
+- **Platform.** Phargus is developed on Linux and macOS. The required CI checks run on Linux; a
+  non-required smoke job runs the build, the exports check and the test suite on Windows and macOS.
+  The packed-package install check runs on Linux only.
+- **No graceful shutdown from a signal on Windows.** On Windows, `process.kill()` with `SIGTERM` or
+  `SIGINT` ends the process without running its signal handlers. So `phargus serve` and
+  `examples/express-app` stop without closing the dashboard, flushing the collector or printing the
+  `counts:` line. Ctrl+C in a console window still delivers `SIGINT` and shuts down gracefully. The
+  tests for signal-driven shutdown are skipped on Windows.
+- **Windows does not apply POSIX directory modes.** A directory made read-only with `chmod` stays
+  writable on Windows, so the test that a heap snapshot into a non-writable directory is refused is
+  skipped there.

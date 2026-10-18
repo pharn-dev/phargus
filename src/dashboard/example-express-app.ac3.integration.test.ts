@@ -421,29 +421,35 @@ describe('examples/express-app: clean shutdown and dependency-free sources', () 
     await ensureFreshDist();
   }, 180_000);
 
-  it('AC-3: on SIGTERM the example exits with code 0 within a bounded time and its stderr has no agent-disabled line', async () => {
-    const run = startExample();
-    current = run;
-    const { appPort, dashboardPort } = await waitForPorts(run, STARTUP_TIMEOUT_MS);
+  // On Windows, process.kill() with SIGTERM terminates the process without running its signal
+  // handlers, so it cannot exit with code 0 (see docs/LIMITS.md).
+  it.skipIf(process.platform === 'win32')(
+    'AC-3: on SIGTERM the example exits with code 0 within a bounded time and its stderr has no agent-disabled line',
+    async () => {
+      const run = startExample();
+      current = run;
+      const { appPort, dashboardPort } = await waitForPorts(run, STARTUP_TIMEOUT_MS);
 
-    // Shut down a running example: an SSE client is connected and a request has been served.
-    const sse = await openSse(dashboardPort);
-    connections.push(sse);
-    expect(sse.statusCode, diagnostics(run)).toBe(200);
-    expect(await httpGet(appPort, '/fast'), diagnostics(run)).toBe(200);
+      // Shut down a running example: an SSE client is connected and a request has been served.
+      const sse = await openSse(dashboardPort);
+      connections.push(sse);
+      expect(sse.statusCode, diagnostics(run)).toBe(200);
+      expect(await httpGet(appPort, '/fast'), diagnostics(run)).toBe(200);
 
-    run.child.kill('SIGTERM');
-    const exit = await waitForExit(run, EXIT_TIMEOUT_MS);
+      run.child.kill('SIGTERM');
+      const exit = await waitForExit(run, EXIT_TIMEOUT_MS);
 
-    expect(
-      exit,
-      `the example did not exit within ${String(EXIT_TIMEOUT_MS)} ms\n${diagnostics(run)}`,
-    ).toBeDefined();
-    expect(exit?.error, diagnostics(run)).toBeUndefined();
-    expect(exit?.signal, diagnostics(run)).toBeNull();
-    expect(exit?.code, diagnostics(run)).toBe(0);
-    expect(run.stderr()).not.toContain('[phargus] agent disabled');
-  }, 90_000);
+      expect(
+        exit,
+        `the example did not exit within ${String(EXIT_TIMEOUT_MS)} ms\n${diagnostics(run)}`,
+      ).toBeDefined();
+      expect(exit?.error, diagnostics(run)).toBeUndefined();
+      expect(exit?.signal, diagnostics(run)).toBeNull();
+      expect(exit?.code, diagnostics(run)).toBe(0);
+      expect(run.stderr()).not.toContain('[phargus] agent disabled');
+    },
+    90_000,
+  );
 
   it('AC-3: the example imports Phargus only through bare @pharn-dev/phargus/<subpath> specifiers, never express, and its README documents build, run and Express', () => {
     const files = sourceFiles(exampleDir);

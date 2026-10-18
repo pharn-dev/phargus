@@ -63,18 +63,23 @@ describe('agent on-demand heap snapshot refusals — AC-3', () => {
     expect(snapshotFilesIn(parent), 'no .heapsnapshot file left behind').toEqual([]);
   }, 60_000);
 
-  it('AC-3: a non-writable directory rejects with an Error naming the directory and leaves no .heapsnapshot file', async () => {
-    const { takeHeapSnapshot } = await import('./index.js');
-    const dir = makeTempDir('readonly');
-    chmodSync(dir, 0o500);
+  // Windows ignores POSIX mode bits on directories, so chmod cannot make one non-writable there.
+  it.skipIf(process.platform === 'win32')(
+    'AC-3: a non-writable directory rejects with an Error naming the directory and leaves no .heapsnapshot file',
+    async () => {
+      const { takeHeapSnapshot } = await import('./index.js');
+      const dir = makeTempDir('readonly');
+      chmodSync(dir, 0o500);
 
-    const promise = callWithoutThrow(() => takeHeapSnapshot({ dir }));
-    const err = await rejectionOf(promise);
+      const promise = callWithoutThrow(() => takeHeapSnapshot({ dir }));
+      const err = await rejectionOf(promise);
 
-    expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).toContain(dir);
-    expect(snapshotFilesIn(dir), 'no .heapsnapshot file left behind').toEqual([]);
-  }, 60_000);
+      expect(err).toBeInstanceOf(Error);
+      expect((err as Error).message).toContain(dir);
+      expect(snapshotFilesIn(dir), 'no .heapsnapshot file left behind').toEqual([]);
+    },
+    60_000,
+  );
 
   it('AC-3: of two same-tick calls the first resolves with a snapshot and the second rejects as already in progress', async () => {
     const { takeHeapSnapshot } = await import('./index.js');

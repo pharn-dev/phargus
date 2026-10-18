@@ -326,7 +326,9 @@ afterAll(async () => {
 const SIGNALS: ReadonlyArray<NodeJS.Signals> = ['SIGTERM', 'SIGINT'];
 
 describe('phargus serve: graceful shutdown on a signal', () => {
-  it.each(SIGNALS)(
+  // On Windows, process.kill() with SIGTERM or SIGINT terminates the process without running its
+  // signal handlers, so there is no graceful shutdown to observe (see docs/LIMITS.md).
+  it.skipIf(process.platform === 'win32').each(SIGNALS)(
     'AC-7: on %s with stdin still open and an SSE client connected, serve exits 0 within 10 s, the SSE response ends and stderr reports the counts',
     async (signal) => {
       await ensureFreshDist();
