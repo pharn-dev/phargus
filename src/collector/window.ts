@@ -1,4 +1,5 @@
 import type { AgentSample } from '../agent/index.js';
+import { truncToNonNegativeInt } from '../agent/int.js';
 
 /** One closed aggregation window. Lag and stalls are nanoseconds, memory is bytes. All integers. */
 export type AggregatedWindow = {
@@ -32,18 +33,6 @@ export type WindowAccumulator = {
   bpMaxStall: number;
 };
 
-/** Truncate to an integer, clamp negatives and NaN to 0, cap at the largest safe integer. */
-function toNonNegativeInt(value: number): number {
-  if (Number.isNaN(value)) {
-    return 0;
-  }
-  const truncated = Math.trunc(value);
-  if (truncated < 0) {
-    return 0;
-  }
-  return truncated > Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : truncated;
-}
-
 function saturatingAdd(a: number, b: number): number {
   return a > Number.MAX_SAFE_INTEGER - b ? Number.MAX_SAFE_INTEGER : a + b;
 }
@@ -74,28 +63,28 @@ export function openWindow(start: number): WindowAccumulator {
 }
 
 export function addSample(acc: WindowAccumulator, sample: AgentSample): void {
-  const heapUsed = toNonNegativeInt(sample.memory.heapUsed);
-  const rss = toNonNegativeInt(sample.memory.rss);
+  const heapUsed = truncToNonNegativeInt(sample.memory.heapUsed);
+  const rss = truncToNonNegativeInt(sample.memory.rss);
   acc.count = saturatingAdd(acc.count, 1);
-  acc.eventLoopMax = Math.max(acc.eventLoopMax, toNonNegativeInt(sample.eventLoop.max));
-  acc.eventLoopP99Max = Math.max(acc.eventLoopP99Max, toNonNegativeInt(sample.eventLoop.p99));
+  acc.eventLoopMax = Math.max(acc.eventLoopMax, truncToNonNegativeInt(sample.eventLoop.max));
+  acc.eventLoopP99Max = Math.max(acc.eventLoopP99Max, truncToNonNegativeInt(sample.eventLoop.p99));
   acc.eventLoopMeanSum = saturatingAdd(
     acc.eventLoopMeanSum,
-    toNonNegativeInt(sample.eventLoop.mean),
+    truncToNonNegativeInt(sample.eventLoop.mean),
   );
   acc.heapUsedLast = heapUsed;
   acc.heapUsedMax = Math.max(acc.heapUsedMax, heapUsed);
   acc.rssLast = rss;
   acc.rssMax = Math.max(acc.rssMax, rss);
-  acc.gcCount = saturatingAdd(acc.gcCount, toNonNegativeInt(sample.gc.count));
-  acc.gcTotalPause = saturatingAdd(acc.gcTotalPause, toNonNegativeInt(sample.gc.totalPause));
-  acc.gcMaxPause = Math.max(acc.gcMaxPause, toNonNegativeInt(sample.gc.maxPause));
-  acc.bpEvents = saturatingAdd(acc.bpEvents, toNonNegativeInt(sample.backpressure.events));
+  acc.gcCount = saturatingAdd(acc.gcCount, truncToNonNegativeInt(sample.gc.count));
+  acc.gcTotalPause = saturatingAdd(acc.gcTotalPause, truncToNonNegativeInt(sample.gc.totalPause));
+  acc.gcMaxPause = Math.max(acc.gcMaxPause, truncToNonNegativeInt(sample.gc.maxPause));
+  acc.bpEvents = saturatingAdd(acc.bpEvents, truncToNonNegativeInt(sample.backpressure.events));
   acc.bpTotalStall = saturatingAdd(
     acc.bpTotalStall,
-    toNonNegativeInt(sample.backpressure.totalStall),
+    truncToNonNegativeInt(sample.backpressure.totalStall),
   );
-  acc.bpMaxStall = Math.max(acc.bpMaxStall, toNonNegativeInt(sample.backpressure.maxStall));
+  acc.bpMaxStall = Math.max(acc.bpMaxStall, truncToNonNegativeInt(sample.backpressure.maxStall));
 }
 
 export function closeWindow(acc: WindowAccumulator, windowMs: number): AggregatedWindow {

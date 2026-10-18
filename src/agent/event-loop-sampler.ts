@@ -1,5 +1,6 @@
 /// <reference types="node" />
 import { monitorEventLoopDelay } from 'node:perf_hooks';
+import { roundToNonNegativeInt } from './int.js';
 
 /**
  * One window of event loop delay, all values integer nanoseconds. Each value is the delay beyond the
@@ -40,17 +41,6 @@ function validateResolution(value: unknown): number {
   return value;
 }
 
-function toNonNegativeInt(value: number): number {
-  if (Number.isNaN(value)) {
-    return 0;
-  }
-  const rounded = Math.round(value);
-  if (rounded < 0) {
-    return 0;
-  }
-  return rounded > Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : rounded;
-}
-
 export function createEventLoopSampler(options?: EventLoopSamplerOptions): EventLoopSampler {
   const resolution = validateResolution(options?.resolution ?? DEFAULT_RESOLUTION_MS);
   // The histogram records the whole timer interval on every tick, even on an idle loop.
@@ -69,11 +59,11 @@ export function createEventLoopSampler(options?: EventLoopSamplerOptions): Event
         histogram.count === 0
           ? { min: 0, max: 0, mean: 0, p50: 0, p99: 0 }
           : {
-              min: toNonNegativeInt(histogram.min - baselineNs),
-              max: toNonNegativeInt(histogram.max - baselineNs),
-              mean: toNonNegativeInt(histogram.mean - baselineNs),
-              p50: toNonNegativeInt(histogram.percentile(50) - baselineNs),
-              p99: toNonNegativeInt(histogram.percentile(99) - baselineNs),
+              min: roundToNonNegativeInt(histogram.min - baselineNs),
+              max: roundToNonNegativeInt(histogram.max - baselineNs),
+              mean: roundToNonNegativeInt(histogram.mean - baselineNs),
+              p50: roundToNonNegativeInt(histogram.percentile(50) - baselineNs),
+              p99: roundToNonNegativeInt(histogram.percentile(99) - baselineNs),
             };
       histogram.reset();
       return result;
