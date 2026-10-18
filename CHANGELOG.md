@@ -7,6 +7,8 @@ All notable changes to Phargus are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-18
+
 ### Security
 
 - Behavior change: `symbolizeStackFrames` now confines reads to the working directory when `roots`
