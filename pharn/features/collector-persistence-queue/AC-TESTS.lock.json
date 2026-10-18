@@ -1,0 +1,93 @@
+{
+  "schema": "ac-tests-lock/5",
+  "feature": "collector-persistence-queue",
+  "mode": "test-first",
+  "spec": {
+    "spec_id": "collector-persistence-queue",
+    "spec_content_hash": "b1534e891eefda90f5ee1f1a8c5c822a35783021a3e2c2ead499bb1fc7ea9d96"
+  },
+  "mapping": {
+    "path": "pharn/features/collector-persistence-queue/AC-TESTS.md",
+    "sha256": "ae97d22bdc28674e417760a41cd948b5292d8b286e029625f50482ef83e10eb9"
+  },
+  "files": [
+    {
+      "path": "src/collector/collector-persistence-queue.ac1.integration.test.ts",
+      "sha256": "e82e0d46350b0c0a318521616b40a65d9908a32bb3c8a1190a3b9cdd107bf52d"
+    },
+    {
+      "path": "src/collector/collector-persistence-queue.ac2.integration.test.ts",
+      "sha256": "13e6041c14da290b645d66fee1cd502f53f64c07c84c4bb831fa34b750733e9a"
+    },
+    {
+      "path": "src/collector/collector-persistence-queue.ac3.integration.test.ts",
+      "sha256": "75acd88abf148530fba27d23de98122fc6a4c6faadb30ec9b5a1f4005324303a"
+    },
+    {
+      "path": "src/collector/collector-persistence-queue.ac4.integration.test.ts",
+      "sha256": "5dd13728eccc7235dcd478636605af51811a3d197d98937efa80dafd8a47a468"
+    }
+  ],
+  "bootstrap": null,
+  "red_run": {
+    "stamp_sha256": "cd5a8aa179a1b53e785c3e0cb10de6c9e36e492484ab4bbe716bf98aefc98193",
+    "files_sha256": "88c105ba53978d21572660b1c433bf9b23b05af1c680aa6a14810f3a460d6866",
+    "gates": [
+      {
+        "gate": "test",
+        "results_sha256": "4bdab9d7daa7902eacfd7cc3148f3b23f69c71545c6b44bf2e6fcd10387920af"
+      }
+    ],
+    "acs": [
+      {
+        "id": "AC-1",
+        "tests": [
+          "src/collector/collector-persistence-queue.ac1.integration.test.ts::collector persistence queue — AC-1 › AC-1: a stalled first append does not hold back the pipeline; all 100 windows reach the subscriber, then the file holds them in order with nothing dropped or failed"
+        ]
+      },
+      {
+        "id": "AC-2",
+        "tests": [
+          "src/collector/collector-persistence-queue.ac2.integration.test.ts::collector persistence queue — AC-2 › AC-2: creating a collector with persist.maxQueueSize 0, -1 or 1.5 throws synchronously naming maxQueueSize",
+          "src/collector/collector-persistence-queue.ac2.integration.test.ts::collector persistence queue — AC-2 › AC-2: with maxQueueSize 2 and a stalled disk, the oldest queued windows are dropped and counted, and the file ends with the last emitted window"
+        ]
+      },
+      {
+        "id": "AC-3",
+        "tests": [
+          "src/collector/collector-persistence-queue.ac3.integration.test.ts::collector persistence queue — AC-3 › AC-3: a failing append rejects consume() with that same Error while the source stays open, counting the failure and reporting no unhandled rejection"
+        ]
+      },
+      {
+        "id": "AC-4",
+        "tests": [
+          "src/collector/collector-persistence-queue.ac4.integration.test.ts::collector persistence queue — AC-4 › AC-4: close() waits for the queued windows to be appended, then close() and consume() resolve with all 5 windows on disk in order"
+        ]
+      }
+    ]
+  },
+  "test_infra": {
+    "levels": [
+      "integration"
+    ],
+    "gates": [
+      {
+        "id": "test",
+        "script": "vitest run",
+        "pre": null,
+        "post": null,
+        "results": "vitest-json"
+      }
+    ],
+    "chained": [],
+    "configs": [
+      {
+        "path": "vitest.config.mts",
+        "sha256": "ae812b81b31f5320f8486226aeef87e3767e7851772d1a845cdeb5b881a17421"
+      }
+    ],
+    "script_files": [],
+    "jest": null,
+    "exclude": []
+  }
+}

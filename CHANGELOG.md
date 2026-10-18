@@ -67,6 +67,17 @@ All notable changes to Phargus are recorded here. The format follows
   the one the call makes or one from `createHeapSnapshotPool()` without `taskTimeoutMs`. An
   explicit `timeoutMs` always wins, and a pool made with `taskTimeoutMs`, `createWorkerPool` or
   anything else keeps its own timeout. At the default 256 MiB cap the timeout stays 30 s.
+- Collector persistence no longer backpressures `consume()` (review finding F25). A slow disk used
+  to hold every window up behind the append, all the way back to the source. Windows now go
+  through a bounded queue and are appended one at a time, in emission order, off the pipeline.
+  `persist.maxQueueSize` sets how many wait (default 1024); it must be a positive safe integer,
+  or `createCollector` throws a `RangeError`. When the queue is full the oldest window is dropped.
+  `collector.persistence.dropped` counts those drops and `collector.persistence.failed` counts
+  windows whose append failed (both integers). A failed append still rejects `consume()` with the
+  append error, now without waiting for the source to end. `close()` and the end of `consume()`
+  wait for the queue to drain, with no time limit, so a disk that never completes an append
+  stalls `close()`. `close()` stops accepting windows before it drains, so a `consume()` still
+  running cannot hold it open; a window that arrives after it is counted in `failed`.
 - OTLP exporters (`@pharn-dev/phargus/otel`) no longer lose spans and windows under load (review
   finding F2). They used to send one request per exported span or window, with one request in
   flight, and silently dropped the newest batch once 64 were queued. They now batch: pending
