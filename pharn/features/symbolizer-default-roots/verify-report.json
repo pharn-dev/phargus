@@ -1,0 +1,109 @@
+{
+  "feature": "symbolizer-default-roots",
+  "gates": {
+    "build": 0,
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "reconcile": 0,
+    "test": 0,
+    "typecheck": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "d3385890b6c656834bf57e1fa39217655b0c33bf72232fc33e3922a2391cad67",
+    "source": "discover",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/2+sha256",
+      "final": "bbb00ba17fa40e816315a729e85cf143eb0210bba32952c5d35acc1c5847c1d7"
+    }
+  },
+  "ac_gate": {
+    "mode": "test-first",
+    "verdict": "PASS",
+    "reason": null,
+    "evidence": [],
+    "acs": [
+      {
+        "id": "AC-1",
+        "level": "integration",
+        "tests": [
+          "src/analyzer/symbolizer-default-roots.ac1.integration.test.ts::symbolizer default roots: confined to the working directory when roots is left out › AC-1: leaves frames outside the working directory unchanged and maps a frame inside it, with no roots option"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-2",
+        "level": "integration",
+        "tests": [
+          "src/analyzer/symbolizer-default-roots.ac2.integration.test.ts::symbolizer default roots: a source map outside the working directory is not read › AC-2: leaves a frame unchanged when its built file is inside the working directory but its sourceMappingURL names a map outside, with no roots option"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-3",
+        "level": "integration",
+        "tests": [
+          "src/analyzer/symbolizer-default-roots.ac3.integration.test.ts::symbolizer default roots: roots: null opts into unconfined reads › AC-3: maps a frame outside the working directory and reports a malformed map there, with roots: null"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      }
+    ],
+    "unmapped_anomalies": [],
+    "note": "an AC is delivered = a locked, once-red test titled AC-<n>:, in a file mapped to AC-<n>, passed on this head run. PHARN does not judge whether that test fully captures the AC's intent."
+  },
+  "completeness": {
+    "plan": "pharn/features/symbolizer-default-roots/PLAN.md",
+    "repoDir": ".",
+    "declared": [
+      "src/analyzer/stack-symbolization.ts",
+      "src/analyzer/symbolize-protocol.ts",
+      "src/analyzer/stack-symbolization.ac1.integration.test.ts",
+      "src/analyzer/stack-symbolization.ac2.integration.test.ts",
+      "src/analyzer/stack-symbolization-roots.integration.test.ts",
+      "docs/THREAT-MODEL.md",
+      "FEATURES.md",
+      "docs/LIMITS.md",
+      "SECURITY.md",
+      "CHANGELOG.md"
+    ],
+    "skipped": [],
+    "missing": [],
+    "complete": true,
+    "verdict": "complete"
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  },
+  "gate_reuse": {
+    "reused": []
+  },
+  "head_install": {
+    "state": "clean",
+    "why": null,
+    "family": "npm",
+    "lockfile": "package-lock.json",
+    "counts": {
+      "changed": 0,
+      "missing": 0,
+      "extraneous": 0,
+      "missing_unchecked": 24
+    }
+  },
+  "reconcile_detail": {
+    "state": "parsed",
+    "exit": 0,
+    "verdict": "CLEAN",
+    "escapes": [],
+    "escapes_total": 0,
+    "merged_count": 0
+  }
+}

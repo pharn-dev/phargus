@@ -18,11 +18,14 @@ type SymbolizeOptions = {
   pool?: WorkerPool;
   timeoutMs?: number;
   /**
-   * Directories the symbolizer may read from. When set, a frame's built file and its source map
-   * are read only if their real path (symlinks and `..` resolved) lies inside one of them; frames
-   * outside are returned unchanged. When left out, any local file a frame names may be read.
+   * Directories the symbolizer may read from. A frame's built file and its source map are read
+   * only if their real path (symlinks and `..` resolved) lies inside one of them; frames outside
+   * are returned unchanged, with no `original` and no `error`. When left out, reads are confined
+   * to the current working directory (read on each call). `null` turns confinement off, so any
+   * local file a frame or `sourceMappingURL` names may be read. A broad working directory such as
+   * `/` or `$HOME` confines little: pass `roots` naming your build output instead.
    */
-  roots?: readonly string[];
+  roots?: readonly string[] | null | undefined;
   /**
    * Largest built file or source map read, in bytes. Default 64 MiB, lowered to 1/8 of the
    * pool's `resourceLimits.maxOldGenerationSizeMb` when that is smaller. A larger built file is
@@ -87,9 +90,12 @@ function checkFrames(frames: readonly StackFrame[]): void {
   });
 }
 
-function checkRoots(roots: readonly string[] | undefined): string[] | undefined {
-  if (roots === undefined) return undefined;
-  if (!Array.isArray(roots)) throw new TypeError('roots must be an array of directory paths');
+function checkRoots(roots: readonly string[] | null | undefined): string[] | undefined {
+  if (roots === undefined) return [resolve(process.cwd())];
+  if (roots === null) return undefined;
+  if (!Array.isArray(roots)) {
+    throw new TypeError('roots must be null or an array of directory paths');
+  }
   return roots.map((root: unknown, index) => {
     if (typeof root !== 'string' || root === '') {
       throw new TypeError(`roots[${index}] must be a non-empty string`);
