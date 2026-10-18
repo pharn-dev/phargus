@@ -1,0 +1,86 @@
+{
+  "schema": "ac-tests-lock/5",
+  "feature": "snapshot-timeout-derived",
+  "mode": "test-first",
+  "spec": {
+    "spec_id": "snapshot-timeout-derived",
+    "spec_content_hash": "d992de47dda2a66f588ec4b8ce47b0a0f84df4ef4d12fea17fc98c3b694d10fc"
+  },
+  "mapping": {
+    "path": "pharn/features/snapshot-timeout-derived/AC-TESTS.md",
+    "sha256": "8c3e76559f372d9825a47226ce0de7b5edcdfe74ccdc1c3d3db058b6cf934e0c"
+  },
+  "files": [
+    {
+      "path": "src/analyzer/snapshot-timeout-derived.ac1.test.ts",
+      "sha256": "e97b0232ab90c0c4916badecc6731bb786e6658c47bc645a7c50e0b3296ebe0a"
+    },
+    {
+      "path": "src/analyzer/snapshot-timeout-derived.ac2.integration.test.ts",
+      "sha256": "d56eac80fb34f5c4e55f6fb6000f44143da1e24b257957ad925379d237720a20"
+    },
+    {
+      "path": "src/analyzer/snapshot-timeout-derived.ac3.integration.test.ts",
+      "sha256": "7eeff1595e0e95742846762481f63320621fb66f93ae8167ce4cf92b0d3eb338"
+    }
+  ],
+  "bootstrap": null,
+  "red_run": {
+    "stamp_sha256": "52c59a659380dcdd96b775bc5f7c5de7a5ff04838457e79274919c14d4551f76",
+    "files_sha256": "0dd242ee8a78dc66c32f48e51f67039ba47cd15fdd472c12f9f75f8c37a491fe",
+    "gates": [
+      {
+        "gate": "test",
+        "results_sha256": "09ee6dd88c80b8a055c4f2e84b58c16ff6e553773c25494140f5857ab71ae2df"
+      }
+    ],
+    "acs": [
+      {
+        "id": "AC-1",
+        "tests": [
+          "src/analyzer/snapshot-timeout-derived.ac1.test.ts::heapSnapshotTimeoutMs › AC-1: derives the task timeout from the byte count at 20 MB/s with a 30 000 ms floor, as integers"
+        ]
+      },
+      {
+        "id": "AC-2",
+        "tests": [
+          "src/analyzer/snapshot-timeout-derived.ac2.integration.test.ts::size-derived heap-snapshot task timeout › AC-2: diffHeapSnapshots passes the timeout derived from the sum of both file sizes to a createHeapSnapshotPool() pool",
+          "src/analyzer/snapshot-timeout-derived.ac2.integration.test.ts::size-derived heap-snapshot task timeout › AC-2: summarizeHeapSnapshot passes the timeout derived from the file size to a createHeapSnapshotPool() pool"
+        ]
+      },
+      {
+        "id": "AC-3",
+        "tests": [
+          "src/analyzer/snapshot-timeout-derived.ac3.integration.test.ts::explicit heap-snapshot task timeouts win over the size-derived one › AC-3: a caller-supplied pool not made by createHeapSnapshotPool receives no timeoutMs",
+          "src/analyzer/snapshot-timeout-derived.ac3.integration.test.ts::explicit heap-snapshot task timeouts win over the size-derived one › AC-3: a createHeapSnapshotPool({ taskTimeoutMs }) pool keeps its own short timeout and the analysis rejects with ERR_WORKER_TASK_TIMEOUT",
+          "src/analyzer/snapshot-timeout-derived.ac3.integration.test.ts::explicit heap-snapshot task timeouts win over the size-derived one › AC-3: options.timeoutMs reaches the pool run unchanged instead of the derived timeout"
+        ]
+      }
+    ]
+  },
+  "test_infra": {
+    "levels": [
+      "integration",
+      "unit"
+    ],
+    "gates": [
+      {
+        "id": "test",
+        "script": "vitest run",
+        "pre": null,
+        "post": null,
+        "results": "vitest-json"
+      }
+    ],
+    "chained": [],
+    "configs": [
+      {
+        "path": "vitest.config.mts",
+        "sha256": "ae812b81b31f5320f8486226aeef87e3767e7851772d1a845cdeb5b881a17421"
+      }
+    ],
+    "script_files": [],
+    "jest": null,
+    "exclude": []
+  }
+}

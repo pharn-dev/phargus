@@ -50,6 +50,13 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- `summarizeHeapSnapshot` and `diffHeapSnapshots` (`@pharn-dev/phargus/analyzer`) no longer time
+  out on large snapshots within a raised `maxSnapshotBytes` (review finding F27). The task timeout
+  is now `max(30 s, size / 20 MB/s)`, summed over both files for a diff, computed by the new
+  `heapSnapshotTimeoutMs(bytes)` export. It applies when no `timeoutMs` is passed and the pool is
+  the one the call makes or one from `createHeapSnapshotPool()` without `taskTimeoutMs`. An
+  explicit `timeoutMs` always wins, and a pool made with `taskTimeoutMs`, `createWorkerPool` or
+  anything else keeps its own timeout. At the default 256 MiB cap the timeout stays 30 s.
 - OTLP exporters (`@pharn-dev/phargus/otel`) no longer lose spans and windows under load (review
   finding F2). They used to send one request per exported span or window, with one request in
   flight, and silently dropped the newest batch once 64 were queued. They now batch: pending
