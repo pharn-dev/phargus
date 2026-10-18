@@ -78,6 +78,14 @@ of variation across rounds; percentages in parentheses are the change versus `no
 - On Node 22, `AsyncLocalStorage` rides on `async_hooks`, so `promise` under `full`/`tracing` is
   much slower than on Node 24. Compare with
   `--node-arg=--experimental-async-context-frame` to see the Node 24 profile on Node 22.
+- **RSS is read at the end of a short cell, so it shows how far V8 has grown its young
+  generation, not only what the agent keeps.** Under this load V8 grows the young generation to
+  its maximum (32 MiB on 64-bit) within a minute or two whether the agent is loaded or not.
+  Per-request state that lives across a scavenge (a traced request's context, for one) makes it
+  get there sooner, so `tracing` and `full` can read several MiB, up to about 25%, above `none`
+  in a 5 s cell and level out in a long run. A real retention cost shows up as old-generation
+  growth: run the soak (heap after GC), or compare long runs with `--duration 60` or more, before
+  calling an RSS delta a memory cost.
 
 **Noise.** Treat a delta smaller than about twice the CV as noise. On a quiet machine the rps CV
 is 1–2 % for `trivial`, `promise` and `cpu`; on shared CI runners expect **CV 3–8 %** on rps and

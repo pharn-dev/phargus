@@ -1,0 +1,167 @@
+{
+  "feature": "dashboard-token-fragment",
+  "gates": {
+    "build": 0,
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "reconcile": 0,
+    "test": 0,
+    "typecheck": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "2d94da901b95cee483df4b7319ea261343fa9c34c486f12a70a916637d8407b3",
+    "source": "discover",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/2+sha256",
+      "final": "1047a274d54a0f3f269248c23a8e6465c94785968dff6b1376c871158b4d2fd0"
+    }
+  },
+  "ac_gate": {
+    "mode": "test-first",
+    "verdict": "PASS",
+    "reason": null,
+    "evidence": [],
+    "acs": [
+      {
+        "id": "AC-1",
+        "level": "integration",
+        "tests": [
+          "src/dashboard/dashboard-token-fragment.ac1.integration.test.ts::dashboard fragment login — AC-1 › AC-1: /login#token=s3cret in a DOM window behind a recording proxy gets a 204 session cookie that opens /events, with no token in any request line and none left in location.href"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-2",
+        "level": "integration",
+        "tests": [
+          "src/dashboard/dashboard-token-fragment.ac2.integration.test.ts::dashboard fragment login — AC-2 › AC-2: /login#token=wrong in a DOM window gets a 401 with no Set-Cookie, shows \"token rejected\", and leaves neither # nor the token in location.href"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-3",
+        "level": "integration",
+        "tests": [
+          "src/dashboard/dashboard-token-fragment.ac3.integration.test.ts::dashboard POST /session — AC-3 › AC-3: POST /session with {\"token\":\"s3cret\"} (no Origin, or its own origin) answers 204 with an HttpOnly SameSite=Strict Path=/ cookie that is not the token, opens /events, and equals the legacy ?token= cookie"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-4",
+        "level": "integration",
+        "tests": [
+          "src/dashboard/dashboard-token-fragment.ac4.integration.test.ts::dashboard POST /session refusals — AC-4 › AC-4: POST /session answers 401 to a wrong token, 403 to a foreign Origin, 415/415/413/400/400/400 to bad bodies, 405 with allow: POST to GET, and 421 to a foreign Host, with no Set-Cookie on any refusal"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-5",
+        "level": "integration",
+        "tests": [
+          "src/dashboard/dashboard-token-fragment.ac5.integration.test.ts::dashboard public login assets — AC-5 › AC-5: with no token POST /session is 404; with a token /login and /login.js answer 200 with the page CSP while /, /app.js, /app.css and /events answer 401, the login page has only src scripts, and neither body holds the token"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-6",
+        "level": "integration",
+        "tests": [
+          "src/dashboard/dashboard-token-fragment.ac6.integration.test.ts::dashboard legacy ?token= exchange — AC-6 › AC-6: GET /?token=s3cret twice answers 303 to / with the POST /session cookie each time, and emits exactly one PHARGUS_DEP_TOKEN_QUERY DeprecationWarning without the token"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-7",
+        "level": "integration",
+        "tests": [
+          "src/cli/dashboard-token-fragment.ac7.integration.test.ts::phargus serve: the fragment login link › AC-7: serve --port 0 with PHARGUS_TOKEN prints http://127.0.0.1:<port>/login#token=<token> on stderr with the literal placeholder and never the token, and --help describes --token with /login#token="
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      }
+    ],
+    "unmapped_anomalies": [],
+    "note": "an AC is delivered = a locked, once-red test titled AC-<n>:, in a file mapped to AC-<n>, passed on this head run. PHARN does not judge whether that test fully captures the AC's intent."
+  },
+  "completeness": {
+    "plan": "pharn/features/dashboard-token-fragment/PLAN.md",
+    "repoDir": ".",
+    "declared": [
+      "src/dashboard/auth.ts",
+      "src/dashboard/plain-response.ts",
+      "src/dashboard/session-endpoint.ts",
+      "src/dashboard/static-assets.ts",
+      "src/dashboard/server.ts",
+      "src/dashboard/ui/login-page.ts",
+      "src/dashboard/ui/login-script.ts",
+      "src/dashboard/ui/app-script.ts",
+      "src/cli/serve.ts",
+      "src/cli/usage.ts",
+      "README.md",
+      "docs/THREAT-MODEL.md",
+      "docs/LIMITS.md",
+      "FEATURES.md",
+      "CHANGELOG.md"
+    ],
+    "skipped": [],
+    "missing": [],
+    "complete": true,
+    "verdict": "complete"
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  },
+  "gate_reuse": {
+    "reused": [
+      {
+        "id": "typecheck",
+        "stage": "regress",
+        "side": "head",
+        "seq": 1
+      },
+      {
+        "id": "build",
+        "stage": "regress",
+        "side": "head",
+        "seq": 2
+      }
+    ]
+  },
+  "head_install": {
+    "state": "clean",
+    "why": null,
+    "family": "npm",
+    "lockfile": "package-lock.json",
+    "counts": {
+      "changed": 0,
+      "missing": 0,
+      "extraneous": 0,
+      "missing_unchecked": 24
+    }
+  },
+  "reconcile_detail": {
+    "state": "parsed",
+    "exit": 0,
+    "verdict": "CLEAN",
+    "escapes": [],
+    "escapes_total": 0,
+    "merged_count": 0
+  }
+}

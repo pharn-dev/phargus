@@ -29,8 +29,10 @@ node --import @pharn-dev/phargus/agent app.mjs | npx phargus serve
   <img src="./docs/assets/dashboard.gif" alt="The Phargus dashboard: event loop lag, memory and GC cards, alerts firing and resolving, and a waterfall of recent requests" width="640">
 </p>
 
-> **Status: 0.1.0, the first release, is on npm.** Roadmap steps S0 to S7 are implemented (agent,
-> collector, dashboard, tracing, V8 and memory depth, plugin runner, OpenTelemetry export; see
+> **Status: 0.1.0, the first release, is on npm** (published 2026-10-12; `latest` on the npm registry).
+> `main` can be ahead of it: changes after 0.1.0 are listed under `Unreleased` in
+> [`CHANGELOG.md`](./CHANGELOG.md). Roadmap steps S0 to S7 are implemented (agent, collector,
+> dashboard, tracing, V8 and memory depth, plugin runner, OpenTelemetry export; see
 > [`ROADMAP.md`](./ROADMAP.md)).
 
 ## Contents
@@ -191,9 +193,14 @@ The recording above is that example.
 
 - On a loopback address (`127.x.x.x`, `localhost`, `::1`) the token is optional. Binding any other
   address without a `token` is refused at startup.
-- With a token, open `http://<host>:<port>/?token=<token>` once in a browser. The server answers
-  with a redirect to `/` and an `HttpOnly`, `SameSite=Strict` cookie, so the token does not stay
-  in the address bar or history. `?token=` is accepted on `/` only.
+- With a token, open `http://<host>:<port>/login#token=<token>` once in a browser. The token is in
+  the URL fragment, which the browser never sends to the server. The login page removes the
+  fragment from the address bar and history, then posts the token to `POST /session` in a JSON
+  body; the server answers `204` with an `HttpOnly`, `SameSite=Strict` cookie and the page opens
+  `/`. A wrong token gets `401` and no cookie.
+- `http://<host>:<port>/?token=<token>` still works for one release and is deprecated: it puts the
+  token in a request line. The server emits a `PHARGUS_DEP_TOKEN_QUERY` deprecation warning the
+  first time it is used. `?token=` is accepted on `/` only.
 - Scripts and `curl` send `Authorization: Bearer <token>`, for example to `/events`.
 - The server answers only requests whose `Host` is the bound address on the bound port (plus
   `localhost`, `127.0.0.1` and `[::1]` for a loopback or `0.0.0.0`/`::` bind); anything else gets
@@ -208,17 +215,20 @@ The recording above is that example.
 
 Choose where the agent writes with `PHARGUS_OUTPUT`:
 
-| Variable              | Default  | Meaning                                                   |
-| --------------------- | -------- | --------------------------------------------------------- |
-| `PHARGUS_OUTPUT`      | `stdout` | `stdout`, `none` (agent off), or a file path              |
-| `PHARGUS_INTERVAL_MS` | `1000`   | sampling interval                                         |
-| `PHARGUS_QUEUE_BOUND` | `1024`   | lines held per output queue before the oldest are dropped |
-| `PHARGUS_ENABLED`     | `true`   | `false` or `0` turns the agent off                        |
+| Variable              | Default  | Meaning                                                                                   |
+| --------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `PHARGUS_OUTPUT`      | `stdout` | `stdout`, `none` (agent off), or a file path                                              |
+| `PHARGUS_INTERVAL_MS` | `1000`   | sampling interval                                                                         |
+| `PHARGUS_QUEUE_BOUND` | `1024`   | lines held per output queue before the oldest are dropped                                 |
+| `PHARGUS_ENABLED`     | `true`   | `false` or `0` turns the agent off                                                        |
+| `PHARGUS_CONFIG`      | none     | path to the one config file to load, `.json` or `.js`; skips the working-directory lookup |
 
 The same keys (`output`, `intervalMs`, `queueBound`, `enabled`) can go in `phargus.config.json` or
 `phargus.config.js` in the working directory. An unknown `PHARGUS_*` variable prints one warning on
 stderr and is ignored; `PHARGUS_TOKEN` and `PHARGUS_DEBUG`, which belong to `phargus serve`, are
-ignored without a warning. An invalid value disables the agent with one
+ignored without a warning. When `PHARGUS_CONFIG` is set, `phargus.config.json` and
+`phargus.config.js` in the working directory are not read, and a problem with the pinned file
+disables the agent like any invalid value. An invalid value disables the agent with one
 `[phargus] agent disabled: ...` line on stderr; your app keeps running.
 
 ---
@@ -320,6 +330,7 @@ the data flow and module boundaries.
 | ------------------------------------------------ | ------------------------------------------------- |
 | [`FEATURES.md`](./FEATURES.md)                   | Full feature scope and status                     |
 | [`ARCHITECTURE.md`](./ARCHITECTURE.md)           | Data flow and who may import what                 |
+| [`docs/API.md`](./docs/API.md)                   | Every supported export, per subpath               |
 | [`docs/PERMISSIONS.md`](./docs/PERMISSIONS.md)   | Node permission-model flags per module            |
 | [`docs/LIMITS.md`](./docs/LIMITS.md)             | Cost, overhead and known limits                   |
 | [`docs/THREAT-MODEL.md`](./docs/THREAT-MODEL.md) | What Phargus defends against and what it does not |

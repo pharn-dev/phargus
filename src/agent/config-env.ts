@@ -16,6 +16,12 @@ const VARIABLES: Readonly<Record<string, AgentConfigKey>> = {
  */
 const CLI_VARIABLES: ReadonlySet<string> = new Set(['PHARGUS_TOKEN', 'PHARGUS_DEBUG']);
 
+/**
+ * The variable that pins the one config file to load. It selects a source rather than setting a
+ * config key, so `readConfigEnv` skips it silently and `loadAgentConfig` reads it directly.
+ */
+export const CONFIG_FILE_VARIABLE = 'PHARGUS_CONFIG';
+
 function parse(name: string, key: AgentConfigKey, text: string): unknown {
   switch (key) {
     case 'intervalMs':
@@ -66,7 +72,7 @@ function suggest(name: string): string | undefined {
   const typed = name.slice('PHARGUS_'.length);
   let best: string | undefined;
   let bestDistance = Number.POSITIVE_INFINITY;
-  for (const known of Object.keys(VARIABLES)) {
+  for (const known of [...Object.keys(VARIABLES), CONFIG_FILE_VARIABLE]) {
     const distance = editDistance(typed, known.slice('PHARGUS_'.length));
     if (distance < bestDistance) {
       best = known;
@@ -88,9 +94,9 @@ export function unknownVariableWarning(name: string): string {
 }
 
 /**
- * Map PHARGUS_* variables to config keys. Other variables, and the CLI's own `PHARGUS_TOKEN` and
- * `PHARGUS_DEBUG`, are ignored. An unknown PHARGUS_ name is reported once through `warn` and
- * ignored; an invalid value for a known name throws.
+ * Map PHARGUS_* variables to config keys. Other variables, the CLI's own `PHARGUS_TOKEN` and
+ * `PHARGUS_DEBUG`, and the config-file pin `PHARGUS_CONFIG`, are ignored. An unknown PHARGUS_ name
+ * is reported once through `warn` and ignored; an invalid value for a known name throws.
  */
 export function readConfigEnv(
   env: Readonly<Record<string, string | undefined>>,
@@ -99,7 +105,12 @@ export function readConfigEnv(
 ): Partial<AgentConfig> {
   const result: Record<string, unknown> = {};
   for (const [name, text] of Object.entries(env)) {
-    if (!name.startsWith('PHARGUS_') || text === undefined || CLI_VARIABLES.has(name)) {
+    if (
+      !name.startsWith('PHARGUS_') ||
+      text === undefined ||
+      CLI_VARIABLES.has(name) ||
+      name === CONFIG_FILE_VARIABLE
+    ) {
       continue;
     }
     if (!Object.hasOwn(VARIABLES, name)) {

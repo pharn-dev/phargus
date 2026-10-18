@@ -14,6 +14,19 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 - **Tracing is where the per-request cost is.** Each traced request runs inside an
   `AsyncLocalStorage` context and keeps a small record until its response finishes. The samplers
   and the backpressure probe add a fixed cost per interval and a few nanoseconds per stream write.
+- **What tracing costs, measured.** Full `bench/overhead.mjs` runs on Node 22.18.0 GitHub runners
+  (4 vCPU, rps CV under 5% in 19 of 20 cells, 2026-10-18): `tracing` against `none` costs about
+  10–13% more CPU per request and about 10% throughput when the server is CPU-bound (`cpu`,
+  `stream`). Samplers alone stay within about 2%. On the same day's runs the tracer was cut from
+  20–40% more CPU per request (trace and span ids now come from a pooled CSPRNG buffer) and from
+  20–50% more RSS (buffered spans are now kept as bytes, so they no longer churn V8's old
+  generation). Most of the remaining CPU cost on Node 22 is `AsyncLocalStorage` (next item). No
+  overhead budget is defined yet; run the benchmark on your own workload.
+- **Memory: a few MiB at steady state.** The span buffer preallocates about 280 KiB for its 1024
+  spans. With tracing on, heap after GC is unchanged and RSS after a minute of load matches the
+  agent-off process within run-to-run noise. In short benchmark cells RSS can still read up to
+  about 25% higher on `promise`: V8 grows its young generation to the same maximum either way,
+  only sooner under tracing (see "Reading the tables" in [`bench/README.md`](../bench/README.md)).
 - **Node 22 makes tracing more expensive.** On Node 22, `AsyncLocalStorage` is built on
   `async_hooks` promise hooks, so once tracing is on every promise in the process pays for it, and
   promise-heavy handlers can lose a large share of their throughput. Node 22's
@@ -43,7 +56,11 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   hold `queueBound` lines (default 1024) and drop the oldest; the span buffer holds 1024 spans
   between ticks. Above roughly 1000 requests per sampling interval, spans are dropped. Every sample
   line carries cumulative `dropped: { samples, spans }` counters; the collector and dashboard do not
-  display them yet.
+  display them yet. The collector's persistence queue holds `persist.maxQueueSize` windows
+  (default 1024) and drops the oldest when the disk falls behind, counted in
+  `collector.persistence.dropped`; neither the dashboard nor `phargus serve` shows it yet.
+  `close()` stops accepting windows, then waits for the queued appends with no time limit, so a
+  disk that never completes an append stalls it.
 - **Event loop lag is observed by the loop itself.** A loop blocked completely cannot report
   until it resumes, so the longest stalls are reported late, with their full length.
 - **Event loop figures are delay beyond the timer interval.** The histogram samples on a 10 ms timer
@@ -94,10 +111,11 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 
 - **No TLS.** The dashboard is plain HTTP. Remote access needs an authenticated tunnel or a
   reverse proxy. The token gate stops casual access, not a network attacker.
-- **The browser token flow assumes a direct link.** The `?token=` link sets a `SameSite=Strict`
-  cookie. If you click that link on another website, some browsers leave the cookie off the
-  redirected request and the first load shows `401`; reloading `/` works. Opening the link from
-  the address bar, a terminal or a bookmark is not affected.
+- **The deprecated `?token=` link assumes a direct link.** The `?token=` link sets a
+  `SameSite=Strict` cookie on a redirect. If you click that link on another website, some browsers
+  leave the cookie off the redirected request and the first load shows `401`; reloading `/` works.
+  Opening the link from the address bar, a terminal or a bookmark is not affected. The
+  `/login#token=` flow sets its cookie on a same-origin `fetch`, so it does not depend on this.
 - **There is no redaction step.** Phargus records method, path without query string, status and
   timing, and nothing else from a request. A secret in a path segment is recorded as is.
 - **Sandboxed rules are limited, not safe.** `isolated-vm` constrains memory, time, result size and
@@ -105,6 +123,10 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 - **Worker memory limits are best-effort for custom workers.** A worker file that makes one large
   native allocation (for example `JSON.parse` of a big string) can exceed its `resourceLimits` far
   enough to abort the whole process. The analyzer's own workers cap their input to avoid this.
+- **The symbolizer's confinement is only as narrow as the working directory.** `symbolizeStackFrames`
+  reads only files inside the working directory unless `roots` names other directories. `roots: null`
+  turns confinement off. A broad working directory (`/`, `$HOME`) confines little, and Phargus does
+  not detect or refuse one.
 
 ## 5. Packaging
 

@@ -3,7 +3,15 @@ import { createRingBuffer } from './ring-buffer.js';
 import type { AggregatedWindow } from './window.js';
 import { parseWindowLine, serializeWindow } from './window-codec.js';
 
-export type PersistOptions = { path: string; maxBytes: number };
+export type PersistOptions = {
+  path: string;
+  maxBytes: number;
+  /**
+   * Most windows waiting for the disk; when full the oldest is dropped and counted (default
+   * 1024). Used by the collector's persistence queue; the store itself ignores it.
+   */
+  maxQueueSize?: number;
+};
 
 /** Mode for files the store creates (owner read/write only); existing files keep their mode. */
 const FILE_MODE = 0o600;

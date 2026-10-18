@@ -2,6 +2,7 @@
 import { OutgoingMessage } from 'node:http';
 import { Duplex, Writable } from 'node:stream';
 import { isExcludedFromBackpressure } from './backpressure-exclusion.js';
+import { roundToNonNegativeInt } from './int.js';
 import { siteFromStack } from './stack-site.js';
 
 /** One call site that stalled. Stall times are integer nanoseconds. */
@@ -45,17 +46,6 @@ type Window = {
   sites: Map<string, SiteStats>;
 };
 type OpenStall = { start: bigint; site: string };
-
-function toNonNegativeInt(value: number): number {
-  if (Number.isNaN(value)) {
-    return 0;
-  }
-  const rounded = Math.round(value);
-  if (rounded < 0) {
-    return 0;
-  }
-  return rounded > Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : rounded;
-}
 
 function saturatingAdd(a: number, b: number): number {
   return Math.min(a + b, Number.MAX_SAFE_INTEGER);
@@ -374,7 +364,7 @@ export function createBackpressureProbe(options: BackpressureProbeOptions = {}):
       if (stall === undefined || !enabled) {
         return;
       }
-      const duration = toNonNegativeInt(Number(process.hrtime.bigint() - stall.start));
+      const duration = roundToNonNegativeInt(Number(process.hrtime.bigint() - stall.start));
       window.totalStall = saturatingAdd(window.totalStall, duration);
       window.maxStall = Math.max(window.maxStall, duration);
       const siteStats = statsFor(stall.site);

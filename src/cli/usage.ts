@@ -17,8 +17,9 @@ and counted. The server keeps running after the input ends; stop it with Ctrl-C.
 Options:
   --port <n>             Port to listen on, 0 to 65535 (default: 7070; 0 picks a free port)
   --host <address>       Address to bind (default: 127.0.0.1). A non-loopback host needs a token.
-  --token <value>        Require this token (Authorization: Bearer, or open /?token=<value> once).
-                         Prefer PHARGUS_TOKEN: a flag shows up in the process list.
+  --token <value>        Require this token (Authorization: Bearer, or open
+                         /login#token=<token> once). Prefer PHARGUS_TOKEN: a flag
+                         shows up in the process list.
   --allowed-host <host>  Also answer requests whose Host header names <host> (repeatable).
                          A bare name matches any port; host:port matches exactly. Use it
                          when the browser reaches the dashboard by another name or IP, for

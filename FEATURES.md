@@ -20,14 +20,14 @@ Status legend:
 - ✅ Zero external dependencies in the agent (Node core only; enforced by ESLint).
 - ✅ Dual package: ESM + CJS, six subpath exports.
 - ✅ Config via env vars (`PHARGUS_OUTPUT`, `PHARGUS_INTERVAL_MS`, `PHARGUS_QUEUE_BOUND`,
-  `PHARGUS_ENABLED`) + `phargus.config.{js,json}`. Unknown `PHARGUS_*` variables warn and are ignored (the CLI's `PHARGUS_TOKEN` and `PHARGUS_DEBUG` are ignored silently).
+  `PHARGUS_ENABLED`) + `phargus.config.{js,json}`, or one explicit file pinned with `PHARGUS_CONFIG`. Unknown `PHARGUS_*` variables warn and are ignored (the CLI's `PHARGUS_TOKEN` and `PHARGUS_DEBUG` are ignored silently).
 - ✅ CLI: `phargus serve` reads the agent's NDJSON from stdin or a file and serves the dashboard,
   so `node --import @pharn-dev/phargus/agent app.mjs | npx phargus serve` is the whole setup.
   Loopback by default; a non-loopback `--host` requires a token. ESM-only, not an `exports` subpath.
 - 🟡 Works the same locally and in production. The agent does; the dashboard needs a collector
   process (`phargus serve`, or one you wire yourself as in `examples/express-app`), and the
   default output is the app's stdout.
-- ⬜ Published to npm. On hold (S8); build from source for now.
+- ✅ Published to npm: `@pharn-dev/phargus@0.1.0` (2026-10-12, `latest`). Changes on `main` since then are under `Unreleased` in `CHANGELOG.md`; build from source to get them before the next release.
 
 ## 2. Runtime metrics (the headline diagnostics)
 
@@ -54,7 +54,7 @@ Status legend:
 - ✅ Allocation sampling profiler capture (`sampleAllocations`, library API).
 - 🟡 Deoptimization detection: a bounded parser for `node --trace-deopt` output
   (`createDeoptParser`). Nothing in Phargus starts or captures that output; you feed the parser lines.
-- ✅ Stack-trace symbolization in a Worker Thread, with optional directory confinement (`roots`).
+- ✅ Stack-trace symbolization in a Worker Thread, with directory confinement (`roots`; default the working directory, `roots: null` to turn it off).
 
 ## 4. Data pipeline & export
 
@@ -83,7 +83,7 @@ Status legend:
 - ✅ Trace detail / waterfall view of recent requests.
 - ⬜ Time-range scrubbing of recent windows. The page shows the latest window only.
 - ✅ Exposure/auth model: loopback without a token, any other bind requires one; `Host`/`Origin`
-  allowlist (`allowedHosts`); `?token=` exchanged once for an `HttpOnly`, `SameSite=Strict` cookie;
+  allowlist (`allowedHosts`); a `/login#token=` fragment link exchanged once through `POST /session` for an `HttpOnly`, `SameSite=Strict` cookie (the `?token=` link still works for one release, deprecated);
   `Authorization: Bearer` for API clients.
 
 ## 6. Custom diagnostic rules (plugin runner)
@@ -117,7 +117,9 @@ Status legend:
 
 - ✅ In-memory ring buffers of recent windows, alerts and spans.
 - ✅ Opt-in disk persistence of recent windows: an append-only NDJSON file with a byte cap
-  (compacted to the newest windows), restored on start, created with mode `0600`.
+  (compacted to the newest windows), restored on start, created with mode `0600`. Written off the
+  critical path through a bounded drop-oldest queue (`maxQueueSize`, default 1024) with `dropped`
+  and `failed` counters on `collector.persistence`, drained on `close()`.
 
 ## 10. Examples (ship with the repo)
 

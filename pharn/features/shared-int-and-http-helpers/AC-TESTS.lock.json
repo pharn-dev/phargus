@@ -1,0 +1,78 @@
+{
+  "schema": "ac-tests-lock/5",
+  "feature": "shared-int-and-http-helpers",
+  "mode": "test-first",
+  "spec": {
+    "spec_id": "shared-int-and-http-helpers",
+    "spec_content_hash": "f1400b63f1212a0c3962531fabe09f827b5395d6406f6ac298f6e7a5775cfcd3"
+  },
+  "mapping": {
+    "path": "pharn/features/shared-int-and-http-helpers/AC-TESTS.md",
+    "sha256": "dc0fbc9c875528bf2cfc051714948b7fed67034f04f786dfd777a09876b13b0f"
+  },
+  "files": [
+    {
+      "path": "src/agent/int.test.ts",
+      "sha256": "6b7df8210210dbda72fe759a2cb810b019a5c35a172b67049035ff09317dbb00"
+    },
+    {
+      "path": "src/agent/shared-int-and-http-helpers.ac3.test.ts",
+      "sha256": "3fc29ac1cd31cce52309f7f32d3043d3b73fec8eac34f0fc9eec7e952b2be7c7"
+    }
+  ],
+  "bootstrap": null,
+  "red_run": {
+    "stamp_sha256": "8169a6215b5921915e93ca7d5bacba556a954bb1c27785394e987d8c80cb67c3",
+    "files_sha256": "9553a2c98af4a432f0c72bce3e083c8b8f66b52fa46c76b6719fffd519bc1b0d",
+    "gates": [
+      {
+        "gate": "test",
+        "results_sha256": "1fee4c46b0753674bb04485f7562829d96fd5b5ff68038132552f38ab3bd5d43"
+      }
+    ],
+    "acs": [
+      {
+        "id": "AC-1",
+        "tests": [
+          "src/agent/int.test.ts::shared integer helpers — AC-1 › AC-1: roundToNonNegativeInt clamps to 0..MAX_SAFE_INTEGER and rounds non-negative fractions with Math.round"
+        ]
+      },
+      {
+        "id": "AC-2",
+        "tests": [
+          "src/agent/int.test.ts::shared integer helpers — AC-2 › AC-2: truncToNonNegativeInt clamps to 0..MAX_SAFE_INTEGER and truncates non-negative fractions with Math.trunc"
+        ]
+      },
+      {
+        "id": "AC-3",
+        "tests": [
+          "src/agent/shared-int-and-http-helpers.ac3.test.ts::shared int and HTTP helpers — AC-3 › AC-3: only the shared int module defines the int helpers, the OTel transport imports the HTTP helpers from the collector, and the agent entrypoint does not export the int helpers"
+        ]
+      }
+    ]
+  },
+  "test_infra": {
+    "levels": [
+      "unit"
+    ],
+    "gates": [
+      {
+        "id": "test",
+        "script": "vitest run",
+        "pre": null,
+        "post": null,
+        "results": "vitest-json"
+      }
+    ],
+    "chained": [],
+    "configs": [
+      {
+        "path": "vitest.config.mts",
+        "sha256": "ae812b81b31f5320f8486226aeef87e3767e7851772d1a845cdeb5b881a17421"
+      }
+    ],
+    "script_files": [],
+    "jest": null,
+    "exclude": []
+  }
+}

@@ -78,10 +78,10 @@ describe('symbolizer roots and caps (F-15)', () => {
     }
   });
 
-  it('still reads any local file without roots, but never puts file bytes in the error', async () => {
+  it('with roots: null reads any local file, but never puts file bytes in the error', async () => {
     const [mapped, leaked] = await symbolizeStackFrames(
       [frame(join(outside, 'outside.js')), frame(join(root, 'dist', 'leak.js'))],
-      { pool },
+      { pool, roots: null },
     );
     expect(mapped?.original).toBeDefined();
     expect(leaked?.error).toBeInstanceOf(MalformedSourceMapError);
@@ -92,7 +92,7 @@ describe('symbolizer roots and caps (F-15)', () => {
   it('caps the size of files read', async () => {
     const [built, map] = await symbolizeStackFrames(
       [frame(join(root, 'dist', 'app.js')), frame(join(outside, 'outside.js'))],
-      { pool, maxFileBytes: 32 },
+      { pool, roots: [base], maxFileBytes: 32 },
     );
     // The built file (> 32 bytes) is not read at all.
     expect(built).toEqual(frame(join(root, 'dist', 'app.js')));
@@ -104,6 +104,7 @@ describe('symbolizer roots and caps (F-15)', () => {
     await writeFile(join(mapCapped, 'a.js.map'), sourceMap().padEnd(200, ' '));
     const [capped] = await symbolizeStackFrames([frame(join(mapCapped, 'a.js'))], {
       pool,
+      roots: [base],
       maxFileBytes: 100,
     });
     expect(capped?.error).toBeInstanceOf(MalformedSourceMapError);
@@ -127,5 +128,8 @@ describe('symbolizer roots and caps (F-15)', () => {
       await small.close();
     }
     await expect(symbolizeStackFrames([], { pool, roots: [''] })).rejects.toThrow(TypeError);
+    await expect(symbolizeStackFrames([], { pool, roots: 'dist' as never })).rejects.toThrow(
+      TypeError,
+    );
   });
 });

@@ -1,0 +1,114 @@
+{
+  "base": "335270fe39fb1e9e1b0c31cc5b2c5f3a6b935564",
+  "inside": [
+    "CHANGELOG.md",
+    "FEATURES.md",
+    "README.md",
+    "docs/LIMITS.md",
+    "docs/THREAT-MODEL.md",
+    "src/cli/serve.ts",
+    "src/cli/usage.ts",
+    "src/dashboard/auth.ts",
+    "src/dashboard/server.ts",
+    "src/dashboard/static-assets.ts",
+    "src/dashboard/ui/app-script.ts",
+    "pharn/features/dashboard-token-fragment/AC-TESTS.lock.json",
+    "pharn/features/dashboard-token-fragment/AC-TESTS.md",
+    "pharn/features/dashboard-token-fragment/BUILD.md",
+    "pharn/features/dashboard-token-fragment/GRILL.md",
+    "pharn/features/dashboard-token-fragment/PLAN.md",
+    "pharn/features/dashboard-token-fragment/SPEC.md",
+    "src/cli/dashboard-token-fragment.ac7.integration.test.ts",
+    "src/dashboard/dashboard-token-fragment.ac1.integration.test.ts",
+    "src/dashboard/dashboard-token-fragment.ac2.integration.test.ts",
+    "src/dashboard/dashboard-token-fragment.ac3.integration.test.ts",
+    "src/dashboard/dashboard-token-fragment.ac4.integration.test.ts",
+    "src/dashboard/dashboard-token-fragment.ac5.integration.test.ts",
+    "src/dashboard/dashboard-token-fragment.ac6.integration.test.ts",
+    "src/dashboard/plain-response.ts",
+    "src/dashboard/session-endpoint.ts",
+    "src/dashboard/ui/login-page.ts",
+    "src/dashboard/ui/login-script.ts"
+  ],
+  "outside_gates": {
+    "build": {
+      "base": 0,
+      "head": 0
+    },
+    "test": {
+      "base": 0,
+      "head": 0
+    },
+    "typecheck": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "gate_run": {
+    "base": {
+      "stamp_sha256": "470ab42bbeb25547f4a9332ab1042bee5fcf51c47a8e6e162345e5bdf01bf2d5",
+      "source": "discover",
+      "fingerprint": {
+        "algo": "worktree-fingerprint/2+sha256+entry-feature-dir",
+        "final": "aafe8111e7e2702ed021ebbc3327fae9219312e5ea546419655ddb67303fdf21"
+      }
+    },
+    "head": {
+      "stamp_sha256": "4ac73dea6ad44f6609f8e62619bdda1fde119e37d9fbd67fc58403eb01eda8b3",
+      "source": "discover",
+      "fingerprint": {
+        "algo": "worktree-fingerprint/2+sha256",
+        "final": "1047a274d54a0f3f269248c23a8e6465c94785968dff6b1376c871158b4d2fd0"
+      }
+    }
+  },
+  "base_evidence": {
+    "reused": false,
+    "miss": "no-record",
+    "requirement_sha256": "b0e18cca6f9bd55ceae771e1ee1e681f15446f38123cd0f5427e20299ecfbab8",
+    "recorded": false,
+    "source": "entry",
+    "entry": {
+      "used": true,
+      "miss": null,
+      "offer_sha256": "36cf847396ff79b6af22a65fb08745930fcd5987153d3858f4cc47c2920ebd97",
+      "entry_stamp_sha256": "2cfc33dc85467380676ce7d0e4f6114143d5d2b21731d07efc06fa4cbdc781de",
+      "base": "335270fe39fb1e9e1b0c31cc5b2c5f3a6b935564",
+      "run": {
+        "command": "pharn-loop",
+        "marker_sha256": "8c3037fa6fea4419f71b938d40721fe43ca53d5083aced9b682ca834f1cfdc95"
+      },
+      "reused_ids": [
+        "test",
+        "typecheck",
+        "build"
+      ],
+      "no_files_ids": [],
+      "ignored_ids": [
+        "lint",
+        "format:check",
+        "test"
+      ]
+    }
+  },
+  "pre_run_snapshot": {
+    "status": "applied",
+    "unchanged": []
+  },
+  "head_install": {
+    "state": "clean",
+    "why": null,
+    "family": "npm",
+    "lockfile": "package-lock.json",
+    "counts": {
+      "changed": 0,
+      "missing": 0,
+      "extraneous": 0,
+      "missing_unchecked": 24
+    }
+  },
+  "base_source": "explicit"
+}

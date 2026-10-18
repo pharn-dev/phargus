@@ -401,7 +401,7 @@ describe('phargus serve: stdin with mixed agent and log lines', () => {
     'AC-4: prints the dashboard URL, streams windows over SSE, reports the input end with the skip and ignored counts, and keeps serving after stdin ends',
     async () => {
       await ensureFreshDist();
-      const { encodeNdjsonLine } = await import('../agent/index.js');
+      const { encodeNdjsonLine } = await import('../agent/ndjson-encoder.js');
 
       const samples = [
         makeSample(BASE_MS + 100, 40),

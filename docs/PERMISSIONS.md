@@ -22,10 +22,15 @@ node --permission \
 | ---------------------------------------- | -------------------------------------------------------------------------------------- |
 | `--allow-fs-read=<app dir>`              | Loading your app, and reading `phargus.config.json` / `phargus.config.js` from the cwd |
 | `--allow-fs-read=<node_modules/phargus>` | Loading the agent itself                                                               |
+| `--allow-fs-read=<PHARGUS_CONFIG file>`  | Reading the config file that `PHARGUS_CONFIG` pins                                     |
 | `--allow-fs-write=<output path>`         | The NDJSON export to a file (`output` other than `'stdout'` or `'none'`)               |
 | `--allow-fs-write=<snapshot dir>`        | `takeHeapSnapshot({ dir })`, which also needs `--allow-fs-read=<snapshot dir>`         |
 
 `output: 'stdout'` needs no write grant. Leave out the write grants for features you do not use.
+
+With `PHARGUS_CONFIG` set, the agent reads only that file for its config. A `.js` config is
+executed with only a read grant, so prefer a pinned `.json` file, or a directory only the operator
+can write.
 
 The agent spawns no worker threads and no child processes, so none of `--allow-worker`,
 `--allow-child-process`, `--allow-addons` or `--allow-wasi` is needed for it.

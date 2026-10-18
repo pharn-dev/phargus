@@ -7,8 +7,30 @@ All notable changes to Phargus are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-18
+
+### Security
+
+- Behavior change: `symbolizeStackFrames` now confines reads to the working directory when `roots`
+  is left out. Frames whose built file or source map lies outside the working directory are no
+  longer read; they come back unchanged unless you pass `roots` naming the directories to read
+  from, or `roots: null` for the old unconfined behavior.
+- Dashboard login no longer puts the token in a request line. Open `/login#token=<token>`: the
+  token is in the URL fragment, which the browser never sends; the public login page removes it
+  from the address bar and history, then posts it as JSON to the new `POST /session` (4096-byte
+  cap, JSON only, constant-time compare), which answers `204` with the same `HttpOnly`,
+  `SameSite=Strict` session cookie, or `401` with none. `phargus serve` and the dashboard script
+  now point at this link. `/?token=<token>` still works but is deprecated and will be removed in a
+  later release; the first use emits a `PHARGUS_DEP_TOKEN_QUERY` deprecation warning.
+
 ### Added
 
+- `PHARGUS_CONFIG` pins the agent's config file. When set, the agent loads exactly that `.json`
+  or `.js` file (a relative path resolves against the working directory) and does not look for
+  `phargus.config.json` or `phargus.config.js` there. An empty value, a missing or unreadable
+  file, something that is not a regular file, or any other extension rejects with a
+  `PhargusConfigError` naming `PHARGUS_CONFIG`, and never falls back to the working-directory
+  lookup. `docs/THREAT-MODEL.md` gains row I1 for the config file as code-execution surface.
 - `phargus serve`, a command-line way to get the dashboard without writing a collector. The
   package now has a `bin`, so `node --import @pharn-dev/phargus/agent app.mjs | npx phargus serve`
   reads the agent's NDJSON from stdin (or `-`), replays a capture file given as an argument,
@@ -48,8 +70,27 @@ All notable changes to Phargus are recorded here. The format follows
   `createOtlpMetricsExporter` and `toOtlpMetrics` overrides it, and an empty or non-string value
   throws a `TypeError`. The trace exporter is unchanged.
 
+- `docs/API.md`, a reference of every supported export per subpath. `npm run check:exports` now
+  also compares each subpath's runtime export names with an exact expected list, through `import`
+  and `require`, and fails on a name added or missing.
+
 ### Fixed
 
+- Lower memory cost of HTTP tracing under load. The tracer's span buffer kept each of its 1024
+  most recent spans as an object plus four strings, and under load each lived long enough to be
+  promoted by V8 and die in the old generation (about 3× the agent-off promotion rate on a
+  promise-heavy server, and about 25 MiB more RSS after a minute). Spans are now stored as bytes
+  in preallocated slots, which take about 280 KiB for the default 1024 spans. Promotion and
+  steady-state RSS now match the agent-off run. What is buffered, dropped and exported is
+  unchanged.
+- Lower per-request CPU cost of HTTP tracing. Trace and span ids are now cut from a 4 KiB buffer
+  of CSPRNG bytes refilled as it runs out, instead of one `randomBytes()` call (and Buffer) per
+  id; a CPU profile of the overhead benchmark put those calls at about 16% of the busy time of a
+  traced server. Ids keep their format (lowercase hex, never all zeros) and no byte is used twice.
+- The dashboard no longer reports a normal SSE client disconnect as a server error. A write to a
+  connection the client had already closed (`EPIPE`) is now treated like `ECONNRESET`: the client
+  is cleaned up and `onError` (or the process warning) is not called. Other errors on an SSE
+  response or socket are still reported, and cleanup stays idempotent.
 - `summarizeHeapSnapshot` and `diffHeapSnapshots` (`@pharn-dev/phargus/analyzer`) no longer time
   out on large snapshots within a raised `maxSnapshotBytes` (review finding F27). The task timeout
   is now `max(30 s, size / 20 MB/s)`, summed over both files for a diff, computed by the new
@@ -57,6 +98,17 @@ All notable changes to Phargus are recorded here. The format follows
   the one the call makes or one from `createHeapSnapshotPool()` without `taskTimeoutMs`. An
   explicit `timeoutMs` always wins, and a pool made with `taskTimeoutMs`, `createWorkerPool` or
   anything else keeps its own timeout. At the default 256 MiB cap the timeout stays 30 s.
+- Collector persistence no longer backpressures `consume()` (review finding F25). A slow disk used
+  to hold every window up behind the append, all the way back to the source. Windows now go
+  through a bounded queue and are appended one at a time, in emission order, off the pipeline.
+  `persist.maxQueueSize` sets how many wait (default 1024); it must be a positive safe integer,
+  or `createCollector` throws a `RangeError`. When the queue is full the oldest window is dropped.
+  `collector.persistence.dropped` counts those drops and `collector.persistence.failed` counts
+  windows whose append failed (both integers). A failed append still rejects `consume()` with the
+  append error, now without waiting for the source to end. `close()` and the end of `consume()`
+  wait for the queue to drain, with no time limit, so a disk that never completes an append
+  stalls `close()`. `close()` stops accepting windows before it drains, so a `consume()` still
+  running cannot hold it open; a window that arrives after it is counted in `failed`.
 - OTLP exporters (`@pharn-dev/phargus/otel`) no longer lose spans and windows under load (review
   finding F2). They used to send one request per exported span or window, with one request in
   flight, and silently dropped the newest batch once 64 were queued. They now batch: pending
@@ -117,6 +169,20 @@ All notable changes to Phargus are recorded here. The format follows
   directory, the packed bin's execute bit and the release-workflow check are skipped;
   `docs/LIMITS.md` records these limits. The idle event loop tests now bound p50 by the sampler's
   resolution instead of 5 ms, because Windows timers leave an idle loop at about 5 ms.
+
+### Removed
+
+- The public entry points of `@pharn-dev/phargus/agent`, `/collector`, `/dashboard` and
+  `/plugin-runner` no longer export internals and scaffold placeholders (review findings F18,
+  F19). This is **breaking** for 0.x consumers that imported them. What is left is the list in
+  [`docs/API.md`](./docs/API.md). Removed:
+  - `agent`: `encodeNdjsonLine`, `createSpanExport`, `SpanExport`, `enable`, `disable`,
+    `drainSpans`, `DEFAULT_SPAN_BUFFER_SIZE`, `HttpTracingOptions`, `SpanDrain`, `toSpanRecord`,
+    `isSpanRecord`, `PhargusAgentPlaceholder`
+  - `collector`: `createWindowAggregator`, `WindowAggregatorOptions`, `createSpanRouter`,
+    `parseWindowLine`, `serializeWindow`, `CollectorPlaceholder`
+  - `dashboard`: `DashboardPlaceholder`
+  - `plugin-runner`: `PluginRunnerPlaceholder`
 
 ## [0.1.0] - 2026-10-12
 

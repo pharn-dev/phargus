@@ -1,4 +1,5 @@
-import { randomBytes } from 'node:crypto';
+import { Buffer } from 'node:buffer';
+import { randomFillSync } from 'node:crypto';
 
 const ALL_ZERO_TRACE_ID = '0'.repeat(32);
 /** The version-00 layout: version, trace-id, parent-id, trace-flags (55 characters). */
@@ -6,11 +7,30 @@ const TRACEPARENT_00 = /^([0-9a-f]{2})-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2
 const TRACEPARENT_00_LENGTH = 55;
 const ALL_ZERO_PARENT_ID = '0'.repeat(16);
 
+/**
+ * Ids are cut from a pool of CSPRNG bytes refilled 4 KiB at a time, and no byte is used twice.
+ * A traced request takes two ids; one `randomBytes()` call each (a native call plus its own
+ * Buffer) was about 16% of the busy CPU in the overhead benchmark's tracing target.
+ */
+const POOL_BYTES = 4096;
+const pool = Buffer.alloc(POOL_BYTES);
+let poolOffset = POOL_BYTES;
+
+function randomHex(bytes: number): string {
+  if (poolOffset + bytes > POOL_BYTES) {
+    randomFillSync(pool);
+    poolOffset = 0;
+  }
+  const hex = pool.toString('hex', poolOffset, poolOffset + bytes);
+  poolOffset += bytes;
+  return hex;
+}
+
 /** A fresh W3C-valid trace id: 32 lowercase hex characters, never all zeros. */
 export function newTraceId(): string {
-  let id = randomBytes(16).toString('hex');
+  let id = randomHex(16);
   while (id === ALL_ZERO_TRACE_ID) {
-    id = randomBytes(16).toString('hex');
+    id = randomHex(16);
   }
   return id;
 }
@@ -19,11 +39,34 @@ const ALL_ZERO_SPAN_ID = '0'.repeat(16);
 
 /** A fresh W3C-shaped span id: 16 lowercase hex characters, never all zeros. */
 export function newSpanId(): string {
-  let id = randomBytes(8).toString('hex');
+  let id = randomHex(8);
   while (id === ALL_ZERO_SPAN_ID) {
-    id = randomBytes(8).toString('hex');
+    id = randomHex(8);
   }
   return id;
+}
+
+/**
+ * Write a fresh span id as its 8 raw bytes at `target[offset]`, never all zeros: the same id
+ * `newSpanId()` would make, without creating its hex string.
+ */
+export function writeSpanId(target: Uint8Array, offset: number): void {
+  for (;;) {
+    if (poolOffset + 8 > POOL_BYTES) {
+      randomFillSync(pool);
+      poolOffset = 0;
+    }
+    let nonZero = 0;
+    for (let i = 0; i < 8; i += 1) {
+      const byte = pool[poolOffset + i] ?? 0;
+      target[offset + i] = byte;
+      nonZero |= byte;
+    }
+    poolOffset += 8;
+    if (nonZero !== 0) {
+      return;
+    }
+  }
 }
 
 /**

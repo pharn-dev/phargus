@@ -1,5 +1,6 @@
 /// <reference types="node" />
 import { constants, PerformanceObserver, type PerformanceEntry } from 'node:perf_hooks';
+import { roundToNonNegativeInt } from './int.js';
 
 /** One window of garbage collection activity. Pauses are integer nanoseconds, the rest integer counts. */
 export type GcSample = {
@@ -15,17 +16,6 @@ export type GcSampler = {
   /** Read the current window, then reset so the next window starts fresh. */
   sample(): GcSample;
 };
-
-function toNonNegativeInt(value: number): number {
-  if (Number.isNaN(value)) {
-    return 0;
-  }
-  const rounded = Math.round(value);
-  if (rounded < 0) {
-    return 0;
-  }
-  return rounded > Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : rounded;
-}
 
 function emptyWindow(): GcSample {
   return {
@@ -55,7 +45,7 @@ export function createGcSampler(): GcSampler {
   let window = emptyWindow();
 
   const fold = (entry: PerformanceEntry): void => {
-    const pauseNs = toNonNegativeInt(entry.duration * 1_000_000);
+    const pauseNs = roundToNonNegativeInt(entry.duration * 1_000_000);
     window.count = Math.min(window.count + 1, Number.MAX_SAFE_INTEGER);
     window.totalPause = Math.min(window.totalPause + pauseNs, Number.MAX_SAFE_INTEGER);
     window.maxPause = Math.max(window.maxPause, pauseNs);

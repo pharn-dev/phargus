@@ -2,7 +2,9 @@
 // bench/overhead.mjs; measures itself between the parent's 'start' and 'stop' requests.
 //
 // Variants that preload the agent (`idle`, `full`) get `--import @pharn-dev/phargus/agent` from the parent.
-// `tracing` and `samplers` load the library API (no auto-start) here, from BENCH_AGENT_INDEX.
+// `tracing` and `samplers` load the library API (no auto-start) here, from BENCH_AGENT_INDEX. The
+// `tracing` variant also loads the HTTP tracing and span export files built next to that index,
+// because the public entry no longer re-exports them.
 import { createWriteStream } from 'node:fs';
 import http from 'node:http';
 import { devNull } from 'node:os';
@@ -30,8 +32,10 @@ async function setUpVariant() {
   const exporter = devNullExporter(agent);
   if (variant === 'tracing') {
     // HTTP tracing only: spans drained once per interval, like the auto-started agent does.
-    agent.enable();
-    const spans = agent.createSpanExport(agent.drainSpans, (record) => exporter.export(record));
+    const tracing = await import(new URL('./http-tracing.js', indexUrl).href);
+    const { createSpanExport } = await import(new URL('./span-export.js', indexUrl).href);
+    tracing.enable();
+    const spans = createSpanExport(tracing.drainSpans, (record) => exporter.export(record));
     setInterval(() => spans.flush(), SAMPLE_INTERVAL_MS).unref();
   } else {
     // Samplers and the backpressure probe only; HTTP tracing stays off.

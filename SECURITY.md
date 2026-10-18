@@ -112,8 +112,9 @@ unless you ask to remain anonymous.
    list the names you reach it by in `allowedHosts`.
 2. **Treat heap snapshots as secrets.** They contain whatever was in memory.
 3. **Review plugin rules** before loading them, and keep the sandbox limits enabled.
-4. **Confine the symbolizer** with the `roots` option when stack frames may name files outside your
-   own build.
+4. **Confine the symbolizer.** Its reads are confined to the working directory by default. Pass
+   `roots` naming your build output when the working directory is broad (such as `/` or `$HOME`),
+   and avoid `roots: null` unless frames come only from your own build.
 5. **Pin and verify.** Install exact versions and verify package provenance where it is available.
 6. **Run with the Node Permission Model** (`--permission`) where your deployment allows it.
 

@@ -11,7 +11,7 @@ type SymbolizedFrame = StackFrame & { original?: OriginalPosition; error?: Error
 type SymbolizeModule = {
   symbolizeStackFrames: (
     frames: readonly StackFrame[],
-    options?: { timeoutMs?: number },
+    options?: { timeoutMs?: number; roots?: readonly string[] },
   ) => Promise<SymbolizedFrame[]>;
 };
 
@@ -124,7 +124,10 @@ describe('analyzer stack symbolization', () => {
       const input = frames.map((frame) => ({ ...frame }));
 
       const mod = (await import('./index.js')) as unknown as SymbolizeModule;
-      const result = await mod.symbolizeStackFrames(frames, { timeoutMs: 60_000 });
+      const result = await mod.symbolizeStackFrames(frames, {
+        timeoutMs: 60_000,
+        roots: [dir],
+      });
 
       expect(Array.isArray(result)).toBe(true);
       expect(result).toHaveLength(frames.length);
