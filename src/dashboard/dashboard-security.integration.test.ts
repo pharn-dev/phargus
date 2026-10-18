@@ -104,7 +104,7 @@ async function login(port: number): Promise<{ setCookie: string; cookie: string 
 const ROUTES = ['/', '/app.js', '/app.css', '/events'];
 
 describe('dashboard Host and Origin validation (DNS rebinding)', () => {
-  it('answers 421 with no body to a foreign Host on the page, assets and /events', async () => {
+  it('answers 421 with a hint body to a foreign Host on the page, assets and /events', async () => {
     for (const token of [undefined, TOKEN]) {
       const server = await start(token === undefined ? {} : { token });
       const auth: Record<string, string> =
@@ -119,7 +119,13 @@ describe('dashboard Host and Origin validation (DNS rebinding)', () => {
           const response = await send(server.port, path, { ...auth, host });
           const what = `GET ${path} Host: ${host} (token: ${String(token !== undefined)})`;
           expect(response.status, what).toBe(421);
-          expect(response.body, `${what}: body`).toBe('');
+          expect(response.headers['content-type'], `${what}: type`).toBe(
+            'text/plain; charset=utf-8',
+          );
+          expect(response.body, `${what}: names allowedHosts`).toContain('allowedHosts');
+          expect(response.body, `${what}: names --allowed-host`).toContain('--allowed-host');
+          expect(response.body, `${what}: no echo of the Host`).not.toContain(host);
+          expect(response.body, `${what}: no echo of the name`).not.toContain('evil');
           expectErrorHeaders(what, response.headers);
         }
       }
