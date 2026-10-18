@@ -1,7 +1,10 @@
 /// <reference types="node" />
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 
-/** One window of event loop delay, all values integer nanoseconds. */
+/**
+ * One window of event loop delay, all values integer nanoseconds. Each value is the delay beyond the
+ * expected timer interval (the sampler's `resolution`), clamped at 0, so an idle loop reads close to 0.
+ */
 export type EventLoopSample = {
   min: number;
   max: number;
@@ -17,6 +20,26 @@ export type EventLoopSampler = {
   sample(): EventLoopSample;
 };
 
+export type EventLoopSamplerOptions = {
+  /**
+   * Timer interval of the underlying `monitorEventLoopDelay` histogram, in whole milliseconds
+   * (default 10). It is subtracted from every exported value.
+   */
+  resolution?: number;
+};
+
+const DEFAULT_RESOLUTION_MS = 10;
+const NS_PER_MS = 1_000_000;
+
+function validateResolution(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    throw new RangeError(
+      `createEventLoopSampler: resolution must be a positive integer number of milliseconds, got ${String(value)}`,
+    );
+  }
+  return value;
+}
+
 function toNonNegativeInt(value: number): number {
   if (Number.isNaN(value)) {
     return 0;
@@ -28,8 +51,11 @@ function toNonNegativeInt(value: number): number {
   return rounded > Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : rounded;
 }
 
-export function createEventLoopSampler(): EventLoopSampler {
-  const histogram = monitorEventLoopDelay();
+export function createEventLoopSampler(options?: EventLoopSamplerOptions): EventLoopSampler {
+  const resolution = validateResolution(options?.resolution ?? DEFAULT_RESOLUTION_MS);
+  // The histogram records the whole timer interval on every tick, even on an idle loop.
+  const baselineNs = resolution * NS_PER_MS;
+  const histogram = monitorEventLoopDelay({ resolution });
   return {
     enable(): void {
       histogram.enable();
@@ -43,11 +69,11 @@ export function createEventLoopSampler(): EventLoopSampler {
         histogram.count === 0
           ? { min: 0, max: 0, mean: 0, p50: 0, p99: 0 }
           : {
-              min: toNonNegativeInt(histogram.min),
-              max: toNonNegativeInt(histogram.max),
-              mean: toNonNegativeInt(histogram.mean),
-              p50: toNonNegativeInt(histogram.percentile(50)),
-              p99: toNonNegativeInt(histogram.percentile(99)),
+              min: toNonNegativeInt(histogram.min - baselineNs),
+              max: toNonNegativeInt(histogram.max - baselineNs),
+              mean: toNonNegativeInt(histogram.mean - baselineNs),
+              p50: toNonNegativeInt(histogram.percentile(50) - baselineNs),
+              p99: toNonNegativeInt(histogram.percentile(99) - baselineNs),
             };
       histogram.reset();
       return result;

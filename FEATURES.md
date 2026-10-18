@@ -31,7 +31,8 @@ Status legend:
 
 ## 2. Runtime metrics (the headline diagnostics)
 
-- ✅ Event loop lag (min, max, mean, p50, p99 per interval; aggregated per window).
+- ✅ Event loop lag (min, max, mean, p50, p99 per interval; aggregated per window). Values are the
+  delay beyond the timer interval the histogram samples at (10 ms), so an idle loop reads close to 0.
 - ✅ Memory pressure (samples carry heap used/total, RSS, external and array buffers; windows keep
   the last and max heap used and RSS).
 - ✅ GC events (count, total and max pause, by kind) from `PerformanceObserver` `gc` entries. There
