@@ -284,9 +284,13 @@ describe('phargus CLI: the packed tarball ships the bin', () => {
 
       const firstLine = (binEntry?.data.toString('utf8') ?? '').split('\n')[0];
       expect(firstLine).toBe('#!/usr/bin/env node');
-      expect((binEntry?.mode ?? 0) & 0o111, `mode ${(binEntry?.mode ?? 0).toString(8)}`).not.toBe(
-        0,
-      );
+      // npm pack takes file modes from the file system, and Windows has no POSIX execute bit, so
+      // a tarball packed there has a 644 bin. Releases are packed on Linux (see docs/LIMITS.md).
+      if (process.platform !== 'win32') {
+        expect((binEntry?.mode ?? 0) & 0o111, `mode ${(binEntry?.mode ?? 0).toString(8)}`).not.toBe(
+          0,
+        );
+      }
     },
     TEST_TIMEOUT_MS,
   );

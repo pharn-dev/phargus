@@ -58,7 +58,7 @@ function mutateJob(
 function expectRejected(mutated: string) {
   // The control first: the unmutated text is accepted, so the failure below is the mutation's.
   const control = checkText(committed);
-  expect(control.status).toBe(0);
+  expect(control.status, control.stderr).toBe(0);
   expect(control.stderr).toBe('');
 
   const result = checkText(mutated);
@@ -75,7 +75,7 @@ function expectRejected(mutated: string) {
 describe('scripts/check-publish-workflow.mjs', { timeout: 30_000 }, () => {
   it('AC-3: accepts the committed .github/workflows/publish.yml', () => {
     const result = check([]);
-    expect(result.status).toBe(0);
+    expect(result.status, result.stderr).toBe(0);
     expect(result.stderr).toBe('');
     expect(result.stdout).toMatch(/^ok /);
   });
