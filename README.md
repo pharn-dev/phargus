@@ -213,17 +213,20 @@ The recording above is that example.
 
 Choose where the agent writes with `PHARGUS_OUTPUT`:
 
-| Variable              | Default  | Meaning                                                   |
-| --------------------- | -------- | --------------------------------------------------------- |
-| `PHARGUS_OUTPUT`      | `stdout` | `stdout`, `none` (agent off), or a file path              |
-| `PHARGUS_INTERVAL_MS` | `1000`   | sampling interval                                         |
-| `PHARGUS_QUEUE_BOUND` | `1024`   | lines held per output queue before the oldest are dropped |
-| `PHARGUS_ENABLED`     | `true`   | `false` or `0` turns the agent off                        |
+| Variable              | Default  | Meaning                                                                                   |
+| --------------------- | -------- | ----------------------------------------------------------------------------------------- |
+| `PHARGUS_OUTPUT`      | `stdout` | `stdout`, `none` (agent off), or a file path                                              |
+| `PHARGUS_INTERVAL_MS` | `1000`   | sampling interval                                                                         |
+| `PHARGUS_QUEUE_BOUND` | `1024`   | lines held per output queue before the oldest are dropped                                 |
+| `PHARGUS_ENABLED`     | `true`   | `false` or `0` turns the agent off                                                        |
+| `PHARGUS_CONFIG`      | none     | path to the one config file to load, `.json` or `.js`; skips the working-directory lookup |
 
 The same keys (`output`, `intervalMs`, `queueBound`, `enabled`) can go in `phargus.config.json` or
 `phargus.config.js` in the working directory. An unknown `PHARGUS_*` variable prints one warning on
 stderr and is ignored; `PHARGUS_TOKEN` and `PHARGUS_DEBUG`, which belong to `phargus serve`, are
-ignored without a warning. An invalid value disables the agent with one
+ignored without a warning. When `PHARGUS_CONFIG` is set, `phargus.config.json` and
+`phargus.config.js` in the working directory are not read, and a problem with the pinned file
+disables the agent like any invalid value. An invalid value disables the agent with one
 `[phargus] agent disabled: ...` line on stderr; your app keeps running.
 
 ---

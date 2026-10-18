@@ -1,0 +1,85 @@
+{
+  "schema": "ac-tests-lock/5",
+  "feature": "agent-config-path-env",
+  "mode": "test-first",
+  "spec": {
+    "spec_id": "agent-config-path-env",
+    "spec_content_hash": "988843b6c77d799eadd17b78ba9e95c7ed4b0757ac845a790afecf5e4b0dbd70"
+  },
+  "mapping": {
+    "path": "pharn/features/agent-config-path-env/AC-TESTS.md",
+    "sha256": "d88b8143b3935c34076c7f8b9c9233d029c22ca99f0cd4c07929d07cdf460058"
+  },
+  "files": [
+    {
+      "path": "src/agent/config-path-env.ac1.integration.test.ts",
+      "sha256": "e7a28f6411b66801cab73e64caef54b5f868e68892934d0f8732f4cb364d8262"
+    },
+    {
+      "path": "src/agent/config-path-env.ac2.integration.test.ts",
+      "sha256": "83639fb40a1bf23acefb7e5158d56fc5138f4c1e1682767066f8786c37d2f7c1"
+    },
+    {
+      "path": "src/agent/config-path-env.ac3.integration.test.ts",
+      "sha256": "0cd61ad664819db0456225b1828cac4f759ad2a0aec5766ea784075a43fb4a37"
+    }
+  ],
+  "bootstrap": null,
+  "red_run": {
+    "stamp_sha256": "8f6b3d960c94805e4eba8f42af88d8adbd996e6783eca3898c57de4708e89e70",
+    "files_sha256": "b07ffcdcf5a3692ed996bb88d89f274a0bd8f75a068cd77d4a50ca2fc0bde4a2",
+    "gates": [
+      {
+        "gate": "test",
+        "results_sha256": "f8584e1cf9353c3ed2ea3c1baa473462a78ffc2baecb1df35dd288dd92ab84d7"
+      }
+    ],
+    "acs": [
+      {
+        "id": "AC-1",
+        "tests": [
+          "src/agent/config-path-env.ac1.integration.test.ts::agent config path env — AC-1 › AC-1: PHARGUS_CONFIG pins a .json file whose values win over the cwd file, with a relative output resolved against the cwd, no PHARGUS_CONFIG key and no warning"
+        ]
+      },
+      {
+        "id": "AC-2",
+        "tests": [
+          "src/agent/config-path-env.ac2.integration.test.ts::agent config path env — AC-2 › AC-2: PHARGUS_CONFIG pins a .js file and resolves even though the cwd holds both phargus.config.json and phargus.config.js"
+        ]
+      },
+      {
+        "id": "AC-3",
+        "tests": [
+          "src/agent/config-path-env.ac3.integration.test.ts::agent config path env — AC-3 › AC-3: a PHARGUS_CONFIG path that does not exist rejects with a PhargusConfigError naming PHARGUS_CONFIG",
+          "src/agent/config-path-env.ac3.integration.test.ts::agent config path env — AC-3 › AC-3: a PHARGUS_CONFIG path that is a directory (dir.json) rejects with a PhargusConfigError naming PHARGUS_CONFIG",
+          "src/agent/config-path-env.ac3.integration.test.ts::agent config path env — AC-3 › AC-3: a PHARGUS_CONFIG path with an unsupported extension (settings.yaml) rejects with a PhargusConfigError naming PHARGUS_CONFIG",
+          "src/agent/config-path-env.ac3.integration.test.ts::agent config path env — AC-3 › AC-3: an empty PHARGUS_CONFIG rejects with a PhargusConfigError naming PHARGUS_CONFIG"
+        ]
+      }
+    ]
+  },
+  "test_infra": {
+    "levels": [
+      "integration"
+    ],
+    "gates": [
+      {
+        "id": "test",
+        "script": "vitest run",
+        "pre": null,
+        "post": null,
+        "results": "vitest-json"
+      }
+    ],
+    "chained": [],
+    "configs": [
+      {
+        "path": "vitest.config.mts",
+        "sha256": "ae812b81b31f5320f8486226aeef87e3767e7851772d1a845cdeb5b881a17421"
+      }
+    ],
+    "script_files": [],
+    "jest": null,
+    "exclude": []
+  }
+}

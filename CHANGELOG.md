@@ -19,6 +19,12 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Added
 
+- `PHARGUS_CONFIG` pins the agent's config file. When set, the agent loads exactly that `.json`
+  or `.js` file (a relative path resolves against the working directory) and does not look for
+  `phargus.config.json` or `phargus.config.js` there. An empty value, a missing or unreadable
+  file, something that is not a regular file, or any other extension rejects with a
+  `PhargusConfigError` naming `PHARGUS_CONFIG`, and never falls back to the working-directory
+  lookup. `docs/THREAT-MODEL.md` gains row I1 for the config file as code-execution surface.
 - `phargus serve`, a command-line way to get the dashboard without writing a collector. The
   package now has a `bin`, so `node --import @pharn-dev/phargus/agent app.mjs | npx phargus serve`
   reads the agent's NDJSON from stdin (or `-`), replays a capture file given as an argument,
