@@ -61,6 +61,16 @@ const DEFAULT_MAX_BUFFERED_EVENTS = 1000;
 /** At most one malformed-request report (plus one summary) per this many milliseconds. */
 const CLIENT_ERROR_REPORT_INTERVAL_MS = 10_000;
 
+/**
+ * The 421 body: says how to allow a Host without echoing the rejected value back (it is
+ * attacker-controlled in a DNS rebinding attempt, and nothing the user needs to see again).
+ */
+const MISDIRECTED_BODY =
+  'misdirected request: this dashboard does not answer to the Host this request used.\n' +
+  'To reach it by another hostname or IP (behind a proxy or a container port map), add that\n' +
+  'host to the allowedHosts option of createDashboardServer(), or pass --allowed-host <host>\n' +
+  'to phargus serve.\n';
+
 function requirePositiveInteger(name: string, value: number): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
     throw new RangeError(`${name} must be a positive safe integer`);
@@ -253,8 +263,7 @@ export async function createDashboardServer(
   const server: Server = createServer((req, res) => {
     // DNS rebinding defence: answer only the hosts this server is reachable as.
     if (!hostPolicy.hostAllowed(req.headers.host)) {
-      res.writeHead(421, { ...ERROR_SECURITY_HEADERS, 'content-length': '0', connection: 'close' });
-      res.end();
+      plain(res, 421, MISDIRECTED_BODY, { connection: 'close' });
       return;
     }
     const url = new URL(req.url ?? '/', 'http://localhost');

@@ -49,6 +49,10 @@ All notable changes to Phargus are recorded here. The format follows
   queue; with full buffers it previously got no alerts and a truncated window history. The replay
   is written in one call outside that queue, alerts first, then windows, then spans.
   `maxBufferedEvents` and `droppedEvents` now cover live events only.
+- Dashboard: a request whose `Host` is not allowed still gets `421`, but now with a short
+  `text/plain` body naming the `allowedHosts` option and `phargus serve --allowed-host` (review
+  finding F24). It used to be bodyless, so behind a proxy or a container port map the browser
+  showed a blank page. The rejected `Host` is not echoed back.
 - The collector no longer dies on non-agent stdout lines. `collector.consume()` now accepts any
   parsed records: foreign records (not agent data) and malformed ones (agent-shaped but unusable)
   are skipped and counted in `collector.ignored`, with an optional `onIgnored` hook, instead of
