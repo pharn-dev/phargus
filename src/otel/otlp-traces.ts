@@ -24,7 +24,7 @@ function requireNonNegativeSafeInteger(field: string, value: number): void {
 
 /**
  * Ids pass through unchanged. The agent already makes OTLP-sized ids (src/agent/trace-id.ts):
- * traceId is randomBytes(16) and spanId randomBytes(8), hex-encoded, and inbound `traceparent`
+ * traceId is 16 and spanId 8 CSPRNG bytes, hex-encoded, and inbound `traceparent`
  * ids are lowercased, so they are 32 and 16 lowercase hex characters, which is what OTLP JSON
  * wants. A malformed id is rejected, never repaired: the whole conversion throws a RangeError
  * that names the field (never the id value). The exporter turns that into one failed batch

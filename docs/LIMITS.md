@@ -14,6 +14,19 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 - **Tracing is where the per-request cost is.** Each traced request runs inside an
   `AsyncLocalStorage` context and keeps a small record until its response finishes. The samplers
   and the backpressure probe add a fixed cost per interval and a few nanoseconds per stream write.
+- **Tracing overhead is not negligible yet (unresolved).** A stable full run of
+  `bench/overhead.mjs` on Node 22.18.0 (Apple M2, rps CV at most 3.0%, 2026-10-18) measured
+  `tracing` against `none` at +33% CPU per request on `trivial`, +48% on `promise`, and −16% and
+  −12% throughput on the saturated `cpu` and `stream` workloads; samplers alone stayed within about
+  1%. Cutting trace and span ids from a pooled CSPRNG buffer roughly halved the per-request CPU
+  in a later run (`promise` +29%, `cpu` −7% throughput), but that run had one disturbed round, and
+  its repeat on the same host was noisier, so the after numbers are indicative, not a verdict.
+  Memory did not improve: under about 50 000 requests/s, RSS stays 17–19 MiB (+23–26%) higher on
+  `trivial` and 35–37 MiB (+47–49%) on `promise`. That is not a leak. The 1024-span drop-oldest buffer keeps
+  recent spans alive long enough to survive young-generation collections, so V8 grows its young
+  generation to the maximum; a 16-span buffer brings RSS back to what `AsyncLocalStorage` alone
+  costs. Changing the buffer's size or drop policy trades away retained spans, so it is left as an
+  open decision. No overhead budget is defined yet.
 - **Node 22 makes tracing more expensive.** On Node 22, `AsyncLocalStorage` is built on
   `async_hooks` promise hooks, so once tracing is on every promise in the process pays for it, and
   promise-heavy handlers can lose a large share of their throughput. Node 22's

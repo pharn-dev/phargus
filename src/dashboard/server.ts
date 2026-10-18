@@ -83,8 +83,12 @@ function requirePositiveInteger(name: string, value: number): void {
   }
 }
 
+/**
+ * A peer that went away: a reset, an aborted request, or a write to a socket the peer already
+ * closed (`EPIPE`, which an SSE stream meets whenever a client hangs up while events are queued).
+ */
 function isDisconnect(error: NodeJS.ErrnoException): boolean {
-  return error.code === 'ECONNRESET' || error.message === 'aborted';
+  return error.code === 'ECONNRESET' || error.code === 'EPIPE' || error.message === 'aborted';
 }
 
 /** Emitted once per server by the first `GET /?token=` exchange; names the replacement, never a token. */
