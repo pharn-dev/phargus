@@ -8,7 +8,7 @@ dashboard has anything to show. That's all the ordering means.
 
 Calendar is yours to set; the ordering is the point.
 
-**Status:** S0 to S7 are implemented on `main`. S8 is in progress: version 0.1.0 is the first release and is being published to npm; launch is pending.
+**Status:** S0 to S7 are implemented on `main`. S8 is in progress: version 0.1.0, the first release, is published on npm (2026-10-12); the launch material (blog post, Show HN) is still pending.
 Where the built code differs from a step's wording below:
 
 - S1: GC events come from a `PerformanceObserver`, not a `--trace-gc` hook.
@@ -23,7 +23,7 @@ Where the built code differs from a step's wording below:
 - Skeleton of the 5 modules under `src/` (a sixth, `otel`, came with S7) with correct `exports` subpaths (dual
   CJS+ESM) and an import-boundary lint rule for the agent.
 - CI: GitHub Actions running build + typecheck + lint + test on PRs.
-- Release process in place (`docs/RELEASING.md`, `publish.yml`); publishing goes live at S8.
+- Release process in place (`docs/RELEASING.md`, `publish.yml`); it published 0.1.0 at S8.
 - Outcome: a clean single package that builds with `npm run build`.
 
 ## S1 — Agent core: the one-liner
@@ -78,7 +78,7 @@ Where the built code differs from a step's wording below:
 
 ## S8 — Launch
 
-- First npm release, through the manual process in `docs/RELEASING.md`.
+- ✅ First npm release: 0.1.0, published 2026-10-12 (process: `docs/RELEASING.md`).
 - `README` with a GIF/asciinema of one-liner → dashboard.
 - `CONTRIBUTING.md`, labeled `good-first-issue`s.
 - Technical blog post + "Show HN".

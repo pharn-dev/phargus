@@ -74,6 +74,14 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- Lower per-request CPU cost of HTTP tracing. Trace and span ids are now cut from a 4 KiB buffer
+  of CSPRNG bytes refilled as it runs out, instead of one `randomBytes()` call (and Buffer) per
+  id; a CPU profile of the overhead benchmark put those calls at about 16% of the busy time of a
+  traced server. Ids keep their format (lowercase hex, never all zeros) and no byte is used twice.
+- The dashboard no longer reports a normal SSE client disconnect as a server error. A write to a
+  connection the client had already closed (`EPIPE`) is now treated like `ECONNRESET`: the client
+  is cleaned up and `onError` (or the process warning) is not called. Other errors on an SSE
+  response or socket are still reported, and cleanup stays idempotent.
 - `summarizeHeapSnapshot` and `diffHeapSnapshots` (`@pharn-dev/phargus/analyzer`) no longer time
   out on large snapshots within a raised `maxSnapshotBytes` (review finding F27). The task timeout
   is now `max(30 s, size / 20 MB/s)`, summed over both files for a diff, computed by the new

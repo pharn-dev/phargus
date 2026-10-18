@@ -29,8 +29,10 @@ node --import @pharn-dev/phargus/agent app.mjs | npx phargus serve
   <img src="./docs/assets/dashboard.gif" alt="The Phargus dashboard: event loop lag, memory and GC cards, alerts firing and resolving, and a waterfall of recent requests" width="640">
 </p>
 
-> **Status: 0.1.0, the first release, is on npm.** Roadmap steps S0 to S7 are implemented (agent,
-> collector, dashboard, tracing, V8 and memory depth, plugin runner, OpenTelemetry export; see
+> **Status: 0.1.0, the first release, is on npm** (published 2026-10-12; `latest` on the npm registry).
+> `main` can be ahead of it: changes after 0.1.0 are listed under `Unreleased` in
+> [`CHANGELOG.md`](./CHANGELOG.md). Roadmap steps S0 to S7 are implemented (agent, collector,
+> dashboard, tracing, V8 and memory depth, plugin runner, OpenTelemetry export; see
 > [`ROADMAP.md`](./ROADMAP.md)).
 
 ## Contents
