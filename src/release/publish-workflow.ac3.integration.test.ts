@@ -72,51 +72,58 @@ function expectRejected(mutated: string) {
 
 // Each case spawns the checker synchronously; under a loaded machine that alone can pass vitest's
 // 5 s default, so the suite gets the same headroom as the other process-spawning tests.
-describe('scripts/check-publish-workflow.mjs', { timeout: 30_000 }, () => {
-  it('AC-3: accepts the committed .github/workflows/publish.yml', () => {
-    const result = check([]);
-    expect(result.status, result.stderr).toBe(0);
-    expect(result.stderr).toBe('');
-    expect(result.stdout).toMatch(/^ok /);
-  });
+// The check runs publish.yml's bash step against a stub `git` put first on PATH. Under Git for
+// Windows' bash the real git runs instead of the stub ("'origin' does not appear to be a git
+// repository"), so the gate scenarios cannot be reproduced there. publish.yml runs on Linux only.
+describe.skipIf(process.platform === 'win32')(
+  'scripts/check-publish-workflow.mjs',
+  { timeout: 30_000 },
+  () => {
+    it('AC-3: accepts the committed .github/workflows/publish.yml', () => {
+      const result = check([]);
+      expect(result.status, result.stderr).toBe(0);
+      expect(result.stderr).toBe('');
+      expect(result.stdout).toMatch(/^ok /);
+    });
 
-  it('AC-3: rejects an added pull_request trigger', () => {
-    const mutated = committed.replace(/^on:\n/m, 'on:\n  pull_request:\n');
-    expect(mutated).not.toBe(committed);
-    expectRejected(mutated);
-  });
+    it('AC-3: rejects an added pull_request trigger', () => {
+      const mutated = committed.replace(/^on:\n/m, 'on:\n  pull_request:\n');
+      expect(mutated).not.toBe(committed);
+      expectRejected(mutated);
+    });
 
-  it('AC-3: rejects cancel-in-progress set to true', () => {
-    const mutated = committed.replace(/cancel-in-progress: false/, 'cancel-in-progress: true');
-    expect(mutated).not.toBe(committed);
-    expectRejected(mutated);
-  });
+    it('AC-3: rejects cancel-in-progress set to true', () => {
+      const mutated = committed.replace(/cancel-in-progress: false/, 'cancel-in-progress: true');
+      expect(mutated).not.toBe(committed);
+      expectRejected(mutated);
+    });
 
-  it('AC-3: rejects id-token: write added to the build job', () => {
-    const mutated = mutateJob(committed, '\n  build:\n', '\n  publish:\n', (s) =>
-      s.replace('\n  build:\n', '\n  build:\n    permissions:\n      id-token: write\n'),
-    );
-    expectRejected(mutated);
-  });
+    it('AC-3: rejects id-token: write added to the build job', () => {
+      const mutated = mutateJob(committed, '\n  build:\n', '\n  publish:\n', (s) =>
+        s.replace('\n  build:\n', '\n  build:\n    permissions:\n      id-token: write\n'),
+      );
+      expectRejected(mutated);
+    });
 
-  it('AC-3: rejects contents: write added to the publish job', () => {
-    const mutated = mutateJob(committed, '\n  publish:\n', '\n  release:\n', (s) =>
-      s.replace(/contents: read/, 'contents: write'),
-    );
-    expectRejected(mutated);
-  });
+    it('AC-3: rejects contents: write added to the publish job', () => {
+      const mutated = mutateJob(committed, '\n  publish:\n', '\n  release:\n', (s) =>
+        s.replace(/contents: read/, 'contents: write'),
+      );
+      expectRejected(mutated);
+    });
 
-  it("AC-3: rejects a release job whose if: lacks the NPM_PUBLISH_ENABLED == 'true' clause", () => {
-    const mutated = mutateJob(committed, '\n  release:\n', null, (s) =>
-      s.replace(/\s*&&\s*vars\.NPM_PUBLISH_ENABLED == 'true'/, ''),
-    );
-    expectRejected(mutated);
-  });
+    it("AC-3: rejects a release job whose if: lacks the NPM_PUBLISH_ENABLED == 'true' clause", () => {
+      const mutated = mutateJob(committed, '\n  release:\n', null, (s) =>
+        s.replace(/\s*&&\s*vars\.NPM_PUBLISH_ENABLED == 'true'/, ''),
+      );
+      expectRejected(mutated);
+    });
 
-  it('AC-3: rejects a gate decide step whose exit-2 case no longer releases (shown by executing it)', () => {
-    const mutated = mutateJob(committed, '\n  gate:\n', '\n  build:\n', (s) =>
-      s.replace(/(\n\s*2\)\s*)RELEASE=true/, '$1RELEASE=false'),
-    );
-    expectRejected(mutated);
-  });
-});
+    it('AC-3: rejects a gate decide step whose exit-2 case no longer releases (shown by executing it)', () => {
+      const mutated = mutateJob(committed, '\n  gate:\n', '\n  build:\n', (s) =>
+        s.replace(/(\n\s*2\)\s*)RELEASE=true/, '$1RELEASE=false'),
+      );
+      expectRejected(mutated);
+    });
+  },
+);

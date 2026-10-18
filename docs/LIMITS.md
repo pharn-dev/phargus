@@ -111,7 +111,8 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   process.
 - **Platform.** Phargus is developed on Linux and macOS. The required CI checks run on Linux; a
   non-required smoke job runs the build, the exports check and the test suite on Windows and macOS.
-  The packed-package install check runs on Linux only.
+  The packed-package install check and the release-workflow check run on Linux only, and releases
+  are packed on Linux: a tarball packed on Windows has no execute bit on the `phargus` bin.
 - **No graceful shutdown from a signal on Windows.** On Windows, `process.kill()` with `SIGTERM` or
   `SIGINT` ends the process without running its signal handlers. So `phargus serve` and
   `examples/express-app` stop without closing the dashboard, flushing the collector or printing the
