@@ -337,17 +337,24 @@ describe('the public API documentation', () => {
     expect(tableRows.some((row) => /\]\((?:\.\/)?docs\/API\.md\)/.test(row))).toBe(true);
   });
 
-  it('AC-3: CHANGELOG [Unreleased] has a Removed subsection naming every removed name and calling it breaking', () => {
+  it('AC-3: CHANGELOG has a Removed subsection naming every removed name and calling it breaking', () => {
     const changelog = readFileSync(join(repoRoot, 'CHANGELOG.md'), 'utf8');
-    const unreleased = sectionOf(changelog, '## [Unreleased]', (line) => line.startsWith('## ['));
+    // The removal ships in the first release after it landed: its section moves from Unreleased
+    // to the versioned heading when that release is cut.
+    const unreleased = [
+      '## [Unreleased]',
+      ...changelog.split('\n').filter((l) => l.startsWith('## [0.2.0]')),
+    ]
+      .map((heading) => sectionOf(changelog, heading, (line) => line.startsWith('## [')))
+      .join('\n');
     const removed = sectionOf(
       unreleased,
       '### Removed',
       (line) => line.startsWith('### ') || line.startsWith('## '),
     );
-    expect(removed, 'CHANGELOG [Unreleased] has no ### Removed subsection').not.toBe('');
+    expect(removed, 'CHANGELOG has no ### Removed subsection').not.toBe('');
     expect(removed).toMatch(/\bbreaking\b/i);
     const unnamed = REMOVED_NAMES.filter((name) => !removed.includes(`\`${name}\``));
-    expect(unnamed, 'CHANGELOG [Unreleased] ### Removed misses').toEqual([]);
+    expect(unnamed, 'CHANGELOG ### Removed misses').toEqual([]);
   });
 });
