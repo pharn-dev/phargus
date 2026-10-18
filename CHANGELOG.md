@@ -37,6 +37,16 @@ All notable changes to Phargus are recorded here. The format follows
   rejected. `content-type` is reserved for the sink's own `application/json`, so supplying it is a
   `TypeError` rather than a silent override. `__proto__` is rejected too, because Node's `fetch`
   drops it. Errors name the header, never its value.
+- OTLP metrics export (`@pharn-dev/phargus/otel`) now carries every window field (review finding
+  F22). New gauges `phargus.gc.pause.max` and `phargus.backpressure.stall.max` (`ns`); new delta
+  monotonic sums `phargus.gc.pause.total` and `phargus.backpressure.stall.total` (`ns`),
+  `phargus.backpressure.events` (`{event}`), `phargus.window.samples` and
+  `phargus.window.late_samples` (`{sample}`, from the window's `count` and `late`). The metrics
+  resource now carries `service.instance.id`, `host.name` and `process.pid` beside
+  `service.name`, so several instances no longer merge into one series. `service.instance.id`
+  defaults to a random UUID generated once per process; the new `serviceInstanceId` option on
+  `createOtlpMetricsExporter` and `toOtlpMetrics` overrides it, and an empty or non-string value
+  throws a `TypeError`. The trace exporter is unchanged.
 
 ### Fixed
 

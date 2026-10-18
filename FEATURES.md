@@ -66,6 +66,11 @@ Status legend:
 - ✅ OpenTelemetry export of windows (metrics) and spans (traces) as OTLP/HTTP JSON, in
   `@pharn-dev/phargus/otel`, outside the agent core. Batched sends, a bounded drop-oldest queue with
   counted and reported loss, timeouts, no redirects, bounded `close()`.
+- ✅ Every window field exported as an OTLP metric: event loop lag and memory gauges, GC count and
+  pause, backpressure events and stalls, and the window's sample and late-sample counts (maxima and
+  last values as gauges, per-window totals as delta sums; the list is in the README). Metrics carry
+  the resource attributes `service.name`, `service.instance.id` (a per-process UUID, or
+  `serviceInstanceId`), `host.name` and `process.pid`.
 
 ## 5. Dashboard
 

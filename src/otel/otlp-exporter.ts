@@ -2,8 +2,15 @@ import type { AggregatedWindow, CollectorListener } from '../collector/index.js'
 import { createOtlpBatchQueue } from './otlp-batch-queue.js';
 import { resolveOtlpExporterOptions, type OtlpExporterOptions } from './otlp-exporter-options.js';
 import { toOtlpMetrics } from './otlp-metrics.js';
+import { DEFAULT_SERVICE_INSTANCE_ID, requireServiceInstanceId } from './otlp-resource.js';
 
-export type OtlpMetricsExporterOptions = OtlpExporterOptions;
+export type OtlpMetricsExporterOptions = OtlpExporterOptions & {
+  /**
+   * The `service.instance.id` resource attribute: a non-empty string. Defaults to a random UUID
+   * generated once per process, shared by every metrics exporter in it.
+   */
+  serviceInstanceId?: string;
+};
 
 export type OtlpMetricsExporter = {
   /**
@@ -51,11 +58,13 @@ export function createOtlpMetricsExporter(
     closeTimeoutMs,
     onError,
   } = resolveOtlpExporterOptions(options);
+  requireServiceInstanceId(options.serviceInstanceId);
+  const serviceInstanceId = options.serviceInstanceId ?? DEFAULT_SERVICE_INSTANCE_ID;
   const queue = createOtlpBatchQueue<AggregatedWindow>({
     maxBatchSize,
     maxQueueSize,
     flushIntervalMs,
-    encode: (batch) => JSON.stringify(toOtlpMetrics(batch, { serviceName })),
+    encode: (batch) => JSON.stringify(toOtlpMetrics(batch, { serviceName, serviceInstanceId })),
     target,
     closeTimeoutMs,
     onError,

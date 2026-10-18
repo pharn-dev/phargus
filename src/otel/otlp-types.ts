@@ -1,7 +1,8 @@
 /** OTLP aggregation temporality enum value for delta, emitted as the JSON integer. */
 export const AGGREGATION_TEMPORALITY_DELTA = 1;
 
-export type OtlpAnyValue = { stringValue: string };
+/** An attribute value. OTLP JSON carries 64-bit integers as decimal strings. */
+export type OtlpAnyValue = { stringValue: string } | { intValue: string };
 
 export type OtlpKeyValue = { key: string; value: OtlpAnyValue };
 
