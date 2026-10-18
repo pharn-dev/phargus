@@ -8,27 +8,33 @@ import {
   cookieValues,
   createHostPolicy,
   isLoopbackHost,
+  isTlsRequest,
+  sessionCookie,
   sessionValueFor,
   tokensMatch,
   type HostPolicy,
 } from './auth.js';
 import { createClientErrorReporter } from './client-error-reporter.js';
+import { plain } from './plain-response.js';
 import {
   ERROR_SECURITY_HEADERS,
   EVENTS_SECURITY_HEADERS,
   STATIC_SECURITY_HEADERS,
 } from './security-headers.js';
+import { handleSessionRequest } from './session-endpoint.js';
 import { createSseClient, type SseClient } from './sse-client.js';
 import { formatEvent } from './sse-format.js';
-import { createStaticAssets, type StaticAsset } from './static-assets.js';
+import { createLoginAssets, createStaticAssets, type StaticAsset } from './static-assets.js';
 
 export type DashboardServerOptions = {
   collector: Collector;
   host: string;
   port: number;
   /**
-   * Required off loopback. A browser opens `/?token=<token>` once and gets an HttpOnly session
-   * cookie in exchange; API clients send `Authorization: Bearer <token>`.
+   * Required off loopback. A browser opens `/login#token=<token>` once (the fragment never
+   * reaches the server) and gets an HttpOnly session cookie through `POST /session`;
+   * `/?token=<token>` still works for one release and is deprecated; API clients send
+   * `Authorization: Bearer <token>`.
    */
   token?: string;
   /**
@@ -81,20 +87,10 @@ function isDisconnect(error: NodeJS.ErrnoException): boolean {
   return error.code === 'ECONNRESET' || error.message === 'aborted';
 }
 
-function plain(
-  res: ServerResponse,
-  status: number,
-  body: string,
-  extra?: Record<string, string>,
-): void {
-  res.writeHead(status, {
-    ...ERROR_SECURITY_HEADERS,
-    'content-type': 'text/plain; charset=utf-8',
-    'content-length': String(Buffer.byteLength(body)),
-    ...extra,
-  });
-  res.end(body);
-}
+/** Emitted once per server by the first `GET /?token=` exchange; names the replacement, never a token. */
+const TOKEN_QUERY_DEPRECATION =
+  'the dashboard login link /?token=<token> is deprecated and will be removed in a later release; ' +
+  'open /login#token=<token> instead';
 
 /** A bodyless raw response for a connection the HTTP parser gave up on. */
 function rawErrorResponse(error: NodeJS.ErrnoException): string {
@@ -148,6 +144,7 @@ export async function createDashboardServer(
   const clientErrors = createClientErrorReporter(report, CLIENT_ERROR_REPORT_INTERVAL_MS);
 
   const assets = createStaticAssets();
+  const loginAssets = createLoginAssets();
   const sessionValue = token === undefined ? undefined : sessionValueFor(token);
 
   const authenticated = (req: IncomingMessage): boolean => {
@@ -165,16 +162,24 @@ export async function createDashboardServer(
     plain(res, 401, 'unauthorized\n', { 'www-authenticate': 'Bearer' });
   };
 
-  /** `GET /?token=…`: trade a correct token for the session cookie and a clean URL. */
+  let tokenQueryWarned = false;
+
+  /** Deprecated `GET /?token=…`: trade a correct token for the session cookie and a clean URL. */
   const exchangeToken = (req: IncomingMessage, res: ServerResponse, presented: string): void => {
+    if (!tokenQueryWarned) {
+      tokenQueryWarned = true;
+      process.emitWarning(TOKEN_QUERY_DEPRECATION, {
+        type: 'DeprecationWarning',
+        code: 'PHARGUS_DEP_TOKEN_QUERY',
+      });
+    }
     if (token === undefined || sessionValue === undefined || !tokensMatch(presented, token)) {
       unauthorized(res);
       return;
     }
-    const secure = (req.socket as { encrypted?: unknown }).encrypted === true ? '; Secure' : '';
     plain(res, 303, 'see other\n', {
       location: '/',
-      'set-cookie': `${SESSION_COOKIE}=${sessionValue}; HttpOnly; SameSite=Strict; Path=/${secure}`,
+      'set-cookie': sessionCookie(sessionValue, isTlsRequest(req)),
     });
   };
 
@@ -287,6 +292,29 @@ export async function createDashboardServer(
         }
         return;
       }
+      // Before authentication: a visitor has no cookie yet. Neither route can leak the token.
+      if (url.pathname === '/session' && sessionValue !== undefined) {
+        handleSessionRequest(req, res, {
+          token,
+          sessionValue,
+          unauthorized,
+          onBodyError: (error): void => {
+            if (!isDisconnect(error)) {
+              report(error);
+            }
+          },
+        });
+        return;
+      }
+      const loginAsset = loginAssets.get(url.pathname);
+      if (loginAsset !== undefined) {
+        if (req.method === 'GET') {
+          serveAsset(req, res, loginAsset);
+        } else {
+          plain(res, 405, 'method not allowed\n', { allow: 'GET' });
+        }
+        return;
+      }
       if (!authenticated(req)) {
         unauthorized(res);
         return;
@@ -300,7 +328,9 @@ export async function createDashboardServer(
       }
       return;
     }
-    const asset = assets.get(url.pathname);
+    // With a token the login assets were served above, before authentication; without one they
+    // are served like any other asset (and a login link there ends in the 404 for /session).
+    const asset = assets.get(url.pathname) ?? loginAssets.get(url.pathname);
     if (asset !== undefined) {
       if (req.method === 'GET') {
         serveAsset(req, res, asset);

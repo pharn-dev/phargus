@@ -2,8 +2,21 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypt
 import type { IncomingMessage } from 'node:http';
 import { isIPv4 } from 'node:net';
 
-/** The cookie the `?token=` exchange sets. Its value is an HMAC of the token, never the token. */
+/**
+ * The cookie both token exchanges set (`POST /session`, and the deprecated `GET /?token=`). Its
+ * value is an HMAC of the token, never the token.
+ */
 export const SESSION_COOKIE = 'phargus_token';
+
+/** The `Set-Cookie` line of a session: one string, built here, for every exchange. */
+export function sessionCookie(value: string, secure: boolean): string {
+  return `${SESSION_COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/${secure ? '; Secure' : ''}`;
+}
+
+/** True when the request arrived over a TLS socket (the dashboard behind a terminating proxy is not). */
+export function isTlsRequest(req: IncomingMessage): boolean {
+  return (req.socket as { encrypted?: unknown }).encrypted === true;
+}
 
 function unbracket(host: string): string {
   return host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;

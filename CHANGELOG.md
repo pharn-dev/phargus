@@ -7,6 +7,16 @@ All notable changes to Phargus are recorded here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- Dashboard login no longer puts the token in a request line. Open `/login#token=<token>`: the
+  token is in the URL fragment, which the browser never sends; the public login page removes it
+  from the address bar and history, then posts it as JSON to the new `POST /session` (4096-byte
+  cap, JSON only, constant-time compare), which answers `204` with the same `HttpOnly`,
+  `SameSite=Strict` session cookie, or `401` with none. `phargus serve` and the dashboard script
+  now point at this link. `/?token=<token>` still works but is deprecated and will be removed in a
+  later release; the first use emits a `PHARGUS_DEP_TOKEN_QUERY` deprecation warning.
+
 ### Added
 
 - `phargus serve`, a command-line way to get the dashboard without writing a collector. The
