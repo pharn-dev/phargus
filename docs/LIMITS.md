@@ -50,7 +50,9 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   and records the whole interval on every tick, so the agent subtracts 10 ms from min, max, mean, p50
   and p99 and clamps at 0. An idle loop therefore reads close to 0, not exactly 0: the remainder is
   real timer and scheduling overhead. Delays shorter than the interval are not resolved, and the
-  subtracted amount is the configured interval, not a measured idle baseline.
+  subtracted amount is the configured interval, not a measured idle baseline. On Windows, an idle
+  loop reads a few milliseconds (about 5 ms on CI runners) rather than close to 0, because Windows
+  timers are coarser.
 - **Phargus cannot protect itself from the host.** Code running in the same process can read or alter
   Phargus's data. It is a diagnostic tool, not a tamper-evident audit log.
 

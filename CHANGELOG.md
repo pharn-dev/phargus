@@ -108,7 +108,8 @@ All notable changes to Phargus are recorded here. The format follows
   still run on Linux only. `.gitattributes` now checks text files out with LF on every platform.
   On Windows, the tests for signal-driven graceful shutdown, a non-writable heap snapshot
   directory, the packed bin's execute bit and the release-workflow check are skipped;
-  `docs/LIMITS.md` records these limits.
+  `docs/LIMITS.md` records these limits. The idle event loop tests now bound p50 by the sampler's
+  resolution instead of 5 ms, because Windows timers leave an idle loop at about 5 ms.
 
 ## [0.1.0] - 2026-10-12
 
