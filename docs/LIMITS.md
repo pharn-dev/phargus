@@ -77,6 +77,10 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 - **Heap-snapshot analysis has caps.** Files over `maxSnapshotBytes` (default 256 MiB) are refused
   before reading. The streaming parser needs the top-level keys in V8's order (`snapshot`, `nodes`,
   `strings`), keeps at most 262 144 distinct object names, and truncates names over 1 KiB.
+  The cap and the task timeout are paired: unless `timeoutMs` is passed or the pool was made with
+  `taskTimeoutMs`, the analysis timeout is `max(30 s, size / 20 MB/s)` (see `heapSnapshotTimeoutMs`),
+  summed over both files for a diff. A pool not made by `createHeapSnapshotPool` keeps its own
+  timeout, and a file that grows after the size check is not re-measured.
   Source files and maps over `maxFileBytes` (default 64 MiB) are not symbolized.
 
 ## 4. Security limits

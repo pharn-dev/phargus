@@ -48,7 +48,8 @@ Status legend:
 
 - ✅ `v8.getHeapSpaceStatistics()` exposure (in every sample).
 - ✅ On-demand heap snapshots (`takeHeapSnapshot`, library API).
-- ✅ Heap-snapshot summaries and diffing in the analyzer worker pool, with an input size cap.
+- ✅ Heap-snapshot summaries and diffing in the analyzer worker pool, with an input size cap; the
+  task timeout scales with the snapshot size unless the caller sets one.
 - ✅ Allocation sampling profiler capture (`sampleAllocations`, library API).
 - 🟡 Deoptimization detection: a bounded parser for `node --trace-deopt` output
   (`createDeoptParser`). Nothing in Phargus starts or captures that output; you feed the parser lines.

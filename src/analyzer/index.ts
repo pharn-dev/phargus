@@ -13,6 +13,7 @@ export {
   diffHeapSnapshots,
   summarizeHeapSnapshot,
 } from './heap-snapshot.js';
+export { heapSnapshotTimeoutMs } from './heap-snapshot-timeout.js';
 export { HeapSnapshotTooLargeError } from './heap-snapshot-error.js';
 export {
   createSymbolizationPool,
