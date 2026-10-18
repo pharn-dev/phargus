@@ -1,0 +1,103 @@
+{
+  "base": "67709097bb271430342c2a16236584e18c2eb715",
+  "inside": [
+    "ARCHITECTURE.md",
+    "CHANGELOG.md",
+    "FEATURES.md",
+    "docs/LIMITS.md",
+    "src/collector/collector.ts",
+    "src/collector/window-store.ts",
+    "pharn/features/collector-persistence-queue/AC-TESTS.lock.json",
+    "pharn/features/collector-persistence-queue/AC-TESTS.md",
+    "pharn/features/collector-persistence-queue/BUILD.md",
+    "pharn/features/collector-persistence-queue/GRILL.md",
+    "pharn/features/collector-persistence-queue/PLAN.md",
+    "pharn/features/collector-persistence-queue/SPEC.md",
+    "src/collector/collector-persistence-queue.ac1.integration.test.ts",
+    "src/collector/collector-persistence-queue.ac2.integration.test.ts",
+    "src/collector/collector-persistence-queue.ac3.integration.test.ts",
+    "src/collector/collector-persistence-queue.ac4.integration.test.ts",
+    "src/collector/persist-queue.ts"
+  ],
+  "outside_gates": {
+    "build": {
+      "base": 0,
+      "head": 0
+    },
+    "test": {
+      "base": 0,
+      "head": 0
+    },
+    "typecheck": {
+      "base": 0,
+      "head": 0
+    }
+  },
+  "regressions": [],
+  "pre_existing": [],
+  "verdict": "no-regressions",
+  "gate_run": {
+    "base": {
+      "stamp_sha256": "929abea341663f14572e77bcbc113e520d01f3cfaa5804c4d44ecd9311b53d57",
+      "source": "discover",
+      "fingerprint": {
+        "algo": "worktree-fingerprint/2+sha256+entry-feature-dir",
+        "final": "8dffa6a00dafe432ab0c04452798107072d2afe0b38ebe1036c5bdefebbac853"
+      }
+    },
+    "head": {
+      "stamp_sha256": "ae5c525fa44df44c07b78a2d4502cda700ff04503361f2557a512cc09b7a5f40",
+      "source": "discover",
+      "fingerprint": {
+        "algo": "worktree-fingerprint/2+sha256",
+        "final": "e6ab47e46a023470454d6051d803a5876504194392ac47f5e05d9759894c8ce1"
+      }
+    }
+  },
+  "base_evidence": {
+    "reused": false,
+    "miss": "no-record",
+    "requirement_sha256": "e960117251006211aef4aabcd74ca28332569e72079cafd4021aaec1bc9787ac",
+    "recorded": false,
+    "source": "entry",
+    "entry": {
+      "used": true,
+      "miss": null,
+      "offer_sha256": "ee8866d5ac4a04afc9a72e0b70909dbb4f0b46e1075f798e8ac36809deddf50d",
+      "entry_stamp_sha256": "a1dd1c68c11d9efe3116257624bf77d4d99c7bd38754181d22833589c6ed2978",
+      "base": "67709097bb271430342c2a16236584e18c2eb715",
+      "run": {
+        "command": "pharn-loop",
+        "marker_sha256": "c5da29fdca152a14d65f5e084f00bf7203142d292d73be41d1805e8993773a2f"
+      },
+      "reused_ids": [
+        "test",
+        "typecheck",
+        "build"
+      ],
+      "no_files_ids": [],
+      "ignored_ids": [
+        "lint",
+        "format:check",
+        "test"
+      ]
+    }
+  },
+  "pre_run_snapshot": {
+    "status": "applied",
+    "unchanged": []
+  },
+  "head_install": {
+    "state": "clean",
+    "why": null,
+    "family": "npm",
+    "lockfile": "package-lock.json",
+    "counts": {
+      "changed": 0,
+      "missing": 0,
+      "extraneous": 0,
+      "missing_unchecked": 24
+    }
+  },
+  "base_source": "explicit"
+}

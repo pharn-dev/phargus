@@ -117,7 +117,9 @@ Status legend:
 
 - ✅ In-memory ring buffers of recent windows, alerts and spans.
 - ✅ Opt-in disk persistence of recent windows: an append-only NDJSON file with a byte cap
-  (compacted to the newest windows), restored on start, created with mode `0600`.
+  (compacted to the newest windows), restored on start, created with mode `0600`. Written off the
+  critical path through a bounded drop-oldest queue (`maxQueueSize`, default 1024) with `dropped`
+  and `failed` counters on `collector.persistence`, drained on `close()`.
 
 ## 10. Examples (ship with the repo)
 

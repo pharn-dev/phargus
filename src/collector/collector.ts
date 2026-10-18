@@ -13,6 +13,7 @@ import { createRingBuffer, type RingBuffer } from './ring-buffer.js';
 import type { AggregatedWindow } from './window.js';
 import { createWindowAggregator } from './window-aggregator.js';
 import { createWindowStore, type PersistOptions } from './window-store.js';
+import { createPersistQueue, DEFAULT_PERSIST_QUEUE_SIZE } from './persist-queue.js';
 
 export const DEFAULT_SPAN_CAPACITY = 1024;
 
@@ -39,6 +40,10 @@ export type WindowPersistence = {
   readonly skipped: number;
   readonly restored: number;
   readonly bytes: number;
+  /** Windows dropped from a full persistence queue (integer, saturating). */
+  readonly dropped: number;
+  /** Windows whose append to the file failed (integer, saturating). */
+  readonly failed: number;
 };
 
 export type Collector = {
@@ -72,6 +77,39 @@ export function createCollector(options: CollectorOptions): Collector {
   const dispatcher = createSinkDispatcher(sinks, options.onSinkError);
   const store =
     options.persist === undefined ? undefined : createWindowStore({ ...options.persist, capacity });
+  const queue =
+    store === undefined
+      ? undefined
+      : createPersistQueue({
+          append: (window) => store.append(window),
+          // Only `undefined` means "default"; anything else reaches the validator.
+          maxQueueSize:
+            options.persist?.maxQueueSize === undefined
+              ? DEFAULT_PERSIST_QUEUE_SIZE
+              : options.persist.maxQueueSize,
+        });
+  const persistence: WindowPersistence | undefined =
+    store === undefined || queue === undefined
+      ? undefined
+      : {
+          path: store.path,
+          maxBytes: store.maxBytes,
+          get skipped(): number {
+            return store.skipped;
+          },
+          get restored(): number {
+            return store.restored;
+          },
+          get bytes(): number {
+            return store.bytes;
+          },
+          get dropped(): number {
+            return queue.dropped;
+          },
+          get failed(): number {
+            return queue.failed;
+          },
+        };
   let restoring: Promise<void> | undefined;
   const restoreOnce = (): Promise<void> => {
     if (store === undefined) {
@@ -91,7 +129,7 @@ export function createCollector(options: CollectorOptions): Collector {
     alerts,
     spans,
     sinks,
-    persistence: store,
+    persistence,
     get ignored(): number {
       return ignored;
     },
@@ -113,6 +151,8 @@ export function createCollector(options: CollectorOptions): Collector {
         transform(window: AggregatedWindow, _encoding, callback): void {
           try {
             windows.push(window);
+            // Hands the window to the persistence queue without waiting for the disk.
+            queue?.push(window);
             subscribers.emitWindow(window);
             callback(null, window);
           } catch (error) {
@@ -120,21 +160,15 @@ export function createCollector(options: CollectorOptions): Collector {
           }
         },
       });
-      const persistWindows = new Transform({
-        objectMode: true,
-        transform(window: AggregatedWindow, _encoding, callback): void {
-          if (store === undefined) {
-            callback(null, window);
-            return;
-          }
-          store.append(window).then(
-            () => callback(null, window),
-            (error: unknown) => callback(error as Error),
-          );
-        },
-      });
       let failure: unknown;
       let failed = false;
+      // A failed append destroys this run's stream with that Error, so pipeline() rejects with it
+      // without waiting for the source.
+      let persistFailure: Error | undefined;
+      const stopListening = queue?.onFailure((error) => {
+        persistFailure ??= error;
+        recordWindows.destroy(error);
+      });
       try {
         await restoreOnce();
         await pipeline(
@@ -143,7 +177,6 @@ export function createCollector(options: CollectorOptions): Collector {
           spanRouter,
           aggregator,
           recordWindows,
-          persistWindows,
           createAlertEvaluator(rules),
           async function (emitted: AsyncIterable<unknown>) {
             for await (const alert of emitted) {
@@ -158,6 +191,17 @@ export function createCollector(options: CollectorOptions): Collector {
         failed = true;
       }
       await dispatcher.settle();
+      try {
+        // Windows still queued are attempted, each failure counted, before the file is released.
+        await queue?.drained();
+      } finally {
+        stopListening?.();
+      }
+      if (!failed && persistFailure !== undefined) {
+        // An append failed after the source had ended.
+        failure = persistFailure;
+        failed = true;
+      }
       if (store !== undefined) {
         try {
           await store.release();
@@ -178,6 +222,8 @@ export function createCollector(options: CollectorOptions): Collector {
     },
     async close(): Promise<void> {
       await dispatcher.close();
+      // Queued appends finish first, so no window is lost to the latch below.
+      await queue?.drained();
       // Latches the store: a consume() still running cannot reopen the file after close().
       await store?.close();
     },

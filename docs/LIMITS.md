@@ -43,7 +43,10 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   hold `queueBound` lines (default 1024) and drop the oldest; the span buffer holds 1024 spans
   between ticks. Above roughly 1000 requests per sampling interval, spans are dropped. Every sample
   line carries cumulative `dropped: { samples, spans }` counters; the collector and dashboard do not
-  display them yet.
+  display them yet. The collector's persistence queue holds `persist.maxQueueSize` windows (default 1024) and drops the oldest when the disk falls behind, counted in
+  `collector.persistence.dropped`; neither the dashboard nor `phargus serve` shows it yet.
+  `close()` waits for queued appends with no time limit, so a disk that never completes an append
+  stalls it.
 - **Event loop lag is observed by the loop itself.** A loop blocked completely cannot report
   until it resumes, so the longest stalls are reported late, with their full length.
 - **Event loop figures are delay beyond the timer interval.** The histogram samples on a 10 ms timer

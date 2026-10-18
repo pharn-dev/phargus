@@ -35,7 +35,9 @@ with an alert rule.
 ┌──── collector / dashboard process (phargus serve, or your own) ────┐
 │ @pharn-dev/phargus/collector                                                    │
 │  └─ pipeline(): spans → ring buffer │ samples → windows →          │
-│     persistence (opt-in) → alerts → sinks (stdout/file/webhook)    │
+│     alerts → sinks (stdout/file/webhook)                           │
+│        │ windows ─▶ persistence queue (opt-in, bounded,            │
+│        │            drop-oldest) → append-only file                │
 │        │ subscribe()                                               │
 │        ├─▶ @pharn-dev/phargus/dashboard: HTTP server, static UI, SSE /events    │
 │        ├─▶ @pharn-dev/phargus/otel: OTLP/HTTP JSON metrics and traces (opt-in)  │
@@ -78,8 +80,12 @@ with an alert rule.
    forwards sample and span records and skips and counts the rest in `collector.ignored`, as
    `foreign` (not agent data) or `malformed` (agent-shaped but unusable), with an optional
    `onIgnored` hook. Then span records go to a ring buffer, samples become fixed time windows with
-   integer math, windows go to an optional append-only file and to the alert evaluator, and
-   alerts go to the sinks. Ring buffers bound windows, alerts and spans. The wiring is
+   integer math, windows go to the alert evaluator and, when persistence is on, into a bounded
+   queue (`persist.maxQueueSize`, default 1024) that is appended to a file one window at a time in
+   emission order, and alerts go to the sinks. A slow disk drops the oldest queued windows, counted
+   in `collector.persistence.dropped`, instead of slowing the pipeline; a failed append is counted
+   in `failed` and rejects `consume()`; `close()` and the end of `consume()` wait for the queue to
+   drain. Ring buffers bound windows, alerts and spans. The wiring is
    `pipeline(input, createNdjsonDecoder(), (records) => collector.consume(records))`.
 4. **Delivery (dashboard).** `createDashboardServer({ collector, host, port })` subscribes to the
    collector and serves the UI and an SSE endpoint. Each SSE client has its own bounded queue; a
@@ -119,7 +125,8 @@ with an alert rule.
   `bench/soak.mjs` runs every module under load and fails on heap growth or leaked workers and
   child processes. A nightly workflow (`.github/workflows/nightly.yml`) runs both. The benchmark is
   informational; no overhead threshold gates a merge or a release yet.
-- Backpressure is honored end to end: the agent drops and counts instead of waiting, and the
+- Backpressure is honored end to end: the agent drops and counts instead of waiting, the
+  collector's persistence queue drops its oldest windows instead of slowing the pipeline, and the
   dashboard drops per client instead of buffering without limit.
 
 ---
