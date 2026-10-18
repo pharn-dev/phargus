@@ -191,9 +191,14 @@ The recording above is that example.
 
 - On a loopback address (`127.x.x.x`, `localhost`, `::1`) the token is optional. Binding any other
   address without a `token` is refused at startup.
-- With a token, open `http://<host>:<port>/?token=<token>` once in a browser. The server answers
-  with a redirect to `/` and an `HttpOnly`, `SameSite=Strict` cookie, so the token does not stay
-  in the address bar or history. `?token=` is accepted on `/` only.
+- With a token, open `http://<host>:<port>/login#token=<token>` once in a browser. The token is in
+  the URL fragment, which the browser never sends to the server. The login page removes the
+  fragment from the address bar and history, then posts the token to `POST /session` in a JSON
+  body; the server answers `204` with an `HttpOnly`, `SameSite=Strict` cookie and the page opens
+  `/`. A wrong token gets `401` and no cookie.
+- `http://<host>:<port>/?token=<token>` still works for one release and is deprecated: it puts the
+  token in a request line. The server emits a `PHARGUS_DEP_TOKEN_QUERY` deprecation warning the
+  first time it is used. `?token=` is accepted on `/` only.
 - Scripts and `curl` send `Authorization: Bearer <token>`, for example to `/events`.
 - The server answers only requests whose `Host` is the bound address on the bound port (plus
   `localhost`, `127.0.0.1` and `[::1]` for a loopback or `0.0.0.0`/`::` bind); anything else gets

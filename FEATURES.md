@@ -83,7 +83,7 @@ Status legend:
 - ✅ Trace detail / waterfall view of recent requests.
 - ⬜ Time-range scrubbing of recent windows. The page shows the latest window only.
 - ✅ Exposure/auth model: loopback without a token, any other bind requires one; `Host`/`Origin`
-  allowlist (`allowedHosts`); `?token=` exchanged once for an `HttpOnly`, `SameSite=Strict` cookie;
+  allowlist (`allowedHosts`); a `/login#token=` fragment link exchanged once through `POST /session` for an `HttpOnly`, `SameSite=Strict` cookie (the `?token=` link still works for one release, deprecated);
   `Authorization: Bearer` for API clients.
 
 ## 6. Custom diagnostic rules (plugin runner)

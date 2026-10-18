@@ -94,10 +94,11 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 
 - **No TLS.** The dashboard is plain HTTP. Remote access needs an authenticated tunnel or a
   reverse proxy. The token gate stops casual access, not a network attacker.
-- **The browser token flow assumes a direct link.** The `?token=` link sets a `SameSite=Strict`
-  cookie. If you click that link on another website, some browsers leave the cookie off the
-  redirected request and the first load shows `401`; reloading `/` works. Opening the link from
-  the address bar, a terminal or a bookmark is not affected.
+- **The deprecated `?token=` link assumes a direct link.** The `?token=` link sets a
+  `SameSite=Strict` cookie on a redirect. If you click that link on another website, some browsers
+  leave the cookie off the redirected request and the first load shows `401`; reloading `/` works.
+  Opening the link from the address bar, a terminal or a bookmark is not affected. The
+  `/login#token=` flow sets its cookie on a same-origin `fetch`, so it does not depend on this.
 - **There is no redaction step.** Phargus records method, path without query string, status and
   timing, and nothing else from a request. A secret in a path segment is recorded as is.
 - **Sandboxed rules are limited, not safe.** `isolated-vm` constrains memory, time, result size and

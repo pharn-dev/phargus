@@ -94,7 +94,7 @@ export async function runServe(
   write(`dashboard at ${dashboard.url}`);
   if (options.token !== undefined) {
     write(
-      `a token is required: open ${dashboard.url}/?token=<token> once, or send Authorization: Bearer <token>`,
+      `a token is required: open ${dashboard.url}/login#token=<token> once, or send Authorization: Bearer <token>`,
     );
   }
 
