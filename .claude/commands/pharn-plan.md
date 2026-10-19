@@ -21,7 +21,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/PLAN.md", "pharn/features/<name>/AC-TESTS.md"]
 constitution_refs: ["P0", "P2", "P4", "P5", "P6", "P7"]
-version: "0.5.3"
+version: "0.5.4"
 ---
 
 # /pharn-plan — plan from Approved, un-drifted intent
@@ -197,7 +197,9 @@ applied_lessons: none | [L1, L2] # MANDATORY — floor-checked (Step 4b); `none`
 > **leading token is a back-tick path** — ``- `path/to/file` — <what changes>``; (3) to **exclude** a
 > path, put it under the `### Explicitly not touched` **subsection** (the setter stops at that
 > heading) — **never** inline as ``- `path` — not touched`` (an inline-marked item still enters
-> scope). **Caveat:** a bare, non-blockquote prose line under `## Files` that reads like an exclusion
+> scope). Fenced code is never read as the list, and in an installed project the setter refuses a plan that
+> names PHARN's own files (`pharn/**` but `pharn/features/**`, `.claude/**`, `pharn.config.json`), so never name them
+> (6.61.0). **Caveat:** a bare, non-blockquote prose line under `## Files` that reads like an exclusion
 > (wording such as _not touch/writ/modif/edit/chang_, _explicitly excluded_, _out of scope_, _off
 > limits_) is treated by the setter as a head-less exclusion intro and **truncates the authorized list
 > right there** — every path after it silently falls out of scope. Keep narrative in a **blockquote**
@@ -208,7 +210,12 @@ touched` heading (rule 3) for a real exclusion. Keep unfilled placeholders as **
 > ``- `path` `` item is **unsafe** because it parses as a real scope path. The `## Steps` above is **advisory prose**,
 > but a non-path line under `## Files` is not harmless (see the caveat above) — only the `## Files`
 > back-tick paths **before any such truncation** become the build's scope, and `/pharn-build` writes
-> nothing outside them (fix #7).
+> nothing outside them (fix #7). **Deleting a file:** list it as ``- `path` (delete) — <why>``: exactly
+> `(delete)`, lower-case, exactly one space after the closing back-tick. `/pharn-build` removes it
+> (`apply-plan-deletions.mjs`) and `/pharn-verify` requires it absent; a near-miss spelling (`(Delete)`, `(deleted)`,
+> two spaces) refuses, and so do a directory, link, glob, placeholder and a guard/trusted path (judged by its on-disk
+> name too). A synonym such as `(remove)`, or `(delete)` anywhere but directly after the path, is an ordinary item:
+> the file stays and nothing reports it.
 
 ## Step 4b — Check the lessons declaration (FLOOR)
 

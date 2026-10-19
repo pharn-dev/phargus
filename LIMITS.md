@@ -1,8 +1,8 @@
 ---
-file: 'LIMITS.md'
+file: "LIMITS.md"
 trust: trusted
-editable_by: 'human only'
-purpose: 'What PHARN does NOT guarantee. Labels the irreducible limits, the residual, and the token cost model honestly. Required by P0 and P7: a limit sold as a guarantee is the disease this whole repo exists to prevent.'
+editable_by: "human only"
+purpose: "What PHARN does NOT guarantee. Labels the irreducible limits, the residual, and the token cost model honestly. Required by P0 and P7: a limit sold as a guarantee is the disease this whole repo exists to prevent."
 ---
 
 # PHARN — Limits (what we do not guarantee)
@@ -121,7 +121,8 @@ State these honestly; do not pretend tiered loading solves them.
 
 ### 3a. Cost scales with fan-out breadth, not change size — and that is backwards
 
-A 3-line typo fix still fans out to every lens, each loading its rules + the diff. Tiered loading
+A 3-line typo fix still fans out to every lens with a non-empty review set, one subagent per lens family,
+each loading its lenses' rules + the diff. Tiered loading
 optimizes _within_ one assembly (don't load all rules at once); it does **nothing** about fan-out
 _breadth_. You pay the most for what there is the most of (small changes). This is
 the largest practical token problem and it is not yet solved.
@@ -139,7 +140,7 @@ the largest practical token problem and it is not yet solved.
 > the orchestrating model, so honoring it is advisory; what backs it is the SPEC's approved, pinned
 > `spec_kind: quick`. Nothing measures whether a change is small: the kind and the flag are what a person
 > chose, and a quick SPEC run without the flag takes the full pipeline. There is still no AUTOMATIC
-> proportionality, and `/pharn-review`'s lens fan-out is unchanged.
+> proportionality, and `--quick` does not change `/pharn-review`'s lens fan-out.
 >
 > **The unattended one is `/pharn-loop --quick` (6.28.0), and nobody is told the trade before it runs.** The model
 > writes and approves the `spec_kind: quick` SPEC itself (`approved_by: model`), and `check-loop.mjs` decides every
@@ -284,13 +285,17 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   reported rather than failed: a path whose bytes are exactly the upstream bytes HEAD merged in during the window
   (`merged[]`, `reconciliation-record.md` §2a); a commit the build makes itself still fails. Since 6.54.0 a scope amendment derived from a plan
   authorizes only what the anchored snapshot covered, so a `## Files` widened after the anchor is reported
-  (`plan-widened-after-anchor`); one widened before the anchor, or a forged snapshot, is not. **The supported claim is exactly "a write to a path the active
+  (`plan-widened-after-anchor`); one widened before the anchor, or a forged snapshot, is not.
+  Since 6.57.0 a deletion is judged like a write: a path present at the anchor and gone from disk at verify — removed
+  with `rm`, with `git rm`, or by a commit, tracked or untracked — fails the stage when no recorded scope covers it,
+  unless upstream deleted it in a merge inside the window (`merged[]`). A path still on disk that has left the
+  reconciled set, because it became git-ignored, is only a warning. **The supported claim is exactly "a write to a path the active
   scope would have denied is detected and fails the stage" — never "Bash writes are prevented."** Four
   bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths are outside the
   reconciled set; the window is anchor-to-verify; the model is **one worktree per session** (two sessions
   sharing a tree share `.pharn/`, so a second session's writes can surface as this one's escape —
-  [[L38]], which this inherits and cannot fix); and there is **no attribution** — it reports _what_,
-  never _who_.
+  [[L38]], which this inherits and cannot fix); and there is **no attribution** — it reports *what*,
+  never *who*.
 - **DELETING it is loud; FORGING it is silent — and that bounds the whole claim.** The baseline lives
   under `.pharn/`, which `Bash` reaches, and nothing authenticates it. Deleting it does not yield a quiet
   green: `/pharn-*verify` passes `--require-baseline`, which makes an absent baseline `INCONCLUSIVE`, and
@@ -499,7 +504,7 @@ What either certifies is narrower than the config's presence suggests.
 - **Struck claim:** "PHARN runs each stage on its configured model" — or any reading of a green
   `check-model-config`, or of an `agent:<alias>` route on a marker, as evidence that `/pharn-plan` ran on
   Opus. The checker's own stdout carries the disclaimer: `NOTE (P0): this is config↔frontmatter EQUALITY —
-never proof a stage RAN under that model.`
+  never proof a stage RAN under that model.`
 - **True statement:** for a routed stage PHARN REQUESTS the configured model, and the stage's marker records
   that request; `cost.json` records the model each request was SERVED — evidence from a transcript format the
   platform does not document, not a floor primitive. Model and effort are applied by the Claude Code

@@ -47,7 +47,7 @@ reads:
   ]
 writes: ["pharn/features/<name>/SHIP.md", "pharn/features/<name>/ship-record.json", "pharn/features/<name>/BRIEFING.md"]
 constitution_refs: ["P0", "P2", "P5", "P6", "P7"]
-version: "0.11.1"
+version: "0.11.2"
 ---
 
 # /pharn-ship — run the product pipeline, end at a human gate
@@ -540,11 +540,12 @@ resume line, exited `0`. Any other ending — `2` (unusable), `3` (refused), an 
 crash — is a **STOP**, whatever file is on disk: a refusal (a RED chain, a missing artifact, an unparseable
 `## Files`) writes **no** `verify-report.json`, and a stop before the feature slug parses, `path-containment`, or a
 crash can leave an EARLIER run's report in place. On a `done` exit: `"PASS"` (every gate green ∧ build complete) → **proceed** to
-GATE 2. `"INCOMPLETE"` (all gates green and no AC evidence red, but a plan-declared `## Files` path is absent —
-`.completeness.missing[]` names it; an AC not delivered yet, or an AC gate that could not measure the partial tree,
+GATE 2. `"INCOMPLETE"` (all gates green and no AC evidence red, but a plan-declared `## Files` path is absent, or one
+marked `(delete)` is still present — `.completeness.missing[]` / `.undeleted[]` names it; an AC not delivered yet, or an AC gate that could not measure the partial tree,
 rides along in `.ac_gate`) → **the single build-completion retry (Step 2b), EXACTLY once**. `"FAIL"` (a real gate
 red — offenders in `.failing_gates[]`; a real failure **beats** incompleteness, so this is **never** retried) or
-`"INCONCLUSIVE"` (fail-closed — e.g. a stamp the checker refused, or an AC gate that could not measure) → **STOP**,
+`"INCONCLUSIVE"` (fail-closed — e.g. a stamp the checker refused, an AC gate that could not measure, or a gate the
+runner timed out or could not start, named in `.unmeasured_gates[]`) → **STOP**,
 present, hand to the human. The advisory `verifiers` block is **NOT** a proceed input — a verifier finding never
 flips the verdict (fix #3, `pharn/ARCHITECTURE.md §7`).
 
@@ -563,7 +564,8 @@ _(In Quick mode the regress re-run and its two markers are SKIPPED — see `## Q
 rebuild and re-verify below run exactly as written, with the kept scope check (item 7) between them.)_
 
 **Only reachable from a step-7 `.verdict == "INCOMPLETE"`** — every gate is green but the build is
-incomplete (a plan-declared `## Files` path is absent; `.completeness.missing[]` names it). This is the
+incomplete (a plan-declared `## Files` path is absent, or one marked `(delete)` is still present;
+`.completeness.missing[]` / `.undeleted[]` names it). This is the
 **one** retryable verify outcome; `FAIL` and `INCONCLUSIVE` are **never** retried. **An AC that is merely not
 delivered yet, or an AC gate that could not measure the partial tree, does not block it**; the retry's re-verify
 measures the AC gate again from scratch, and it proceeds only on `PASS`.
