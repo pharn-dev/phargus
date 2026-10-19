@@ -5,7 +5,7 @@ Phargus runs **inside** the Node.js process it observes, and its dashboard expos
 the product, not an afterthought. We welcome coordinated disclosure of any vulnerability in this
 repository.
 
-> **Status:** Version 0.1.0 is the first release and is being published to npm. Roadmap steps S0
+> **Status:** Version 0.2.0 is the latest release on npm (0.1.0 was the first). Roadmap steps S0
 > to S7 are implemented on `main`. Reports against `main` and the latest release are welcome and
 > are handled according to this policy.
 
