@@ -39,6 +39,7 @@ node --import @pharn-dev/phargus/agent app.mjs | npx phargus serve
 
 - [Why Phargus](#why-phargus)
 - [Quick start](#quick-start)
+- [Agent skills](#agent-skills)
 - [Configuration](#configuration)
 - [What you get](#what-you-get)
 - [How it fits together](#how-it-fits-together)
@@ -208,6 +209,38 @@ The recording above is that example.
   reach the dashboard by another name, list that name in `allowedHosts` (`--allowed-host` for
   `phargus serve`).
 - The dashboard is plain HTTP. For remote access use an SSH tunnel or a TLS-terminating proxy.
+
+---
+
+## Agent skills
+
+If you work with a coding agent, [`pharn-dev/skills`](https://github.com/pharn-dev/skills) ships a
+`phargus` plugin that sets up and diagnoses Phargus for you. Ask in plain language; the agent picks
+the skill.
+
+| Skill              | What it does                                                                                        |
+| ------------------ | --------------------------------------------------------------------------------------------------- |
+| `phargus-setup`    | Connects Phargus to your app and verifies the dashboard receives real samples                       |
+| `phargus-diagnose` | Investigates slow requests, event-loop stalls, GC pressure and stream backpressure                  |
+| `phargus-verify`   | Compares before and after measurements and says whether a fix helped, regressed or is inconclusive  |
+| `phargus-memory`   | Separates heap, RSS and buffer growth and reads heap snapshot summaries and diffs                   |
+| `phargus-rules`    | Turns an observed condition into a collector alert or sandboxed rule, replayed before you enable it |
+
+Install for Claude Code:
+
+```text
+/plugin marketplace add pharn-dev/skills
+/plugin install phargus@pharn-dev
+```
+
+Or for any supported agent with the [Skills CLI](https://github.com/vercel-labs/skills):
+
+```bash
+npx skills add pharn-dev/skills
+```
+
+The skills are a development draft targeting the 0.1.x runtime; see the
+[skills README](https://github.com/pharn-dev/skills#readme) for Codex and compatibility details.
 
 ---
 
