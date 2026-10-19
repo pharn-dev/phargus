@@ -14,6 +14,9 @@ const CI_WORKFLOW = join(WORKFLOWS_DIR, 'ci.yml');
 const PHARN_CI_USES = 'pharn-dev/pharn-ci@a88e62a8febf5cd9a77b8e0252cd060c3b94782c';
 const CHECK_PINS_TIMEOUT_MS = 60_000;
 
+/** On Windows, `npm` is a `.cmd` shim; `spawnSync('npm', …)` without this fails with ENOENT. */
+const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
 /** The line with any trailing ` # comment` removed, right-trimmed. */
 function stripComment(line: string): string {
   const hash = line.search(/(^|\s)#/);
@@ -176,7 +179,7 @@ describe('ci.yml Test job (pharn-ci wiring)', () => {
       );
     expect(offenders).toEqual([]);
 
-    const pins = spawnSync('npm', ['run', 'check:pins'], {
+    const pins = spawnSync(NPM_COMMAND, ['run', 'check:pins'], {
       cwd: repoRoot,
       encoding: 'utf8',
       timeout: CHECK_PINS_TIMEOUT_MS,

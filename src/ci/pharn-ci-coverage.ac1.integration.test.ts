@@ -10,6 +10,9 @@ const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..
 const srcDir = join(repoRoot, 'src');
 const LCOV_FILE = join(repoRoot, 'coverage', 'lcov.info');
 
+/** On Windows, `npm` is a `.cmd` shim; `spawnSync('npm', …)` without this fails with ENOENT. */
+const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
 /** The source file no test imports: it must still get an `SF:` record. */
 const UNIMPORTED_SOURCE = ['src', 'cli', 'bin.ts'].join('/');
 
@@ -112,7 +115,7 @@ describe.skipIf(inChildRun)('npm run test:coverage (pharn-ci coverage input)', (
       // A stale report from an earlier run must not satisfy this test.
       rmSync(LCOV_FILE, { force: true });
 
-      const result = spawnSync('npm', ['run', 'test:coverage'], {
+      const result = spawnSync(NPM_COMMAND, ['run', 'test:coverage'], {
         cwd: repoRoot,
         env: childEnv(),
         encoding: 'utf8',
