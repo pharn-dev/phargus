@@ -14,8 +14,13 @@ const CI_WORKFLOW = join(WORKFLOWS_DIR, 'ci.yml');
 const PHARN_CI_USES = 'pharn-dev/pharn-ci@a88e62a8febf5cd9a77b8e0252cd060c3b94782c';
 const CHECK_PINS_TIMEOUT_MS = 60_000;
 
-/** On Windows, `npm` is a `.cmd` shim; `spawnSync('npm', …)` without this fails with ENOENT. */
-const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+/**
+ * On Windows, `npm` resolves to a `.cmd` shim. `spawnSync('npm', …)` fails with ENOENT because a
+ * `.cmd` file is not directly executable, and `spawnSync('npm.cmd', …)` then fails with EINVAL
+ * because a `.cmd` file can only run through a shell. `shell: true` on win32 routes the call
+ * through `cmd.exe`, which resolves and runs it correctly; elsewhere it is a no-op either way.
+ */
+const NPM_SPAWN_OPTIONS = { shell: process.platform === 'win32' } as const;
 
 /** The line with any trailing ` # comment` removed, right-trimmed. */
 function stripComment(line: string): string {
@@ -179,10 +184,11 @@ describe('ci.yml Test job (pharn-ci wiring)', () => {
       );
     expect(offenders).toEqual([]);
 
-    const pins = spawnSync(NPM_COMMAND, ['run', 'check:pins'], {
+    const pins = spawnSync('npm', ['run', 'check:pins'], {
       cwd: repoRoot,
       encoding: 'utf8',
       timeout: CHECK_PINS_TIMEOUT_MS,
+      ...NPM_SPAWN_OPTIONS,
     });
     expect(pins.error, String(pins.error)).toBeUndefined();
     expect(pins.status, `${pins.stdout}\n${pins.stderr}`).toBe(0);
