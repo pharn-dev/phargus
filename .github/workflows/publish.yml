@@ -214,7 +214,9 @@ jobs:
       # Exactly the tarball built for the verified version, by name; --ignore-scripts so nothing
       # from the package runs here. `--provenance` emits a signed attestation via the same OIDC
       # token. The leading `./` is load-bearing: a bare `pkg/x.tgz` matches npm's GitHub
-      # `owner/repo` shorthand and is resolved as a git repo, not the file.
+      # `owner/repo` shorthand and is resolved as a git repo, not the file. `--loglevel verbose`
+      # logs npm's Trusted Publishing (OIDC) token exchange, so a rejected exchange shows up in
+      # the run log instead of only the registry's generic E404.
       - name: Publish
         if: steps.registry.outputs.published == 'false'
         env:
@@ -222,7 +224,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$TARBALL" =~ ^[A-Za-z0-9._-]+\.tgz$ ]] || { echo "unexpected tarball name: $TARBALL"; exit 1; }
-          npm publish "./pkg/${TARBALL}" --provenance --access public --ignore-scripts
+          npm publish "./pkg/${TARBALL}" --provenance --access public --ignore-scripts --loglevel verbose
 
   release:
     needs: [gate, publish]
