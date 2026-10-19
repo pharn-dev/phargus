@@ -19,7 +19,7 @@ npm run build           # dual build into dist/: ESM (dist/esm) + CJS (dist/cjs)
 npm run check:exports   # after build: every `exports` subpath loads via import and require
 npm run check:package   # after build: tarball contents, source maps, and engines.node == .nvmrc
 node scripts/pack-release.mjs /tmp/phargus-package
-npm run check:install -- /tmp/phargus-package/pharn-dev-phargus-0.1.0.tgz
+npm run check:install -- /tmp/phargus-package/pharn-dev-phargus-0.2.0.tgz
 npm run typecheck       # tsc --noEmit over src/ and the repo's own scripts and configs
 npm test
 npm run lint
