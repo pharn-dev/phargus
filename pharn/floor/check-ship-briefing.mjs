@@ -56,11 +56,12 @@
 import "./runtime-floor.mjs";
 import { readFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { BULLET_FIELD_LINE_RE, FM_RE, describeRepeats, fieldEntries, frontmatterEntries, stripBom } from "./frontmatter-core.mjs";
+import { fenceStates } from "./plan-files-core.mjs";
 
 const HEADING_RE = /^#{1,6}[ \t]+\S/;
 const REGRESS_ENUM = new Set(["no-regressions", "regressions", "inconclusive"]);
-const VERIFY_ENUM = new Set(["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"]);
+export const VERIFY_ENUM = new Set(["PASS", "FAIL", "INCOMPLETE", "INCONCLUSIVE"]);
 
 // The exact marker heading a generated paragraph must carry — duplicated from
 // render-ship-briefing.mjs's ADVISORY_HEADING (P3; pinned equal by the parity test).
@@ -120,28 +121,27 @@ function readEnvelopeValue(raw) {
   return isQuotedScalar(trimmed) ? yamlUnscalar(trimmed) : clean(raw);
 }
 
-// duplicated: render-ship-briefing.mjs's readHeaderField
+// duplicated: render-ship-briefing.mjs's readHeaderField (6.65.2: LAST copy wins, as check-spec.mjs reads the SPEC;
+// the line grammar is frontmatter-core.mjs's; bullet-header fences are plan-files-core.mjs's `fenceStates`)
 export function readHeaderField(text, field) {
   const fm = text.match(FM_RE);
-  if (fm) {
-    for (const line of fm[1].split(/\r?\n/)) {
-      const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-      if (kv && kv[1] === field) return clean(kv[2]);
-    }
-    return undefined;
+  if (fm) return lastValue(fieldEntries(fm[1].split(/\r?\n/)), field);
+  const lines = text.split(/\r?\n/);
+  const fenced = fenceStates(lines);
+  const header = [];
+  for (let i = 0; i < lines.length; i++) {
+    if (fenced[i]) continue;
+    if (HEADING_RE.test(lines[i])) break;
+    header.push(lines[i]);
   }
-  let inFence = false;
-  for (const line of text.split(/\r?\n/)) {
-    if (/^\s*(```|~~~)/.test(line)) {
-      inFence = !inFence;
-      continue;
-    }
-    if (inFence) continue;
-    if (HEADING_RE.test(line)) break;
-    const kv = line.match(/^-[ \t]+([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv && kv[1] === field) return clean(kv[2]);
-  }
-  return undefined;
+  return lastValue(fieldEntries(header, BULLET_FIELD_LINE_RE), field);
+}
+
+// duplicated: render-ship-briefing.mjs's lastValue
+function lastValue(entries, field) {
+  let found;
+  for (const { key, raw } of entries) if (key === field) found = clean(raw);
+  return found;
 }
 
 // duplicated: render-ship-briefing.mjs's grillVerdictLine (★ trust-fence fix: fenced blocks skipped,
@@ -232,15 +232,21 @@ function carriesAcTestsMode(version) {
   return major > 0 || minor >= 2;
 }
 
-export function readEnvelope(text) {
-  const m = text.match(FM_RE);
-  if (!m) return null;
+// The envelope through frontmatter-core.mjs's `frontmatterEntries` (6.71.3): `{ fields, repeated }`, or null with no
+// frontmatter. A repeated key is never resolved to one copy — `gate()` REDs it (contract: "The rule of the contract",
+// envelope shape), because the floor would certify one copy while a person reads the other.
+function envelope(text) {
+  const fm = frontmatterEntries(text);
+  if (fm === null) return null;
   const fields = new Map(); // Map, never a plain object indexed by an arbitrary key (L15)
-  for (const line of m[1].split(/\r?\n/)) {
-    const kv = line.match(/^([A-Za-z_][\w-]*):[ \t]*(.*)$/);
-    if (kv) fields.set(kv[1], readEnvelopeValue(kv[2]));
-  }
-  return fields;
+  for (const { key, raw } of fm.entries) fields.set(key, readEnvelopeValue(raw));
+  return { fields, repeated: fm.repeated };
+}
+
+/** The envelope's fields as `gate()` reads them; null with no frontmatter OR a repeated key (never one copy). */
+export function readEnvelope(text) {
+  const env = envelope(text);
+  return env === null || env.repeated.length > 0 ? null : env.fields;
 }
 
 function gate(briefingPath) {
@@ -251,10 +257,15 @@ function gate(briefingPath) {
     return fail(`briefing is unreadable (${briefingPath}): ${e.message}`);
   }
 
-  const fields = readEnvelope(text);
-  if (fields === null) {
+  const env = envelope(text);
+  if (env === null) {
     return fail(`briefing has no \`---\`-fenced YAML frontmatter (${briefingPath}) — see pharn/pharn-contracts/ship-briefing.md`);
   }
+  if (env.repeated.length > 0) {
+    red("envelope", `frontmatter repeats ${describeRepeats(env.repeated)} — every field appears at most once`);
+    return fail2(briefingPath);
+  }
+  const fields = env.fields;
 
   const REQUIRED = [
     "feature",

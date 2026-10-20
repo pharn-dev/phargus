@@ -130,6 +130,17 @@ checker's distinct, RED verdict) — the honest consequence of `cap` being addit
 a record from before this field existed can be well-shaped without being re-derivable, and nothing
 conflates the two.
 
+**`cap` is also compared with the run marker (6.65.0, audit LOOP-2).** Re-deriving with the record's own `cap` only
+proves the record agrees with itself, so `check-loop-decision.mjs` also reads the cap `/pharn-loop` opened with — the
+`cap` that `require-loop-record.cjs --open <name> --cap <M>` wrote at Step 1a into `.pharn/pharn-loop/<name>/active.json`,
+located from the record's own `pharn/features/<name>/` path. Unequal is RED `CAP_MISMATCH`; a marker that is absent, a
+symlink, malformed, another run's or capless is RED `CAP_UNWITNESSED` (fail-closed: the closeout runs this check before
+its own `--close`, every run opens the marker before its feature directory exists, and a blocked record — the one stop
+that may lack one — is skipped first); and `iterations` greater than `cap` is RED `ITER_OVER_CAP`, since a compliant
+run stops at `iter <= cap`. Bound: agreement between two files the run can write, never provenance; a typed
+`iterations` that is too low still passes; and a hand re-check after the run's Final step closed the marker is RED
+`CAP_UNWITNESSED`. `check-loop-record.mjs` is unchanged: `cap` stays optional to the shape.
+
 **The sixth, optional field: `mode` (6.28.0, `/pharn-loop --quick`).** `mode ∈ {full, quick}` (the vocabulary is
 `pharn/floor/loop-mode-core.mjs`'s `LOOP_MODES`); **absent means `full`**, so every record written before 6.28.0
 keeps its meaning, and a full run may omit it. **What it records, one meaning for every record class: the run's
@@ -164,7 +175,9 @@ so no record carries `STOP_TERMINAL` for it. From 6.59.0 a gate the runner did n
 or (at verify) unable to start — makes the stage's verdict inconclusive, so a run that hit one records
 `STOP_TERMINAL` (`terminal_cause: unmeasured`) where an earlier one recorded `STOP_CAP` after rebuilding toward the
 hang, or — for a timed-out regress BASE — the blocked stop S11 `stale-evidence` (`verify-report.md`, "A gate that was
-not measured"; `regression-report.md`). Nothing branches on a prior record's `decision` (a later run reads only
+not measured"; `regression-report.md`). From 6.65.0 a reconcile gate that could not decide (its checker's exit 2) is
+`terminal_cause: reconcile-inconclusive` rather than `reconcile`; the record's `decision` is `STOP_TERMINAL` as
+before. Nothing branches on a prior record's `decision` (a later run reads only
 its `## Handoff`), so no version field is added; read an older record's `decision` with its date in mind.
 
 **`commit` — `unknown` is an honest absence, not a value.** `/pharn-loop` captures the SHA with
@@ -233,6 +246,13 @@ than lenient: **nothing downstream reads this record as a gate**, so there is no
 a smuggled field to reach. The one place an extra token _would_ matter — an extra `###` under
 `## Handoff` — is exactly the place this contract closes above.
 
+**Every frontmatter key appears at most once (6.71.3), an extra key included.** A repeated key is refused, never
+resolved to one copy: `check-loop-record.mjs` and `check-loop-decision.mjs` RED it (keys and counts only), and the two
+consumers read the envelope as absent — `loop-closeout.mjs` stops at `decision unverifiable` without committing, and
+`render-cost-ledger.mjs` copies no declared outcome. Reading the last copy, as every reader once did, certified a value
+a person reading the file top-down never sees, and YAML 1.2 rejects such a mapping. "Ignored" above is about an extra
+key's **value**, not its multiplicity.
+
 **`cap` and `mode` are the exceptions to "nothing downstream reads this record as a gate", and they are scoped
 narrowly.** `check-loop-record.mjs` — this contract's own checker — treats `cap` as it treats any other optional
 value: shape-validated when present, otherwise ignored, never RED for its absence; `mode` likewise, plus its one
@@ -244,7 +264,8 @@ guarantee (`check-loop-record.mjs`'s shape verdict) is unchanged by either field
 ## The rule of the contract (P0)
 
 - **FLOOR (deterministic, `pharn/floor/check-loop-record.mjs`):** given a record, the envelope's four
-  mandatory fields and its optional `cap` and `mode` are shape-valid, `decision` and `mode` are a consistent pair,
+  mandatory fields and its optional `cap` and `mode` are shape-valid, no frontmatter key repeats, `decision` and
+  `mode` are a consistent pair,
   and the Handoff's structure is exactly as specified — enum membership, anchored regexes over control-char-guarded
   values, and heading-list equality (`pharn/ARCHITECTURE.md §2` primitive #3).
   **This is the verdict GIVEN a record handed to the checker.** That a record is ever written, or ever

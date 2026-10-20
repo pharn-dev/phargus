@@ -86,6 +86,7 @@
 
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { stripBom } from "./frontmatter-core.mjs";
 
 // ── The enumeration IS the deliverable (L29 / L36) ───────────────────────────────────────────────────
 // The closed stage → product-command map. Every pass below iterates THIS object; no pass re-derives the
@@ -239,8 +240,11 @@ function resolveStage(stages, stage) {
 // Parse a command file's frontmatter `model:` / `effort:`. Same `---` fence + `^([A-Za-z0-9_]+):\s*(.*)$`
 // line parse + quote-strip as `count-grillers.mjs`'s `frontmatterRole` and `.dev/floor/check-config.mjs`
 // — a STRUCTURED read of the structured location, never a substring grep (L6). The key match is EXACT,
-// which is what keeps `model_tier:` from ever being read as `model:`.
-function frontmatterModelEffort(text) {
+// which is what keeps `model_tier:` from ever being read as `model:`. One leading BOM is stripped first
+// (frontmatter-core.mjs `stripBom`, 6.65.2), as those readers now do: a BOM'd command used to read as having
+// no `model:` at all.
+function frontmatterModelEffort(rawText) {
+  const text = stripBom(rawText);
   if (!text.startsWith("---")) return {};
   const end = text.indexOf("\n---", 3);
   if (end === -1) return {};
@@ -433,4 +437,7 @@ function main() {
   return 1;
 }
 
-process.exit(main());
+// THE FLUSH RULE (6.20.4; this CLI since 6.71.1): the exit code is SET and the process ends naturally, after Node has
+// drained stdout — stage-agent-core.mjs JSON.parses `resolve`'s document through spawnSync, and an immediate exit
+// dropped queued writes past a pipe's 64 KiB buffer on darwin. pharn/floor/cli-stdout-flush.test.mjs pins it.
+process.exitCode = main();

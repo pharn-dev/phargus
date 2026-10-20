@@ -26,14 +26,15 @@ The regression-report is `pharn/features/<name>/regression-report.json` (product
 beside the human-facing `REGRESSION.md`. It is `pharn/floor/check-regress.mjs`'s **`verdict` subcommand**
 stdout, plus — in the product report — three additive advisory blocks, `base_evidence` (6.33.0; its `source` and
 `entry` keys 6.49.0),
-`pre_run_snapshot` (6.37.0) and `head_install` (6.40.0), the key `base_source` (regress-base-integrity), and, only
+`pre_run_snapshot` (6.37.0) and `head_install` (6.40.0), the key `base_source` (regress-base-integrity), only when the
+project's declaration decided this invocation's fresh base install, `base_install` (6.66.0), and, only
 when the run's entry gates recorded changes, `entry_gate_changes` (6.42.0), all below.
 
 **Since `stage-regress-script` (6.23.0), the WRITER is `pharn/floor/stage-regress.mjs`, not the model.** The
 product stage script shells `check-regress.mjs verdict` and writes its output atomically (a tmp file under
 `.pharn/pharn-regress/`, then `rename`), so no stray tmp file lands in the feature directory. Since 6.33.0 it
 appends `base_evidence`, since 6.37.0 `pre_run_snapshot` after it, since 6.40.0 `head_install`, then `base_source`
-(regress-base-integrity), and since 6.42.0, when present, `entry_gate_changes` last, as the object's last keys and re-serializes with the same `JSON.stringify(…, null, 2)`
+(regress-base-integrity), since 6.66.0, when present, `base_install`, and since 6.42.0, when present, `entry_gate_changes` last, as the object's last keys and re-serializes with the same `JSON.stringify(…, null, 2)`
 the checker prints with, so every key the checker printed keeps its bytes: the report minus those blocks is the
 checker's stdout, byte for byte (`stage-regress.test.mjs` pins it). The dev
 twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes by hand and adds no block.
@@ -46,7 +47,8 @@ twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes b
   deterministic suite catches — a regression with no covering test, rule or eval is **invisible** here.
   `verdict: "no-regressions"` means _"no gate that was green at base is red at head"_, nothing wider.
 - **IS NOT** a report on the feature itself. Gates already red **at base** are classified `pre_existing`
-  and deliberately **excluded** from the verdict — they are not the increment's fault, and blaming them
+  and deliberately **excluded** from the verdict (since 6.72.0, a dev report computed `--per-test` excepts a
+  gate red on both sides when a test failed at head that did not fail at base — `per_test`, below) — they are not the increment's fault, and blaming them
   on it would train an operator to wave through the one signal that must never be waved through.
 
 ## The object
@@ -64,18 +66,19 @@ twin (`/pharn-dev-regress`) is unchanged: the model writes the checker's bytes b
 
 ## Field shape + trust classes
 
-| field            | shape                                                                                | class                                      |
-| ---------------- | ------------------------------------------------------------------------------------ | ------------------------------------------ |
-| `base`           | the git ref the baseline was captured at, or `null`                                  | ADVISORY — no floor op reads it            |
-| `inside`         | array of repo-relative paths counted as inside the feature                           | ADVISORY — no floor op reads it            |
-| `outside_gates`  | `{ "<gate-id>": { "base": <int>, "head": <int> } }`                                  | ADVISORY — no floor op reads it            |
-| `regressions`    | array of gate-ids that were `0` at base and non-zero at head                         | ADVISORY — no floor op reads it            |
-| `pre_existing`   | array of gate-ids already non-zero at base                                           | ADVISORY — no floor op reads it            |
-| `verdict`        | **enum** — `no-regressions` · `regressions` · `inconclusive`                         | **FLOOR-RELEVANT** — enum-gated by 4 sites |
-| `reason`         | a diagnostic sentence, present only on `inconclusive`                                | ADVISORY — no floor op reads it            |
-| `base_timed_out` | gate-ids whose BASE run timed out — stamp path, present only when non-empty          | ADVISORY — the verdict already reflects it |
-| `head_timed_out` | gate-ids whose HEAD run timed out (6.59.0) — stamp path, present only when non-empty | ADVISORY — the verdict already reflects it |
-| `base_source`    | **enum** — `explicit` · `dirty-head` · `merge-base` (product report only)            | ADVISORY — no floor op reads it            |
+| field            | shape                                                                                                                                        | class                                                       |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `base`           | the git ref the baseline was captured at, or `null`                                                                                          | ADVISORY — no floor op reads it                             |
+| `inside`         | array of repo-relative paths counted as inside the feature                                                                                   | ADVISORY — no floor op reads it                             |
+| `outside_gates`  | `{ "<gate-id>": { "base": <int>, "head": <int> } }`                                                                                          | ADVISORY — no floor op reads it                             |
+| `regressions`    | array of gate-ids that were `0` at base and non-zero at head — and, with `per_test`, its gate when red on both sides with a new head failure | ADVISORY — no floor op reads it                             |
+| `pre_existing`   | array of gate-ids already non-zero at base, except a `per_test` gate with a new head failure                                                 | ADVISORY — no floor op reads it                             |
+| `verdict`        | **enum** — `no-regressions` · `regressions` · `inconclusive`                                                                                 | **FLOOR-RELEVANT** — enum-gated by 4 sites                  |
+| `reason`         | a diagnostic sentence, present only on `inconclusive`                                                                                        | ADVISORY — no floor op reads it                             |
+| `base_timed_out` | gate-ids whose BASE run timed out — stamp path, present only when non-empty                                                                  | ADVISORY — the verdict already reflects it                  |
+| `head_timed_out` | gate-ids whose HEAD run timed out (6.59.0) — stamp path, present only when non-empty                                                         | ADVISORY — the verdict already reflects it                  |
+| `per_test`       | the opt-in per-test comparison of one gate (6.72.0, dev path only) — below                                                                   | ADVISORY — no floor op reads it; its ids are untrusted DATA |
+| `base_source`    | **enum** — `explicit` · `dirty-head` · `merge-base` (product report only)                                                                    | ADVISORY — no floor op reads it                             |
 
 **`regressions` being empty is not the guarantee — `verdict` is.** The two always agree in emitter
 output, but only one of them is read, so a hand-edited report with `regressions: []` beside
@@ -84,7 +87,9 @@ output, but only one of them is read, so a hand-edited report with `regressions:
 
 **Trust (P2).** Every field carries deterministic-tool output — gate-id strings, integer exit codes, and
 file paths from `git diff` and path-set membership: the enum-gated / floor-verifiable class. **This
-artifact contains no untrusted free text**, which is a genuine difference from the verify-report and is
+artifact contains no untrusted free text — with one exception since 6.72.0:** a dev report computed with
+`--per-test` carries test ids (test titles from the repository) in `per_test.new_failures`, below. They are
+untrusted DATA, rendered fenced, read by no floor op. Otherwise this is a genuine difference from the verify-report and is
 why its residual section is narrower. The `scope` subcommand (below) _does_ emit `finding-shape` objects
 with free-text `problem` fields, but those go to the command's own output and `REGRESSION.md` — **not**
 into this file.
@@ -108,7 +113,7 @@ same set**, `{no-regressions, regressions, inconclusive}`:
 
 | consumer                               | on a value outside the set             |
 | -------------------------------------- | -------------------------------------- |
-| `pharn/floor/check-ship.mjs`           | `INCONCLUSIVE`, exit 2 — fail-closed   |
+| `.dev/floor/check-ship.mjs`            | `INCONCLUSIVE`, exit 2 — fail-closed   |
 | `pharn/floor/check-loop.mjs`           | `INCONCLUSIVE`, exit 2 — fail-closed   |
 | `pharn/floor/render-ship-briefing.mjs` | the honest literal `n/a` in the render |
 | `pharn/floor/check-ship-briefing.mjs`  | RED (shape)                            |
@@ -139,6 +144,37 @@ report reaches the same fail-closed state. Nothing anywhere reads an absent verd
   sentence. **Since 6.23.0, the product `REGRESSION.md` itself is no longer model-written prose** — it is
   rendered by `pharn/floor/render-regression.mjs`, deterministic code the stage script calls before
   writing it (`pharn/pharn-contracts/stage-exit.md`). The dev twin's `REGRESSION.md` remains hand-written.
+
+## The opt-in `per_test` block (6.72.0, advisory shape — dev path)
+
+`check-regress.mjs verdict` adds it only when called with `--per-test <gate> --base-tests <b> --head-tests <h>`, on
+the positional path (`/pharn-dev-regress` passes it for its outside `tests` gate; the stamp path refuses the flags, so
+no product report carries it — the follow-up `regress-per-test-product`). The two files are `pharn-test-results/1`
+documents (`test-results-record.md`, the `pharn-json` format), read by the record builder that contract names.
+
+```json
+{
+  "gate": "tests",
+  "base": { "passed": 5620, "failed": 2, "skipped": 4, "suite_errors": 0 },
+  "head": { "passed": 5619, "failed": 3, "skipped": 4, "suite_errors": 0 },
+  "new_failures": [{ "id": "t/b.test.mjs::b1", "base": "passed" }],
+  "still_failing": 2
+}
+```
+
+- **What it changes in the table:** for that one gate, base ≠ 0 and head ≠ 0 is a **regression** (the gate id goes
+  in `regressions`, not `pre_existing`) when `new_failures` is non-empty — a test failed at head whose base status is
+  `passed`, `skipped` or `absent` — or head reports more suite errors than base. Otherwise the row is `pre_existing`,
+  as before, and every other row is unchanged. So with the block, `regressions` is no longer only "0 at base".
+- **The direction is deliberate.** Under machine load a test red at head only reads as a regression where the single
+  exit code read `pre_existing`: a false RED in place of a false GREEN. A run once hid 11 real head failures behind a
+  load-red base (`.dev/features/frontmatter-parser-parity/REGRESSION.md`).
+- **Fail-closed** (`inconclusive`, exit 2): `usage-error` (the flags incomplete, on the stamp path, or naming a gate
+  absent from the maps), `per-test-record-refused` (a record unreadable, malformed, over a cap, contradicting its exit,
+  or holding an anomaly), `per-test-unaccounted-red` (a red gate whose record shows no failed test and no suite error).
+- **Trust:** `new_failures[].id` is repository test-title text — untrusted DATA, never read by a floor op. The
+  records themselves are unauthenticated files the caller names; the comparison is floor over what they say, never
+  proof of what ran.
 
 ## Extra keys are IGNORED (deliberately not a closed-key object)
 
@@ -193,7 +229,8 @@ reader can re-derive it, and it must **never** be read as an invariant the repo 
 ## Residual (named, not hidden — `LIMITS.md §2`)
 
 Narrower than the verify-report's, and narrower for a structural reason rather than by luck: this
-artifact carries **no untrusted free text**, so there is no injected-quote channel through it. The
+artifact carries **no untrusted free text** (outside a dev report's `per_test.new_failures` ids, which no floor op
+reads), so there is no injected-quote channel through it. The
 residual that remains is the honest one about the verdict itself — a `no-regressions` verdict is only as
 wide as the suite that produced it, and a reader who takes it as "the change is safe" has substituted a
 guarantee about **gates** for a guarantee about **behavior**. The document says exactly what the gates
@@ -486,6 +523,23 @@ records. NOT claimed: a partially committed build with another uncommitted chang
 holds the committed part (only `--base` closes it); the base checkout still reaches an inherited `NODE_PATH`, global
 folders and an ancestor of the temp root; `baseInstallNeeded` sees lockfiles and declared dependencies, not a
 dependency resolved some other way; and a broad-but-not-total glob (`**/*.js`) is reported, never refused.
+
+## The conditional `base_install` block (6.66.0, advisory shape)
+
+Present only when the project's `pharn.config.json` `regress.install` decided THIS invocation's fresh base install
+(`stage-exit.md`, "The `regress` install command"); absent when argv or the lockfile table decided it, and when the
+BASE evidence was reused or came from the entry gates, so every other report keeps its bytes. It sits after
+`base_source` and before `entry_gate_changes`:
+
+```json
+"base_install": { "declared_in": "pharn.config.json#regress.install", "value": "head-node-modules" }
+```
+
+`value` is the declared member (`none`, `head-node-modules`, or a lockfile family), re-derived from the validated
+decision, never copied from the file. **`head-node-modules` is an APPROXIMATION and the block is its disclosure:** the
+base gates ran over the project's own installed `node_modules`, so a regression caused purely by a dependency change is
+red on both sides and reads `pre_existing` — not attributed. It does not weaken `/pharn-verify`, whose threshold is
+absolute over every gate at HEAD. Nothing gates on this block. Trust: fixed strings selected by membership; no path.
 
 ## The conditional `entry_gate_changes` block (6.42.0, advisory shape)
 
