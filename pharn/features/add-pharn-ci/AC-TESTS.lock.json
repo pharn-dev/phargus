@@ -1,0 +1,87 @@
+{
+  "schema": "ac-tests-lock/5",
+  "feature": "add-pharn-ci",
+  "mode": "test-first",
+  "spec": {
+    "spec_id": "add-pharn-ci",
+    "spec_content_hash": "60e68b31b40fd8f0a4e010a1eb4028946c11d99c54e39996dc90db64a13a3256"
+  },
+  "mapping": {
+    "path": "pharn/features/add-pharn-ci/AC-TESTS.md",
+    "sha256": "021aebd0a95d8d586cd2dfe5b03f0d64d51c33e4c3ff884ab77fc85e3a0c828c"
+  },
+  "files": [
+    {
+      "path": "src/ci/pharn-ci-config.ac2.test.ts",
+      "sha256": "4053ec1831b149de046911def64a200c4bb1b58701c78a203cff0f5c1f53fc01"
+    },
+    {
+      "path": "src/ci/pharn-ci-coverage.ac1.integration.test.ts",
+      "sha256": "5a67a4c672575c810175816eb96a0d2ff862c221c4ebb672c6793a025e93c916"
+    },
+    {
+      "path": "src/ci/pharn-ci-workflow.ac3.test.ts",
+      "sha256": "314031e6eb71d9e4b66eac42c17b0051ec29705325320bc672d7051ef1373292"
+    }
+  ],
+  "bootstrap": null,
+  "red_run": {
+    "stamp_sha256": "3f7bd9d7ae83b40636c6dcdf21f71c84ed4fb4b6319c20709fc72b59f9bc85ae",
+    "files_sha256": "cff2986dd15a55e1889c8eec69e7f3d3a0e4e5db7f422960687b5d7c39323c55",
+    "gates": [
+      {
+        "gate": "test",
+        "results_sha256": "dfaf6ef4d0b4da132d43cb392cfb815d039423b042d5f88d327ddbcade2ca6ca"
+      }
+    ],
+    "acs": [
+      {
+        "id": "AC-1",
+        "tests": [
+          "src/ci/pharn-ci-coverage.ac1.integration.test.ts::npm run test:coverage (pharn-ci coverage input) › AC-1: exits 0 and writes a git-ignored coverage/lcov.info with an SF record for every non-test src .ts file"
+        ]
+      },
+      {
+        "id": "AC-2",
+        "tests": [
+          "src/ci/pharn-ci-config.ac2.test.ts::.pharn/ci.yml (pharn-ci settings) › AC-2: has only the coverage key, file coverage/lcov.info, threshold 80, and no tab",
+          "src/ci/pharn-ci-config.ac2.test.ts::.pharn/ci.yml (pharn-ci settings) › AC-2: is not git-ignored while .pharn/writes-scope.json still is"
+        ]
+      },
+      {
+        "id": "AC-3",
+        "tests": [
+          "src/ci/pharn-ci-workflow.ac3.test.ts::ci.yml Test job (pharn-ci wiring) › AC-3: has job-level permissions of exactly contents: read and pull-requests: write",
+          "src/ci/pharn-ci-workflow.ac3.test.ts::ci.yml Test job (pharn-ci wiring) › AC-3: keeps the name Test, checks out with fetch-depth 0 and runs npm run test:coverage",
+          "src/ci/pharn-ci-workflow.ac3.test.ts::ci.yml Test job (pharn-ci wiring) › AC-3: runs the pinned pharn-ci step only on pull_request and merge_group events",
+          "src/ci/pharn-ci-workflow.ac3.test.ts::ci.yml Test job (pharn-ci wiring) › AC-3: with pharn-ci wired in, no workflow uses pull_request_target and check:pins exits 0"
+        ]
+      }
+    ]
+  },
+  "test_infra": {
+    "levels": [
+      "integration",
+      "unit"
+    ],
+    "gates": [
+      {
+        "id": "test",
+        "script": "vitest run",
+        "pre": null,
+        "post": null,
+        "results": "vitest-json"
+      }
+    ],
+    "chained": [],
+    "configs": [
+      {
+        "path": "vitest.config.mts",
+        "sha256": "ae812b81b31f5320f8486226aeef87e3767e7851772d1a845cdeb5b881a17421"
+      }
+    ],
+    "script_files": [],
+    "jest": null,
+    "exclude": []
+  }
+}

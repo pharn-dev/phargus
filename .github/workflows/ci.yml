@@ -71,9 +71,15 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    # pharn-ci posts its diff-coverage comment, so this one job needs `pull-requests: write`.
+    # A job-level block replaces the workflow-level one, so `contents: read` is repeated.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -82,7 +88,17 @@ jobs:
       - name: Install
         run: npm ci
       - name: Test
-        run: npm test
+        run: npm run test:coverage
+      # Only on pull requests and merge groups: on a push it would gate main against the previous commit.
+      - id: pharn-ci
+        if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+        uses: pharn-dev/pharn-ci@a88e62a8febf5cd9a77b8e0252cd060c3b94782c # v0.1.0
+        timeout-minutes: 5
+      - if: always() && steps.pharn-ci.outputs.report-path != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: pharn-ci-report
+          path: ${{ steps.pharn-ci.outputs.report-path }}
 
   build:
     name: Build
