@@ -103,7 +103,7 @@
     "provenance": true
   },
   "peerDependencies": {
-    "isolated-vm": "^6.1.0"
+    "isolated-vm": "^7.0.0"
   },
   "peerDependenciesMeta": {
     "isolated-vm": {
@@ -131,15 +131,15 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^26.6.5",
-    "@vitest/coverage-v8": "^5.0.3",
+    "@vitest/coverage-v8": "^5.0.5",
     "eslint": "^10.12.0",
     "eslint-config-prettier": "^10.1.8",
     "globals": "^17.13.0",
-    "happy-dom": "^21.0.1",
-    "isolated-vm": "^6.2.0",
+    "happy-dom": "^21.0.3",
+    "isolated-vm": "^7.0.1",
     "prettier": "^3.9.10",
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.2",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.5"
   }
 }
