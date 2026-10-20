@@ -121,7 +121,8 @@ State these honestly; do not pretend tiered loading solves them.
 
 ### 3a. Cost scales with fan-out breadth, not change size — and that is backwards
 
-A 3-line typo fix still fans out to every lens, each loading its rules + the diff. Tiered loading
+A 3-line typo fix still fans out to every lens with a non-empty review set, one subagent per lens family,
+each loading its lenses' rules + the diff. Tiered loading
 optimizes _within_ one assembly (don't load all rules at once); it does **nothing** about fan-out
 _breadth_. You pay the most for what there is the most of (small changes). This is
 the largest practical token problem and it is not yet solved.
@@ -139,7 +140,7 @@ the largest practical token problem and it is not yet solved.
 > the orchestrating model, so honoring it is advisory; what backs it is the SPEC's approved, pinned
 > `spec_kind: quick`. Nothing measures whether a change is small: the kind and the flag are what a person
 > chose, and a quick SPEC run without the flag takes the full pipeline. There is still no AUTOMATIC
-> proportionality, and `/pharn-review`'s lens fan-out is unchanged.
+> proportionality, and `--quick` does not change `/pharn-review`'s lens fan-out.
 >
 > **The unattended one is `/pharn-loop --quick` (6.28.0), and nobody is told the trade before it runs.** The model
 > writes and approves the `spec_kind: quick` SPEC itself (`approved_by: model`), and `check-loop.mjs` decides every
@@ -284,7 +285,11 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   reported rather than failed: a path whose bytes are exactly the upstream bytes HEAD merged in during the window
   (`merged[]`, `reconciliation-record.md` §2a); a commit the build makes itself still fails. Since 6.54.0 a scope amendment derived from a plan
   authorizes only what the anchored snapshot covered, so a `## Files` widened after the anchor is reported
-  (`plan-widened-after-anchor`); one widened before the anchor, or a forged snapshot, is not. **The supported claim is exactly "a write to a path the active
+  (`plan-widened-after-anchor`); one widened before the anchor, or a forged snapshot, is not.
+  Since 6.57.0 a deletion is judged like a write: a path present at the anchor and gone from disk at verify — removed
+  with `rm`, with `git rm`, or by a commit, tracked or untracked — fails the stage when no recorded scope covers it,
+  unless upstream deleted it in a merge inside the window (`merged[]`). A path still on disk that has left the
+  reconciled set, because it became git-ignored, is only a warning. **The supported claim is exactly "a write to a path the active
   scope would have denied is detected and fails the stage" — never "Bash writes are prevented."** Four
   bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths are outside the
   reconciled set; the window is anchor-to-verify; the model is **one worktree per session** (two sessions

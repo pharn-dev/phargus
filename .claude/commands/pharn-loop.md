@@ -48,8 +48,102 @@ reads:
     "pharn/floor/validate.mjs",
   ]
 writes: ["pharn/features/<name>/SPEC.md", "pharn/features/<name>/LOOP.md"]
+allowed-tools:
+  [
+    "Read",
+    "Write",
+    "Edit",
+    "Glob",
+    "Grep",
+    "Agent",
+    "Skill",
+    "Bash(node pharn/floor/feature-name.mjs --fresh)",
+    "Bash(git rev-parse HEAD)",
+    "Bash(git symbolic-ref --short -q HEAD)",
+    "Bash(echo detached)",
+    "Bash(mkdir -p .pharn/pharn-loop/*)",
+    "Bash(git status --porcelain -uall > .pharn/pharn-loop/*/pre-run-status.txt)",
+    "Bash(node .claude/hooks/require-loop-record.cjs --open * --cap *)",
+    "Bash(node pharn/floor/pre-run-snapshot.mjs --capture *)",
+    "Bash(node pharn/floor/mark-phase.mjs --name * --kind run-start)",
+    "Bash(node pharn/floor/entry-gates.mjs --start --feature * --timeout-ms 540000)",
+    "Bash(node pharn/floor/mark-phase.mjs --name * --kind stage-start --stage * --route 'inline:route-unavailable')",
+    "Bash(node pharn/floor/mark-phase.mjs --name * --kind orchestrator)",
+    "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-spec --name *)",
+    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-spec)",
+    "Bash(node pharn/floor/check-spec-approved.mjs pharn/features/*/SPEC.md)",
+    "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-plan --name *)",
+    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-plan)",
+    "Bash(node pharn/floor/mark-phase.mjs --name * --kind stage-start --stage pharn-grill)",
+    "Bash(node pharn/floor/entry-gates.mjs --wait --feature * --budget-ms 570000)",
+    "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-test --name *)",
+    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-test)",
+    "Bash(node pharn/floor/check-test-stage.mjs * --require-test-first)",
+    "Bash(node pharn/floor/check-red-run.mjs --preflight --ac-tests pharn/features/*/AC-TESTS.md --discover package.json --root .)",
+    "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-build --name * --iteration *)",
+    "Bash(node pharn/floor/stage-agent.mjs finish --command pharn-loop --name * --stage pharn-build --iteration *)",
+    "Bash(node pharn/floor/stage-direct.mjs --stage pharn-regress --name * --iteration * --timeout-ms 540000 --budget-ms 570000 --base *)",
+    "Bash(node pharn/floor/stage-direct.mjs --stage pharn-verify --name * --iteration * --timeout-ms 540000 --budget-ms 570000)",
+    "Bash(node pharn/floor/stage-direct.mjs --stage pharn-regress --name * --resume --budget-ms 570000)",
+    "Bash(node pharn/floor/stage-direct.mjs --stage pharn-verify --name * --resume --budget-ms 570000)",
+    "Bash(node pharn/floor/check-loop-fresh.mjs --feature * --base * --iter * --front)",
+    "Bash(node pharn/floor/check-loop.mjs pharn/features/*/verify-report.json pharn/features/*/regression-report.json --iter * --cap *)",
+    "Bash(node pharn/floor/entry-gates.mjs --abort --feature *)",
+    "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-spec --name * --mode quick)",
+    "Bash(node pharn/floor/check-spec.mjs --spec-kind pharn/features/*/SPEC.md)",
+    "Bash(node pharn/floor/stage-agent.mjs start --command pharn-loop --stage pharn-build --name * --iteration * --mode quick)",
+    "Bash(node pharn/floor/check-quick-scope.mjs --feature * --base *)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-loop.md --target pharn/features/*/SPEC.md)",
+    "Bash(node pharn/floor/reconcile-baseline.mjs --amend-scope)",
+    "Bash(node pharn/floor/check-spec.mjs pharn/features/*/SPEC.md)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-loop.md --target pharn/features/*/LOOP.md)",
+    "Bash(git rev-parse HEAD 2>/dev/null)",
+    "Bash(echo unknown)",
+    "Bash(node pharn/floor/loop-closeout.mjs --feature * --base *)",
+    "Bash(git status --short --branch)",
+    "Bash(cat .pharn/pharn-loop/*/closeout-phase 2>/dev/null)",
+    'Bash(echo "no git step reached")',
+    "Bash(node pharn/floor/check-loop-record.mjs pharn/features/*/LOOP.md)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --clear)",
+    "Bash(node .claude/hooks/require-loop-record.cjs --close *)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-grill.md --target pharn/features/*/GRILL.md)",
+    "Bash(node pharn/floor/grill-scan.mjs pharn/features/*/PLAN.md)",
+    "Bash(node pharn/floor/check-plan-spec-agree.mjs pharn/features/*/PLAN.md pharn/features/*/SPEC.md)",
+    "Bash(node pharn/floor/check-plan-lessons.mjs pharn/features/*/PLAN.md memory-bank/lessons-learned.md)",
+    "Bash(node pharn/floor/catalogue-installed-skills.mjs .)",
+    "Bash(node pharn/floor/griller-extract.mjs .)",
+    "Bash(node pharn/floor/feature-name.mjs)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-spec.md --target pharn/features/*/SPEC.md)",
+    "Bash(node pharn/floor/check-spec.mjs --resolve-template-ref)",
+    "Bash(node pharn/floor/check-spec.mjs --template-path *)",
+    "Bash(node pharn/floor/check-spec.mjs --hash pharn/features/*/SPEC.md)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-plan.md --target pharn/features/*/PLAN.md)",
+    "Bash(node pharn/floor/check-lessons-index.mjs . --verdict)",
+    "Bash(node pharn/floor/check-ac-tests.mjs --spec pharn/features/*/SPEC.md)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-plan.md --target pharn/features/*/AC-TESTS.md)",
+    "Bash(node pharn/floor/check-ac-tests.mjs pharn/features/*/AC-TESTS.md pharn/features/*/SPEC.md pharn/features/*/PLAN.md)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --from-plan pharn/features/*/AC-TESTS.md)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-test.md --target pharn/features/*/AC-TESTS.lock.json)",
+    "Bash(node pharn/floor/ac-tests-lock.mjs --write *)",
+    "Bash(node pharn/floor/ac-tests-lock.mjs --check *)",
+    "Bash(node pharn/floor/run-gates.mjs init --stage ac-test --feature * --out .pharn/pharn-test/gates --discover package.json --ac-tests pharn/features/*/AC-TESTS.md)",
+    "Bash(node pharn/floor/run-gates.mjs run --next --out .pharn/pharn-test/gates --timeout-ms 540000)",
+    "Bash(node pharn/floor/check-red-run.mjs --verdict --ac-tests pharn/features/*/AC-TESTS.md --out .pharn/pharn-test/gates --root .)",
+    "Bash(node pharn/floor/ac-tests-lock.mjs --record-red-run * --out .pharn/pharn-test/gates)",
+    "Bash(node pharn/floor/ac-tests-lock.mjs --check * --require-red-run)",
+    "Bash(node pharn/floor/ac-tests-lock.mjs --write-bootstrap *)",
+    "Bash(node pharn/floor/ac-tests-lock.mjs --check * --require-red-run --allow-bootstrap)",
+    "Bash(node pharn/floor/check-test-stage.mjs *)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --from-plan pharn/features/*/PLAN.md)",
+    "Bash(node pharn/floor/reconcile-baseline.mjs --anchor --by pharn-build)",
+    "Bash(node pharn/floor/check-seam-config.mjs .pharn/seam-config.json)",
+    "Bash(node pharn/floor/apply-plan-deletions.mjs --feature *)",
+    "Bash(node pharn/floor/build-gate.mjs --feature * --mode targeted --timeout-ms 540000 --budget-ms 570000)",
+    "Bash(node pharn/floor/build-gate.mjs --feature * --mode full --timeout-ms 540000 --budget-ms 570000)",
+    "Bash(node .claude/hooks/set-writes-scope.cjs --from-frontmatter .claude/commands/pharn-build.md --target pharn/features/*/BUILD.md)",
+  ]
 constitution_refs: ["P0", "P2", "P3", "P5", "P6", "P7"]
-version: "0.11.1"
+version: "0.13.0"
 ---
 
 # /pharn-loop — run the product pipeline unattended to a floor-grade stop, then report what was done
@@ -86,6 +180,23 @@ Load the trusted prefix and obey it:
   stop commits nothing, leaves the changes in the working tree, and **reverts a model-approved SPEC to
   `Draft`** — an agent-performed step (advisory), so an aborted run can skip it. A SPEC the run never approved
   (a clarification stop, S6b) simply stays a `Draft`.
+- **No prompt from Claude Code either (6.58.0).** Never use a tool that puts a question or a plan approval to the person during a run. The
+  frontmatter `allowed-tools` pre-approves, for this run's one turn, exactly the shell lines this command, its two
+  parts, the inline `/pharn-grill` and the four stages it may run inline (`/pharn-spec`, `/pharn-plan`, `/pharn-test`,
+  `/pharn-build`) pin — each `<placeholder>` a `*` — plus the file, Agent and Skill tools, so Claude Code does not
+  stop to ask permission for them (6.61.0: no prefix grant; the seam-config `node -e` line of `/pharn-build` is left
+  out and may prompt). **ADVISORY (P0):** that the grant is honored is Claude Code's behavior, not PHARN's floor, and
+  a deny or ask rule of the person's still wins. Claude Code's docs do not say whether the grant reaches a stage
+  agent, so a stage agent running the project's own commands (its test runner, its build) follows the session's
+  permission mode: when nobody will be there, run the loop in a mode that does not prompt for those (auto mode, or
+  allow rules). **What the grant widens:** a `*` matches any text, so a pinned script runs with whatever arguments
+  the run gives it (the inline build's `reconcile-baseline.mjs --anchor` included), and a shell redirection on a
+  granted line writes that script's output wherever Claude Code's Edit rules allow — outside both PHARN write
+  guards, as every Bash write is (`LIMITS.md §6`). And the pinned gate lines run your project's own tests, which
+  execute code the build wrote, with no prompt: run an unattended loop only where that is acceptable (a sandbox, a
+  container, a throwaway checkout). What it does not widen: no `node` script outside the pinned lines is
+  pre-approved, the two write guards still judge every Write and Edit (fix #2, fix #7), and in an installed project
+  the setter refuses a plan that names PHARN's own files (`.claude/hooks/set-writes-scope.cjs`, header).
 - **The human decision still exists; it moves to after the run.** A person reviews the branch (or the
   working tree) and decides what to merge.
 - **It is expensive unattended.** Every iteration re-runs `/pharn-regress` (the project's suite at HEAD, and a
@@ -101,6 +212,18 @@ Step 4's entry read then goes on past a red gate instead of stopping at S14. It 
 (after `--quick`), never inside the description — ADVISORY, an instruction to you, like `--quick`'s rule.
 `/pharn-loop --quick [--max-iter N] <increment description>` (6.28.0) is the quick form — load its quick part
 before Step 1a, as `## Quick mode` below says; every step not named there runs as written.
+
+**Plan mode first (6.58.0).** If the session is in plan mode, stop here — before the quick part is read and before
+Step 1a writes anything. Plan mode blocks every write until a person approves a plan, and no command can leave it on
+its own, so leaving it would ask the person to approve a plan: the one thing this command must not do. End with exactly
+this line and nothing else:
+
+```text
+pharn-loop: not started — the session is in plan mode; leave plan mode (Shift+Tab) and run /pharn-loop again.
+```
+
+Nothing is written — no feature directory, marker, scope or record — so the Stop guard (inert in plan mode anyway)
+holds nothing. **ADVISORY (P0):** you read your mode from what Claude Code tells you; nothing on the floor detects it.
 
 ### Step 1a — the fixed-rule entry steps (S1, S2, S3) and the pre-run snapshot
 
@@ -640,7 +763,9 @@ Each iteration `<N>` (1-based). **Every sub-stage is marked on entry and the orc
      regression) and `N < M`.
      `N++`, back to 1.
    - **`1` `STOP_CAP`** — a measurable red at `N >= M`. Go to Step 6.
-   - **`4` `STOP_TERMINAL`** — an inconclusive verdict (nothing was measured, so a retry would be blind), an
+   - **`4` `STOP_TERMINAL`** — an inconclusive verdict (nothing was measured, so a retry would be blind — a gate the
+     runner timed out or could not start included: verify `.unmeasured_gates[]`, regress `.head_timed_out[]` /
+     `.base_timed_out[]`, each a gate never measured, never a red one), an
      **AC-evidence red**, or a **reconcile red** (a retry would re-anchor the baseline and erase the detected Bash
      escape). The JSON's closed `terminal_cause` says which: **`ac-evidence` is S13** (`blocked: ac-evidence-invalid`)
      — a blocked stop, recorded as Step 2 says; `unmeasured` and `reconcile` go to Step 6 with the decision as
