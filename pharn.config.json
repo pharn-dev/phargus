@@ -1,10 +1,10 @@
 {
   "pharnVersion": "0.7.0",
-  "skillsVersion": "6.64.3",
+  "skillsVersion": "6.72.0",
   "repo": "pharn-dev/pharn-oss",
-  "commit": "94ad252baef07e219db9adfccad83df2c40e2e58",
+  "commit": "18037dd423b8339815d6944226213883f9a8151c",
   "modules": [],
-  "installedAt": "2026-10-19T14:33:57.608Z",
+  "installedAt": "2026-10-20T13:18:00.387Z",
   "models": {
     "stages": {
       "default": {

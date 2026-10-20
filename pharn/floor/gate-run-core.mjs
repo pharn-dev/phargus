@@ -191,6 +191,8 @@ export const REASON_CODES = Object.freeze([
   "lock-busy",
   "output-hash-mismatch",
   "path-containment",
+  "per-test-record-refused",
+  "per-test-unaccounted-red",
   "reconcile-not-last",
   "regress-verify-tree-mismatch",
   "report-malformed",
@@ -715,6 +717,26 @@ function excludedBlock(ids) {
   return ids.length ? { declared_in: EXCLUSION_DECLARED_IN, ids: [...ids] } : null;
 }
 
+/** 6.65.0 (audit LOOP-4) — what a REPORT's copy of that block says, for a renderer or a commit message that must name
+ *  the excluded gates: `null` when the value is not a plain object (no block — nothing was excluded, or the report
+ *  predates 6.36.0), else `{ count, ids, unlisted, declaredHere }` — `ids` the ALLOWLIST members it names, in ALLOWLIST
+ *  order (the only values a caller may render inline), `unlisted` how many entries are not, `count` both, and
+ *  `declaredHere` whether `declared_in` is the one sanctioned source. Lenient by design: it describes what a report
+ *  says and never validates it (validateStamp's excludedDefect is the shape gate, at the stamp). TOTAL over parsed
+ *  JSON (L62): only typeof / Array.isArray / includes, never String(); own-property reads (L15). */
+export function excludedFacts(x) {
+  if (x === null || typeof x !== "object" || Array.isArray(x)) return null;
+  const raw = Object.hasOwn(x, "ids") && Array.isArray(x.ids) ? x.ids : [];
+  const ids = ALLOWLIST.filter((id) => raw.some((v) => typeof v === "string" && v === id));
+  const listed = raw.filter((v) => typeof v === "string" && ALLOWLIST.includes(v)).length;
+  return {
+    count: raw.length,
+    ids,
+    unlisted: raw.length - listed,
+    declaredHere: Object.hasOwn(x, "declared_in") && x.declared_in === EXCLUSION_DECLARED_IN,
+  };
+}
+
 /** The `--base-tests` list's shape (6.49.0), or null: a NON-EMPTY array (an empty list handed to a runner means "the
  *  whole suite", L16) of distinct clean tokens, none led by `-` and none glob-shaped, at most MAX_BASE_TESTS long. The
  *  path rule proper is ac-tests-core.mjs `badPath`, which run-gates.mjs applies when it reads the file. TOTAL (L62). */
@@ -1160,7 +1182,7 @@ export function completenessFromStamp(stamp) {
 }
 
 /** The advisory `gate_run` block both reports carry. It was additive: when 6.8.0 added it, every consumer of those
- *  reports then read named fields only (verified by reading each: check-loop.mjs, check-ship.mjs,
+ *  reports then read named fields only (verified by reading each: check-loop.mjs, .dev/floor/check-ship.mjs,
  *  check-loop-decision.mjs, check-ship-briefing.mjs, render-ship-briefing.mjs, render-run-report.mjs,
  *  ship-outcome-core.mjs — none validated a closed key set); check-loop-fresh.mjs (6.10.0) reads
  *  `gate_run.stamp_sha256` by name. A consumer added since is not covered by either reading.

@@ -119,7 +119,7 @@
 // test asserts the two agree on totals over the same bytes, with the class-name mapping made explicit
 // (D4), so the pair cannot drift silently while both exist. Agreement is ALL it proves ([[L43]]): it
 // stayed GREEN while both under-counted. The ★ per-request tests over
-// `fixtures/cost-ledger/usage-snapshots/` are what bind the rule to transcript shapes actually seen.
+// `test-fixtures/cost-ledger/usage-snapshots/` are what bind the rule to transcript shapes actually seen.
 //
 // Usage:
 //   node pharn/floor/render-cost-ledger.mjs <name> [--base <dir>] [--repo <dir>] [--session <id>]
@@ -138,7 +138,7 @@ import { homedir } from "node:os";
 import { findTranscriptDirs, sessionScan } from "./transcript-core.mjs";
 import { DEFAULT_BASE as MARKERS_DEFAULT_BASE, MARKER_KINDS, MARKER_MODES, cleanScalar, markerLine } from "./mark-phase.mjs";
 import { isRouteToken } from "./route-token-core.mjs";
-import { FM_RE, stripBom } from "./frontmatter-core.mjs";
+import { frontmatterEntries, stripBom } from "./frontmatter-core.mjs";
 import { readShipOutcome, OUTCOME_SOURCE as SHIP_OUTCOME_SOURCE } from "./ship-outcome-core.mjs";
 import {
   runWindow,
@@ -546,7 +546,8 @@ export function attribute(markers, ts, sessionId) {
 }
 
 /** Read `outcome` from the LOOP.md ENVELOPE only — never grepped from the body (L6). A `decision:` line
- *  in prose is DATA about a record, not a declaration of one. Returns null when there is no record. */
+ *  in prose is DATA about a record, not a declaration of one. Returns null when there is no record, no
+ *  `decision`, or a repeated envelope key (6.71.3). */
 export function readOutcome(loopPath) {
   let text;
   try {
@@ -554,12 +555,15 @@ export function readOutcome(loopPath) {
   } catch {
     return null;
   }
-  const m = text.match(FM_RE);
-  if (!m) return null;
+  // frontmatter-core.mjs's `frontmatterEntries` (6.71.3), the one reader check-loop-record.mjs reads this envelope
+  // with. A repeated key is never resolved to one copy: the envelope reads as absent (null), exactly as one with no
+  // `decision` does, so no declared outcome is copied and the caller falls through to the derived one — whose
+  // `source` then says so. The value rule below is unchanged.
+  const fm = frontmatterEntries(text);
+  if (fm === null || fm.repeated.length > 0) return null;
   const fields = new Map(); // a Map, never a plain object keyed by arbitrary input (L15)
-  for (const line of m[1].split("\n")) {
-    const kv = line.match(/^([A-Za-z_][A-Za-z0-9_]*):[ \t]*(.*)$/);
-    if (kv) fields.set(kv[1], kv[2].trim().replace(/^["']|["']$/g, ""));
+  for (const { key, raw } of fm.entries) {
+    fields.set(key, raw.trim().replace(/^["']|["']$/g, ""));
   }
   const decision = fields.get("decision");
   if (typeof decision !== "string" || decision.length === 0) return null;
