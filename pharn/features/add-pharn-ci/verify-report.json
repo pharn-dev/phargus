@@ -1,0 +1,108 @@
+{
+  "feature": "add-pharn-ci",
+  "gates": {
+    "build": 0,
+    "format:check": 0,
+    "instruction-growth": 0,
+    "lint": 0,
+    "reconcile": 0,
+    "test": 0,
+    "typecheck": 0
+  },
+  "verdict": "PASS",
+  "failing_gates": [],
+  "gate_run": {
+    "stamp_sha256": "346d13ee43d97bd15255457649ae7009131eb9e866d3b057d5e831d1f7d8d77b",
+    "source": "discover",
+    "fingerprint": {
+      "algo": "worktree-fingerprint/2+sha256",
+      "final": "05e6d7bec845248f2817c01727d8470cc537a05be2924f434c9edfb2733a3706"
+    }
+  },
+  "ac_gate": {
+    "mode": "test-first",
+    "verdict": "PASS",
+    "reason": null,
+    "evidence": [],
+    "acs": [
+      {
+        "id": "AC-1",
+        "level": "integration",
+        "tests": [
+          "src/ci/pharn-ci-coverage.ac1.integration.test.ts::npm run test:coverage (pharn-ci coverage input) › AC-1: exits 0 and writes a git-ignored coverage/lcov.info with an SF record for every non-test src .ts file"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-2",
+        "level": "unit",
+        "tests": [
+          "src/ci/pharn-ci-config.ac2.test.ts::.pharn/ci.yml (pharn-ci settings) › AC-2: has only the coverage key, file coverage/lcov.info, threshold 80, and no tab",
+          "src/ci/pharn-ci-config.ac2.test.ts::.pharn/ci.yml (pharn-ci settings) › AC-2: is not git-ignored while .pharn/writes-scope.json still is"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      },
+      {
+        "id": "AC-3",
+        "level": "unit",
+        "tests": [
+          "src/ci/pharn-ci-workflow.ac3.test.ts::ci.yml Test job (pharn-ci wiring) › AC-3: has job-level permissions of exactly contents: read and pull-requests: write",
+          "src/ci/pharn-ci-workflow.ac3.test.ts::ci.yml Test job (pharn-ci wiring) › AC-3: keeps the name Test, checks out with fetch-depth 0 and runs npm run test:coverage",
+          "src/ci/pharn-ci-workflow.ac3.test.ts::ci.yml Test job (pharn-ci wiring) › AC-3: runs the pinned pharn-ci step only on pull_request and merge_group events",
+          "src/ci/pharn-ci-workflow.ac3.test.ts::ci.yml Test job (pharn-ci wiring) › AC-3: with pharn-ci wired in, no workflow uses pull_request_target and check:pins exits 0"
+        ],
+        "status": "passed",
+        "reason": null,
+        "detail": ""
+      }
+    ],
+    "unmapped_anomalies": [],
+    "note": "an AC is delivered = a locked, once-red test titled AC-<n>:, in a file mapped to AC-<n>, passed on this head run. PHARN does not judge whether that test fully captures the AC's intent."
+  },
+  "completeness": {
+    "plan": "pharn/features/add-pharn-ci/PLAN.md",
+    "repoDir": ".",
+    "declared": [
+      "package.json",
+      "package-lock.json",
+      ".gitignore",
+      ".pharn/ci.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "skipped": [],
+    "missing": [],
+    "complete": true,
+    "verdict": "complete"
+  },
+  "verifiers": {
+    "registered": 0,
+    "findings": []
+  },
+  "gate_reuse": {
+    "reused": []
+  },
+  "head_install": {
+    "state": "clean",
+    "why": null,
+    "family": "npm",
+    "lockfile": "package-lock.json",
+    "counts": {
+      "changed": 0,
+      "missing": 0,
+      "extraneous": 0,
+      "missing_unchecked": 24
+    }
+  },
+  "reconcile_detail": {
+    "state": "parsed",
+    "exit": 0,
+    "verdict": "CLEAN",
+    "escapes": [],
+    "escapes_total": 0,
+    "merged_count": 0
+  }
+}

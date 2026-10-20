@@ -1,10 +1,13 @@
 node_modules/
 dist/
+coverage/
 *.tsbuildinfo
 .tsbuildinfo
 .claude/settings.local.json
 .claude/worktrees/
-.pharn/
+# PHARN scratch stays ignored; only the pharn-ci settings file is committed.
+/.pharn/*
+!/.pharn/ci.yml
 .pharn-backup/
 runs/
 .env
