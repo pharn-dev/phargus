@@ -172,6 +172,16 @@ function siteOf(stream: Observable, wrapper: WriteFn): string {
   return resolved;
 }
 
+/**
+ * Newer Node releases flush an `http.OutgoingMessage` to its socket after `write()` has returned,
+ * outside the synchronous window `createWrapper` suppresses. A socket stall that belongs to a
+ * message whose own stall is still open is that same stall, so it is not counted again.
+ */
+function isCoveredByOpenMessage(stream: Observable, open: WeakMap<object, OpenStall>): boolean {
+  const message = (stream as { _httpMessage?: unknown })._httpMessage;
+  return typeof message === 'object' && message !== null && open.has(message);
+}
+
 function notify(stream: unknown, wrapper: WriteFn): void {
   if (typeof stream !== 'object' || stream === null || registry.observers.size === 0) {
     return;
@@ -348,7 +358,7 @@ export function createBackpressureProbe(options: BackpressureProbeOptions = {}):
   };
 
   const observe: Observer = (stream, wrapper) => {
-    if (open.has(stream)) {
+    if (open.has(stream) || isCoveredByOpenMessage(stream, open)) {
       return;
     }
     const site = siteOf(stream, wrapper);
