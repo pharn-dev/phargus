@@ -11,7 +11,7 @@ import { describe, expect, it } from 'vitest';
 const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const WORKFLOWS_DIR = join(repoRoot, '.github', 'workflows');
 const CI_WORKFLOW = join(WORKFLOWS_DIR, 'ci.yml');
-const PHARN_CI_USES = 'pharn-dev/pharn-ci@a88e62a8febf5cd9a77b8e0252cd060c3b94782c';
+const PHARN_CI_USES = 'pharn-dev/pharn-ci@0873ce23f3595a3497325635b7bf3ee93ea77687';
 const CHECK_PINS_TIMEOUT_MS = 60_000;
 
 /**
