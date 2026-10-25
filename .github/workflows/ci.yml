@@ -92,8 +92,13 @@ jobs:
       # Only on pull requests and merge groups: on a push it would gate main against the previous commit.
       - id: pharn-ci
         if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        uses: pharn-dev/pharn-ci@a88e62a8febf5cd9a77b8e0252cd060c3b94782c # v0.1.0
+        uses: pharn-dev/pharn-ci@0873ce23f3595a3497325635b7bf3ee93ea77687 # v0.2.0
         timeout-minutes: 5
+        with:
+          # A weakened test (deleted, skipped, focused, or a loosened script, workflow or config) fails the check;
+          # a reviewer who is not the PR author signs it off with the pharn/accepted label.
+          # Only on pull requests: the merge queue never reads the label, so block there would fail a signed-off PR.
+          test-integrity: ${{ github.event_name == 'pull_request' && 'block' || 'warn' }}
       - if: always() && steps.pharn-ci.outputs.report-path != ''
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
