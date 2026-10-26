@@ -1,5 +1,5 @@
 ---
-file: "LIMITS.md"
+file: "pharn/LIMITS.md"
 trust: trusted
 editable_by: "human only"
 purpose: "What PHARN does NOT guarantee. Labels the irreducible limits, the residual, and the token cost model honestly. Required by P0 and P7: a limit sold as a guarantee is the disease this whole repo exists to prevent."
@@ -26,7 +26,7 @@ thing whose purpose is to be executed as instructions.
 
 - **Struck claim:** "markdown-only = safe."
 - **Backstop (floor):** `kind: community` cannot declare trusted-write or off-allowlist egress
-  (`THREAT-MODEL.md §3`, pre-write hook; pre-egress specified, ships with the guarded surface). Safety comes from the floor, not from the
+  (`pharn/THREAT-MODEL.md §3`, pre-write hook; pre-egress specified, ships with the guarded surface). Safety comes from the floor, not from the
   absence of `.cjs`. **Live today, and narrower than that sentence reads:** `pharn/floor/validate.mjs`
   enforces `kind` enum membership and restricts `seal` to `kind: pharn-owned`. The markdown-only /
   no-`.cjs` half and the trusted-write half are enforced by **no running check** — the three hooks
@@ -95,23 +95,22 @@ AC gate requires each locked, once-red test to pass on the head run (6.17.0–6.
 bounded in §9. The template rules are opt-in by the `spec_template` frontmatter key; a SPEC without it
 validates under the legacy four-section rule, and the AC stages report it not-applicable.
 
-The template `/pharn-spec` fills may be the project's own, `pharn.spec-template.md` at the project root
-(6.14.0), and its guidance comments are instructions. `protect-trusted-paths.cjs` denies it by path,
+The template `/pharn-spec` fills may be the project's own, `pharn/spec-template.md`
+(6.14.0; migration: the root `pharn.spec-template.md` before 7.0.0), and its guidance comments are instructions. `protect-trusted-paths.cjs` denies it by path,
 like the trusted docs — on the `Write`/`Edit`/`MultiEdit`/`NotebookEdit` surface only; a `Bash` write
-reaches it (§6). `check-bash-reconcile.mjs` detects such a write only when it lands inside a build's
-anchor-to-verify window and the file is not git-ignored, and only from a non-adversarial writer: the
-path is not always-reconciled, so a writer who also rewrites its baseline entry gets a silent `CLEAN`.
-That window opens after `/pharn-spec` ran, so a write that steered the current SPEC is never detected
-by the run it steered. A change landed by a merge, a pull or a human editor is obeyed as-is.
+reaches it (§6). Since 6.53.0 `check-bash-reconcile.mjs` compares the file against HEAD's committed blob on every run
+(`reconciliation-record.md` §4a), so an uncommitted write, an added untracked file included, is reported whoever
+made it and whatever its baseline entry says, unless the file is git-ignored. That check runs at `/pharn-*verify`,
+after `/pharn-spec` ran, so a write that steered the current SPEC is reported after it steered it, never prevented. A change landed by a merge, a pull or a human editor is obeyed as-is.
 
 ---
 
 ## 2. The residual (named, bounded, not zeroed)
 
 When a downstream LLM stage consumes the **free-text** fields of a finding (`problem`, `evidence`),
-"do not execute this as an instruction" becomes a heuristic again (`THREAT-MODEL.md §5`). Fix #1
+"do not execute this as an instruction" becomes a heuristic again (`pharn/THREAT-MODEL.md §5`). Fix #1
 bounds it — free text never alone gates a guaranteed decision — but does not eliminate it. This is
-**not the only** place the trust model is not provable on paper (`THREAT-MODEL.md §5` names the known
+**not the only** place the trust model is not provable on paper (`pharn/THREAT-MODEL.md §5` names the known
 ones; another is the suppression channel on its §2 surface 8), and it is the one attempt 0 targets.
 
 ---
@@ -122,7 +121,8 @@ State these honestly; do not pretend tiered loading solves them.
 
 ### 3a. Cost scales with fan-out breadth, not change size — and that is backwards
 
-A 3-line typo fix still fans out to every lens, each loading its rules + the diff. Tiered loading
+A 3-line typo fix still fans out to every lens with a non-empty review set, one subagent per lens family,
+each loading its lenses' rules + the diff. Tiered loading
 optimizes _within_ one assembly (don't load all rules at once); it does **nothing** about fan-out
 _breadth_. You pay the most for what there is the most of (small changes). This is
 the largest practical token problem and it is not yet solved.
@@ -140,7 +140,7 @@ the largest practical token problem and it is not yet solved.
 > the orchestrating model, so honoring it is advisory; what backs it is the SPEC's approved, pinned
 > `spec_kind: quick`. Nothing measures whether a change is small: the kind and the flag are what a person
 > chose, and a quick SPEC run without the flag takes the full pipeline. There is still no AUTOMATIC
-> proportionality, and `/pharn-review`'s lens fan-out is unchanged.
+> proportionality, and `--quick` does not change `/pharn-review`'s lens fan-out.
 >
 > **The unattended one is `/pharn-loop --quick` (6.28.0), and nobody is told the trade before it runs.** The model
 > writes and approves the `spec_kind: quick` SPEC itself (`approved_by: model`), and `check-loop.mjs` decides every
@@ -161,6 +161,13 @@ griller, secrets-in-code lens, security-review auditors — specified; ships wit
 loading does not cache between stages (fresh contexts naively cannot). Real cost ≈
 `diff_size × (validators + verifiers + lenses + auditors) + rule_overlap` — both terms large,
 neither touched by tiered loading.
+
+**Read that formula as the design estimate, not as the measured cost model.** Its repetition term was measured in
+aggregate, never per rule file: over the window `.dev/measurements/token-cost-2026-08-18.md` §4 covers, 1.111 billion
+tokens were read from the prompt cache against 41.1 million written to it, and caching absorbed 82.6% of what the
+same tokens would have cost at the full input price. How many times a named rule file such as `security.md` is
+re-sent was not measured. What a run pays each time, measured later, is §3g: a fixed prefix for every fresh context,
+and the orchestrator's re-sends — two terms the formula does not name.
 
 ### 3c. Cold-start cliff
 
@@ -205,6 +212,29 @@ Nothing deterministic stops a plan from naming `CLAUDE.md`, and no behavioural e
 deterministic backstop is §3e's `instruction-growth` gate at `/pharn-verify`. It bounds the bytes one change adds to
 the modelled set, never what a plan names, and never growth accumulated across changes that each stay under budget.
 
+### 3g. What was measured: a prefix per fresh context, times fan-out, plus the orchestrator's re-sends
+
+Every fresh context — a routed stage agent, a review lens-family subagent — pays a fixed prefix on its first request,
+before any stage work. And every orchestrator step that runs a pinned line is a model request of its own, carrying the
+orchestrator's whole context so far. Neither depends on the size of the change.
+
+- **The prefix, measured.** A fresh `general-purpose` agent's first request cache-wrote 68,223–129,646 tokens (median
+  91,759) over 29 agents in this repository (`.dev/measurements/pipeline-performance-audit-2026-09-29.md` §3). In
+  three real `/pharn-loop` runs in a user project on 6.35.0, every stage agent's first request carried
+  288,489–304,974 tokens; in the run measured in depth, about half of that prefix was the project's own instruction
+  files, by a bytes/4 estimate (`.dev/measurements/loop-wall-clock-2026-10-05.md` §3). The total scales with the
+  number of fresh contexts a run opens: five stage agents in a one-iteration full loop, one more per further
+  iteration.
+- **The orchestrator's re-sends, estimated.** Counted on the code of 2026-09-29, a green one-iteration full
+  `/pharn-loop` made at least 70 pinned or mandated orchestrator tool calls (a static lower bound, not the run's
+  request count; the pipeline-performance audit §4). The 57 of them that run a pinned line run one per turn, because
+  each branches on the exit code of the one before, so each is a model request that re-sends the orchestrator's
+  context. Later releases that folded pinned lines may have moved both figures. The run measured in depth made 52
+  orchestrator requests before it stopped in verify; the first carried 434,842 tokens.
+- **What this does not say.** Which of the two dominates a run is not established; of the prefix's composition only
+  the instruction-file share above is measured; no figure here is priced; and every token figure is the ledgers'
+  count, while a bytes-to-tokens conversion is an estimate (§1c).
+
 ---
 
 ## 4. What "good architecture" means here
@@ -213,9 +243,9 @@ Per P0, claiming the architecture is "proven good" would be the exact disease th
 prevents. The honest standard:
 
 - Every _guarantee_ reduces to the floor (`ARCHITECTURE.md §2`) **or** is labeled `advisory`.
-- The _known_ holes from red-team are closed or labeled (`THREAT-MODEL.md §4`).
+- The _known_ holes from red-team are closed or labeled (`pharn/THREAT-MODEL.md §4`).
 - The four irreducible limits (§1) are named, not hidden, and backstopped.
-- The residuals (§2, `THREAT-MODEL.md §5`) are named, and the free-text one is the first thing the
+- The residuals (§2, `pharn/THREAT-MODEL.md §5`) are named, and the free-text one is the first thing the
   experiment tests.
 
 "Good" = known holes closed or labeled, and limits honest. **Not** "no holes." The unknowns are
@@ -267,9 +297,12 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
 
 | payload                                                       | hook                        | verdict                   |
 | ------------------------------------------------------------- | --------------------------- | ------------------------- |
-| `{"tool_name":"Bash",…{"command":"printf x >> LIMITS.md"}}`   | `protect-trusted-paths.cjs` | **exit 0** — not denied   |
+| `{"tool_name":"Bash",…{"command":"printf x >> LIMITS.md"}}` (pre-7.0.0 root path; migration) | `protect-trusted-paths.cjs` | **exit 0** — not denied   |
 | `{"tool_name":"Bash",…{"command":"printf x >> README.md"}}`   | `enforce-writes-scope.cjs`  | **exit 0** — not denied   |
-| `{"tool_name":"Edit","tool_input":{"file_path":"pharn/LIMITS.md"}}` | `protect-trusted-paths.cjs` | exit 2 — denied (control) |
+| `{"tool_name":"Edit","tool_input":{"file_path":"LIMITS.md"}}` (pre-7.0.0 root path; migration) | `protect-trusted-paths.cjs` | exit 2 — denied (control) |
+
+(Both probe tables in this file were measured when the doc sat at the root as `LIMITS.md`; migration: it is
+`pharn/LIMITS.md` since 7.0.0, and the verdicts carry over to that path.)
 
 - **Struck claim:** "the trusted docs are write-protected", "`writes:` is enforced", or "canon cannot be
   written", stated without a tool-surface qualifier. Each is true of `Write`/`Edit`/`MultiEdit`/
@@ -277,23 +310,56 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
 - **True statement:** a `Bash` write is **not denied**, and is **not detected at the time it happens**. No
   `PostToolUse` hook is wired (`grep -c PostToolUse .claude/settings.json` → `0`), so nothing observes
   the write, and no record of it exists to reconcile later.
+- **`Bash` is not the only surface outside the matcher.** (a) A write made through an **MCP server's** tool — a
+  filesystem server's `write_file`, say — arrives under that tool's own `mcp__<server>__<tool>` name, which is none
+  of `Write|Edit|MultiEdit|NotebookEdit`; even where the matcher's pattern happens to match it, each hook's own
+  anchored `isWrite` test does not, so neither guard judges it; the after-the-fact reconciliation
+  below covers it exactly as it covers a `Bash` write, and no more. (b) **`"disableAllHooks": true`** in any settings
+  file Claude Code loads turns off every hook, both guards included, while the wiring stays exactly as committed.
+  `hook-wiring.test.cjs` RED-fails when either project file (`.claude/settings.json`, or `.claude/settings.local.json`
+  when present) carries the key — a test of this repository's own files, and tests never ship, so in an install
+  nothing PHARN ships checks either file; a user-level `~/.claude/settings.json` lies outside every repository.
+- **The setter's refusals of a plan are early, lexical and reachable through `Bash`.** In an installed project
+  `set-writes-scope.cjs --from-plan` refuses a plan that names PHARN's own installed files, a CI workflow
+  (`.github/workflows/**`) or a git hooks directory (`.husky/**`, or a `core.hooksPath` inside the project), unless
+  the operator passes the matching opt-in before the mode (`pharn/THREAT-MODEL.md §2` item 10). The setter runs through
+  `Bash`, so an agent holding `Bash` can pass the opt-in or write the scope record itself. It finds `core.hooksPath`
+  without running git: in the config of the repository holding the project (the nearest repository at or above it) and
+  its `config.worktree`, `/etc/gitconfig`, and the XDG and global user files. It does not follow `include` or
+  `includeIf`, read configuration passed through the environment or `-c`, or read a system file at another prefix, so
+  a hooks directory named only there is not refused. Other executable configuration is not refused at all: a hook
+  manager configured elsewhere (`lefthook.yml`, `.pre-commit-config.yaml`, hook settings in `package.json`), what a
+  workflow or an existing hook runs from elsewhere in the repository (a local action under `.github/actions/`, a
+  script, the project's own tests), another CI system's files, `package.json` scripts, or a tool configuration that
+  runs code.
 - **It IS detected AFTERWARDS, as of `SKILLS_VERSION` 4.0.0 — and detection is strictly weaker than
   prevention.** `/pharn-*build` anchors a content-hash baseline and `/pharn-*verify` runs
   `pharn/floor/check-bash-reconcile.mjs`, which re-hashes the tree and asks the **live guards**, by
   executing them, whether each changed path would have been denied. Denied means the `reconcile` gate
-  fails, so the verify verdict is `FAIL`. **The supported claim is exactly "a write to a path the active
+  fails, so the verify verdict is `FAIL`. Since 6.52.0 one class is
+  reported rather than failed: a path whose bytes are exactly the upstream bytes HEAD merged in during the window
+  (`merged[]`, `reconciliation-record.md` §2a); a commit the build makes itself still fails. Since 6.54.0 a scope amendment derived from a plan
+  authorizes only what the anchored snapshot covered, so a `## Files` widened after the anchor is reported
+  (`plan-widened-after-anchor`); one widened before the anchor, or a forged snapshot, is not.
+  Since 6.57.0 a deletion is judged like a write: a path present at the anchor and gone from disk at verify — removed
+  with `rm`, with `git rm`, or by a commit, tracked or untracked — fails the stage when no recorded scope covers it,
+  unless upstream deleted it in a merge inside the window (`merged[]`). A path still on disk that has left the
+  reconciled set, because it became git-ignored, is only a warning. **The supported claim is exactly "a write to a path the active
   scope would have denied is detected and fails the stage" — never "Bash writes are prevented."** Four
   bounds, all in `pharn/pharn-contracts/reconciliation-record.md`: ignored paths are outside the
   reconciled set; the window is anchor-to-verify; the model is **one worktree per session** (two sessions
-  sharing a tree share `.pharn/`, so a second session's writes can surface as this one's escape —
+  sharing a tree share `pharn/.run/`, so a second session's writes can surface as this one's escape —
   [[L38]], which this inherits and cannot fix); and there is **no attribution** — it reports *what*,
   never *who*.
 - **DELETING it is loud; FORGING it is silent — and that bounds the whole claim.** The baseline lives
-  under `.pharn/`, which `Bash` reaches, and nothing authenticates it. Deleting it does not yield a quiet
+  under `pharn/.run/`, which `Bash` reaches, and nothing authenticates it. Deleting it does not yield a quiet
   green: `/pharn-*verify` passes `--require-baseline`, which makes an absent baseline `INCONCLUSIVE`, and
   the always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`,
-  `.dev/floor/*`) is compared against **committed blob ids** rather than against the baseline, so that
-  half resists a determined writer. But for an **ordinary** path the baseline IS the reference, so a
+  `.dev/floor/*`, and since 6.53.0 the four trusted docs, `CODEOWNERS`, `pharn/spec-template.md` and memory-bank canon,
+  an added untracked file included) is compared against **committed blob ids** rather than against the baseline, so that
+  half resists a determined writer. The cost, stated ([[L68]]): reconcile has no attribution, so a
+  human's uncommitted edit at one of those paths reads as an escape even with no baseline; commit it before running
+  the gates. But for an **ordinary** path the baseline IS the reference, so a
   writer who edits a denied file **and** rewrites that file's baseline entry obtains a silent `CLEAN` —
   no escape, no warning. **Therefore the guarantee is NON-ADVERSARIAL detection:** it catches tooling
   that escapes its scope — a formatter, a generator, a script, a mistake, which is the entire population
@@ -325,12 +391,39 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   changed when the run began whose bytes still equal the run's pre-run snapshot is reported, not counted — so a build
   that writes such a path back to its pre-run bytes is not seen, a path an earlier run escaped with is pre-run state
   for a re-run (reported, not refused), and the snapshot, kept in the git dir out of the write tools' reach, can be
-  forged through `Bash`. A smoke alarm, never the guard.
+  forged through `Bash`. Since 6.52.0 a total-glob `## Files` entry (`**`, `*`, `**/*`, `.`) is refused by both scope checks rather than
+  read as declaring everything, and the base the check compares against is recorded as `base_source` (`explicit`,
+  `dirty-head` or `merge-base`): `/pharn-ship` and `/pharn-loop` pass the base they captured before the build, while a
+  standalone `/pharn-regress` on a partly committed build still compares against a base that holds the committed part.
+  A smoke alarm, never the guard.
 - **The only true prevention is OS-level sandboxing of the `Bash` process** — a filesystem jail, a
   read-only mount, or an equivalent harness-layer control that makes the write fail before any hook
   would be consulted. PHARN does **not** implement it, and cannot: exactly like §1d's out-of-band
   approval signal, it is **harness-layer, environment-dependent, and not expressible in markdown
   methodology**. Until an environment supplies it, this stays a named limit, not a guarantee.
+
+- **An unattended `/pharn-loop` refuses to start without evidence of a sandbox (7.1.0), and that is all it does.**
+  The sandbox above stays harness-layer, and PHARN still does not implement one. What this version adds is a refusal:
+  `/pharn-loop`'s Step 1a runs `pharn/floor/check-run-isolation.mjs`, which stops the run (S15, `blocked: not-isolated`)
+  unless it finds a container marker and none of a fixed list of credentials, or the operator passed
+  `--accept-host-execution` (`pharn/pharn-contracts/loop-record.md`, "The isolation field"). The verdict over its probe
+  is floor (closed lists, string equality, set membership). That the environment really is isolated is not:
+  - **The evidence and the override are operator-fakeable by design.** `PHARN_ISOLATED=1`, a planted `/.dockerenv`, an
+    emptied `HOME`, and so is a project's own `.claude/settings.json` `env` block, which is project content. The check
+    binds the honest operator, not the hostile one. The override exists because the lists cannot know every sandbox
+    or every credential: an operator who knows their environment must be able to say so, and the record, the run
+    report and the commit message then repeat that they did.
+  - **The floor sees argv, never who typed the flag, and the record of it is run-writable.** The record, the run report
+    and the commit message repeat the witness file `pharn/.run/pharn-loop/<name>/isolation.json`. That file is
+    git-ignored `pharn/.run/` state that the Write tool reaches in every posture and that a `Bash` write reaches too,
+    and reconcile never sees it. So those lines name the flag faithfully only while nobody rewrites the witness, and
+    the record check's RED does not gate the commit. Agreement between files the run can write, never provenance.
+  - **The lists are closed and partial.** A token in a project `.env`, a keychain, a cloud metadata endpoint, or a
+    credential named nowhere on the list is not seen. A container the list does not recognize needs `PHARN_ISOLATED=1`.
+  - **The agent's own model credential is always present.** `ANTHROPIC_API_KEY` (or the session's `~/.claude/` login)
+    is how the agent runs at all, so a compromised run can still send data out through it. That exfiltration residual
+    is untouched by this stop.
+  - `/pharn-ship` runs no such check: a person approves its SPEC and decides at its end.
 
 **Why this is not one of §1's four irreducible limits.** It _is_ reducible — the sandbox above reduces
 it — just not by anything this repository can ship. §1's four cannot be reduced at all, which is what
@@ -348,7 +441,7 @@ and this section names which side PHARN is on.
 
 ## 7. The write guards act only when Claude Code starts them, and judge the tree Claude is in
 
-Every write-guard claim in this file, and `THREAT-MODEL.md §4` items 2 and 7, holds only while both
+Every write-guard claim in this file, and `pharn/THREAT-MODEL.md §4` items 2 and 7, holds only while both
 `PreToolUse` hooks actually **run**. Claude Code runs a command hook in Claude's **current** directory, and
 treats a hook that exits with anything other than 0 or 2 — including one whose script cannot be found — as a
 non-blocking error. Until `SKILLS_VERSION` 6.1.0 the shipped wiring was a relative `node .claude/hooks/…`,
@@ -357,13 +450,16 @@ read off the wiring:
 
 | hook command run from               | payload          | exit                                             |
 | ----------------------------------- | ---------------- | ------------------------------------------------ |
-| `pharn/pharn-core`, relative wiring | `Edit LIMITS.md` | **1** — `Cannot find module`; the write proceeds |
-| repo root, relative wiring          | `Edit LIMITS.md` | 2 — denied                                       |
+| `pharn/pharn-core`, relative wiring | `Edit LIMITS.md` (pre-7.0.0 root path; migration) | **1** — `Cannot find module`; the write proceeds |
+| repo root, relative wiring          | `Edit LIMITS.md` (pre-7.0.0 root path; migration) | 2 — denied                                       |
 
 6.1.0 anchors both commands on `${CLAUDE_PROJECT_DIR}`. The bounds that remain:
 
 - **A guard that cannot start, or that times out, still does not block.** That is Claude Code's documented
-  behaviour, and no hook can change it.
+  behaviour, and no hook can change it. What a running guard controls is its own exit, and both deny (exit 2) on
+  input they cannot use — an empty or unreadable stdin, invalid JSON, a payload that is not an object — and on an
+  uncaught exception, through a handler each registers before its first decision. A process
+  killed by a signal, or one that fails before that handler is registered, exits otherwise and does not block.
 - **The fix reaches an install only through its own `settings.json`.** `pharn update` never touches that
   file, so an install upgraded without editing it keeps the relative form and stays fail-open from every
   other directory. Upgrade the hooks first, then the two commands; roll back in the reverse order.
@@ -386,9 +482,9 @@ read off the wiring:
   friction, not a hole.
 - **In an installed project, `enforce-writes-scope.cjs` is fail-closed only while PHARN is working
   (6.24.0).** With no scope set and no open `/pharn-ship`, `/pharn-loop` or `/pharn-review` run, it denies
-  PHARN's installed surface — `pharn/**` except `pharn/features/**`, `.claude/**` and `pharn.config.json`,
-  matched case-folded, with the `pharn/features/` exception matched as written, so a case or trailing-dot
-  variant of it is denied — plus its own input `.pharn/writes-scope.json` and, on a system whose separator
+  PHARN's installed surface — `pharn/**` except `pharn/features/**` and `pharn/.run/**`, `.claude/**` and
+  `pharn.config.json`, matched case-folded, with the `pharn/features/` and `pharn/.run/` exceptions matched as written, so a case or trailing-dot
+  variant of it is denied — plus its own input `pharn/.run/writes-scope.json` and, on a system whose separator
   is `/`, any path containing a backslash: there a backslash is part of a file name, while the guards' path
   folding reads it as a separator. It allows every other path inside the project, including the files
   Claude Code loads at session start (`CLAUDE.md`, `AGENTS.md`, `.mcp.json`), so a write made outside a run
@@ -431,21 +527,25 @@ read off the wiring:
     files on a case-insensitive volume, so it is denied as the project's own (re-review R1) — and so is a
     sibling directory named like the project plus a trailing dot, although on APFS that is another
     directory: an over-block.
-- **A run is open while `.pharn/<pharn-loop|pharn-ship|pharn-review>/<name>/active.json` exists with a
+- **In a dev checkout or an unsignalled tree, the one out-of-project place the Write tool reaches is this
+  session's own scratchpad (6.73.1, audit TST-12)**, recognised by the rule above, under any scope. The memory
+  folder and ordinary temp paths stay denied there, as does every path inside another git tree, and a Claude Code
+  that sends no usable `scratchpad_dir` and `session_id` gets no allowance.
+- **A run is open while `pharn/.run/<pharn-loop|pharn-ship|pharn-review>/<name>/active.json` exists with a
   modification time within 24 h**, or while one of those three state directories is present but is not a
   readable directory — a file planted there holds the tree fail-closed until someone removes it. The
   markers are written and removed through `Bash` (§6). `/pharn-ship`, `/pharn-review` and `/pharn-loop`
   stop when opening their marker fails (the loop also when its pre-run snapshot does), but a run that
   skips the step is unguarded between its stages, a crashed run's marker
   keeps every session in the tree fail-closed for up to 24 h unless it is closed, and `touch` extends it.
-  The posture needs `skillsVersion` at the root the guard judges. A malformed `.pharn/writes-scope.json`
+  The posture needs `skillsVersion` at the root the guard judges. A malformed `pharn/.run/writes-scope.json`
   denies every write in an installed project.
 - **Every write is judged at every target it can reach (6.24.0), in every posture.** The guard resolves a
   path both the way `path.resolve()` does and the way the filesystem does — reading each existing
   directory's on-disk spelling, following a dangling symlink to the target it names, and applying `..` to
   a symlink's real parent — and denies the write if either target is denied. In a dev checkout or an
   unsignalled tree that, and a guard error now denying instead of crashing open, are the only verdict
-  changes, and both move toward deny; the first includes a path spelled with another letter case or
+  changes 6.24.0 made, and both move toward deny; the first includes a path spelled with another letter case or
   Unicode form than an existing directory, now also judged at that directory's own spelling. A hard link
   is not resolved,
   so the permissive default judges it by its own name; creating one needs `Bash`.
@@ -502,6 +602,17 @@ What either certifies is narrower than the config's presence suggests.
   lists), and the orchestrators themselves all run on the model of the session running the orchestrator, not
   on one chosen for the stage. A stage that could have been routed records its reason on its marker; the
   policy's own inline stages are named as such in the run's summary.
+- **How a routed stage agent is launched is the harness's choice; `/pharn-loop` waits either way.** Claude Code
+  decides whether an Agent call runs in the foreground or the background, and PHARN does not control it. Measured on
+  Claude Code 2.1.310's interactive CLI (PHARN 7.1.1, `.dev/measurements/loop-interactive-cli-2026-10-26.md`): every
+  stage agent was launched in the background with no `run_in_background` sent, six Agent calls in two runs, and
+  `stage-agent.mjs finish --budget-ms` waited each one out; one `--quick` run completed. The residual
+  (`pharn/floor/stage-agent-core.mjs`, `stage-agent-background`) is therefore handled by that wait, not gone, and a
+  harness that changes its default again changes nothing in PHARN. Headless `claude -p --permission-mode auto` is
+  the other measured path: its stage agents ran in the foreground on 6.73.2, which sent `run_in_background: false`;
+  headless under 7.1.1, which sends no such parameter, is not measured. One run is not a bound: a stage longer than
+  one 570 s wait, the wait's cap, whether `TaskStop` stops an agent left running, other Claude Code versions and a
+  full loop are not measured.
 - **Deleting the block loses routing as well as the check.** Probed, not reasoned about: a config with no
   `models.stages`, and an absent config file, each exit **0 GREEN by design** in the checker — the
   `check-lessons-index` NO_CANON / COLD precedent, the honest normal state of an install that does not use
@@ -522,6 +633,7 @@ model to a hook.
 
 <!-- §8 was drafted in .dev/features/model-routing-limit and applied by a human (SKILLS_VERSION 6.4.1). -->
 <!-- §8 was revised in .dev/features/stage-model-routing and applied by a human (SKILLS_VERSION 6.27.0). -->
+<!-- §8 gained the launch bullet in .dev/features/loop-background-cli, applied by a human (SKILLS_VERSION 7.1.2). -->
 
 ---
 
@@ -544,9 +656,22 @@ discipline, as everywhere (§1d). What the verdicts certify is narrower than "th
 - **Agreement, never provenance.** The tests, the reporter config, the `package.json` scripts and
   `pharn.config.json` are agent-editable. `results-exit-contradiction`, the lock and the
   test-infrastructure pin NARROW a forged report and never close it: a self-consistent fabricated lock,
-  stamp and results set over the live tree passes. The pin also does not see, among others, a setup file
-  a config imports, configuration read from the environment, script chaining, npm's own configuration or
-  the runner's version (`pharn/floor/test-infra-core.mjs` states the full list).
+  stamp and results set over the live tree passes. Since 6.68.0 the pin covers the command of every
+  allowlisted gate the project has (its `package.json` script, `pre`/`post` scripts and the scripts it
+  chains to), not only the AC level gates'. It DETECTS a change at `/pharn-verify`; it never prevents one,
+  and by then the changed command has already run at the build gate, regress and verify. For a gate no AC
+  level maps to (`lint`, `typecheck`, `build`, …) it pins the command only, never what the command reads:
+  the files it names and its own configuration (`eslint.config.*`, `tsconfig.json`, a Prettier config)
+  stay agent-editable. The pin also does not see, among others, a setup file a config imports,
+  configuration read from the environment, a chain through another runner (`npm-run-all`, `turbo`), npm
+  configuration outside the project root or the runner's version (`pharn/floor/ac-test-infra-core.mjs` states
+  the full list).
+- **Those commands run with your environment.** The project's gate scripts and `/pharn-regress`'s base install
+  (`npm ci` or the lockfile's equivalent, unless `--no-install`) run with your full process environment
+  (`pharn/floor/run-gates.mjs` passes `process.env` through), so any secret in it reaches the project's scripts.
+  The base install runs the install lifecycle scripts (`preinstall`, `postinstall`, `prepare` and the like) that
+  the BASE commit's manifest and lockfile name — the project's own, and its dependencies' as far as the package
+  manager runs them — with no `--ignore-scripts`, in that same environment.
 - **Weaker and absent evidence are reported, never hidden.** A `spec_kind: test-infra` SPEC gets
   BOOTSTRAP evidence: no test was locked or shown red, and `spec_kind` sits inside the approval pin §1d
   already calls forgeable. A legacy SPEC gets no AC evidence, and verify reports it `not-applicable`.
@@ -563,3 +688,43 @@ write — harness-layer, the same category as §6's sandbox and §1d's out-of-ba
 §6 and §8, this is a limit, not one of §1's four.
 
 <!-- §9 was drafted from .dev/features/verify-ac-gate/PROTECTED-FOLLOWUPS.md (queue item 07) and applied by a human (SKILLS_VERSION 6.20.2). -->
+
+---
+
+## 10. The floor refuses an old Node; it cannot vouch for the runtime it runs on
+
+Since 6.50.0 every floor CLI that gates its entry point on `import.meta.main` imports `pharn/floor/runtime-floor.mjs`
+first, and below Node 24.2.0 it prints one line and exits 2 instead of exiting 0 having checked nothing (CHANGELOG
+[6.50.0]). The refusal is floor for those CLIs only. A script with no entry gate runs on any Node, an API an older
+Node lacks fails loudly rather than silently, and a caller that ignores exit codes is outside it. The installer's own
+`engines` field lives in a separate repository and is not governed by this tree.
+
+---
+
+## 11. A merge to `main` is not a release; only the release channel waits for CI
+
+pharn-cli installs one of two channels. The default since pharn-cli 0.15.0, `--ref latest`, takes the newest GitHub
+release and records `"ref": "latest"`. When no release can be resolved (none published, `api.github.com`
+unreachable, or its unauthenticated limit of 60 requests an hour used up, which `pharn status --strict` on a shared
+CI address can hit), pharn-cli exits 1 and names `--ref main`; it never falls back to `main` on its own.
+`main` takes the tip of `main`: whatever merged last, before its checks on
+`main` have finished. It is what an install receives when its `pharn.config.json` records no `ref`: one made with
+`--ref main`, or by a pharn-cli older than 0.15.0 without `--ref latest`. `pharn update` keeps such an install on
+`main` until `pharn update --ref latest` switches it. Since `.github/workflows/release.yml`,
+a release exists only for a commit on which `floor`, `check`, `Analyze (javascript-typescript)` and
+`Socket Security: Project Report` concluded `success`. The workflow tags it `v<SKILLS_VERSION>` and never moves a tag
+that points elsewhere.
+
+- **Struck claim:** "every merge to `main` is a release."
+- **True statement:** every merge reaches the `main` channel; a merge that bumps `SKILLS_VERSION` also becomes a
+  release once its required checks are green on `main`; an `[Unreleased]` merge releases nothing new.
+- **Bounds.** The gate is a property of a GitHub Actions workflow, not a PHARN floor primitive.
+  - The owner's ruleset bypass still merges a red tree onto `main`, and the `main` channel installs it. The release
+    job only keeps that commit from being tagged.
+  - A person with admin rights can create or move a tag by hand unless a tag ruleset protects `v*`.
+  - The workflow's check list is a copy of the ruleset's. A check added to the ruleset and not to the workflow is
+    not waited for. `Socket Security: Pull Request Alerts` is left out on purpose: it runs on pull requests only.
+  - A newer push cancels an older _pending_ release run, so a version bumped twice before the first run starts gets
+    no tag of its own.
+- **Backstop:** pharn-cli refuses a draft or prerelease, a tag that does not match `v<X.Y.Z>`, and a tagged tree
+  whose root `SKILLS_VERSION` differs from the tag (pharn-cli `src/lib/release.ts`, `src/lib/repo.ts`).

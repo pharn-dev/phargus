@@ -57,7 +57,7 @@
 //
 //   THE BOUND (lessons-learned L43): a stamp certifies INTERNAL CONSISTENCY, never provenance. A
 //   self-consistent FABRICATED pair of stamps passes, and a test builds one to prove it. Stamps live in
-//   the writable tree, which `Bash` reaches unhooked (LIMITS.md §6). No child process is spawned — the
+//   the writable tree, which `Bash` reaches unhooked (pharn/LIMITS.md §6). No child process is spawned — the
 //   stamp grammar is imported from gate-run-core.mjs, so the "no child process" property above holds.
 //
 // Usage:
@@ -96,7 +96,7 @@
 // failed, so a gate red at base hid every NEW failure at head behind `pre_existing`: a load-red base masked 11 real head
 // failures in one recorded /pharn-dev-regress run (.dev/features/frontmatter-parser-parity/REGRESSION.md). With
 // `--per-test <gate> --base-tests <b> --head-tests <h>` the two files are `pharn-test-results/1` documents
-// (test-results-record.md's `pharn-json`), read and checked by test-results-core.mjs's own `readResultsFile` +
+// (test-results-record.md's `pharn-json`), read and checked by per-test-results-core.mjs's own `readResultsFile` +
 // `parseResults` + `buildRecord` — one grammar (L35), with the gate's exit from each map as that record's exit. For
 // that gate only, base != 0 && head != 0 becomes a REGRESSION when some test FAILED at head whose base status is not
 // `failed` (passed, skipped, or absent from the base record), or head reports more suite errors than base; otherwise it
@@ -122,8 +122,8 @@ import { readFileSync, existsSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { validateStamp, stampToMap, gateRunBlock, timedOutRunIds, SHA_RE, FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { isConcrete } from "./plan-files-core.mjs";
-import { buildRecord, readResultsFile } from "./test-results-core.mjs";
-import { parseResults } from "./test-results-formats.mjs";
+import { buildRecord, readResultsFile } from "./per-test-results-core.mjs";
+import { parseResults } from "./per-test-results-formats.mjs";
 
 // --- The ESCAPE-EXEMPT sets (the floor check for lessons-learned L17). -----------------------------
 // `scope` computes `escaped` over `git diff <base>`, which answers "what CHANGED since base" — but it is
@@ -139,7 +139,7 @@ import { parseResults } from "./test-results-formats.mjs";
 // judgment), and neither is silent: every exempted path is reported in `escape_exempt`.
 //
 // NOT taken: L17's other suggested remedy — deriving "written by the build" from
-// `.pharn/writes-scope.json` — is UNIMPLEMENTABLE as stated, which is a discovery, not a preference.
+// `pharn/.run/writes-scope.json` — is UNIMPLEMENTABLE as stated, which is a discovery, not a preference.
 // That file is a single MUTABLE record every stage's Step 0 overwrites, so by the time /pharn-dev-regress
 // runs it holds the regress stage's own scope, not the build's (verified live). It would require a
 // durable per-build scope record, which does not exist.
@@ -167,6 +167,7 @@ const PIPELINE_ARTIFACTS = [
   "REVIEW.md",
   "findings.json",
   "assignments.json",
+  "merge-report.json",
   "SHIP.md",
   "ship-record.json",
   "BRIEFING.md",
@@ -200,7 +201,7 @@ const LENS_FINDINGS_RE = /^lenses\/[A-Za-z0-9._-]+\/findings\.json$/;
 // assumption. BOUNDED, and stated: the hook gates the Write-tool surface only, so a Bash-tool write
 // bypasses both it and this exemption (the L19 escape). The claim is "the build could not have written
 // this WITH THE WRITE TOOL", never "no process changed it".
-const TRUSTED_DOCS = ["pharn/CONSTITUTION.md", "pharn/ARCHITECTURE.md", "THREAT-MODEL.md", "LIMITS.md"];
+const TRUSTED_DOCS = ["pharn/CONSTITUTION.md", "pharn/ARCHITECTURE.md", "pharn/THREAT-MODEL.md", "pharn/LIMITS.md"];
 
 // THE NARROWING THIS EXEMPTION INTRODUCES — the honest cost, stated because it is not obvious (P0/P7).
 // A build that rewrites its OWN `pharn/features/<name>/PLAN.md` `## Files` to retroactively authorize a path it
@@ -250,7 +251,7 @@ function emit(obj, code) {
 // Split on COMMA or NEWLINE only, never on spaces. A space is a legal filename character and
 // `git diff --name-only` does NOT quote it, so a whitespace split turns ONE real path into TWO tokens.
 // That is not cosmetic: composed with the escape-exempt sets it LAUNDERS an escape — a single undeclared
-// file named `THREAT-MODEL.md LIMITS.md` split into two tokens that are each separately exempt, and
+// file named `pharn/THREAT-MODEL.md pharn/LIMITS.md` split into two tokens that are each separately exempt, and
 // `scope` exited 0 where it had exited 1 before the exemption existed. `normPath` already trims each
 // token, so surrounding spaces around a comma are still tolerated (`a.ts, b.ts`).
 function parseList(s) {
@@ -589,7 +590,7 @@ function readSideStamp(path, side, label) {
 // --- THE PER-TEST COMPARISON (6.72.0) — see the header, THE OPT-IN PER-TEST COMPARISON. ---------------------------
 const PER_TEST_FLAGS = ["--per-test", "--base-tests", "--head-tests"];
 
-/** One side's per-test record for gate `gate`, whose exit in that side's map is `exit`: test-results-core.mjs's own
+/** One side's per-test record for gate `gate`, whose exit in that side's map is `exit`: per-test-results-core.mjs's own
  *  read + parse + build over a `pharn-test-results/1` document, then the two refusals only a COMPARISON needs (an
  *  ambiguous test, and a red the record does not account for — L34). `{ok, record}` or `{ok: false, reason_code,
  *  reason}`. No child process; the file is read under the builder's byte cap, never followed or evaluated. */

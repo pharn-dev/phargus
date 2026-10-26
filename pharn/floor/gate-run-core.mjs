@@ -45,7 +45,7 @@
 //   • FORGERY. **This certifies INTERNAL CONSISTENCY, never provenance — a self-consistent fabricated
 //     stamp passes, and a test builds one to prove it rather than leaving the bound as prose**
 //     (lessons-learned L43; the phrasing is check-cost-ledger.mjs's, cited not restated — P4). The stamp
-//     and its logs live in the writable tree, which `Bash` reaches unhooked: the LIMITS.md §6 class.
+//     and its logs live in the writable tree, which `Bash` reaches unhooked: the pharn/LIMITS.md §6 class.
 //
 // BUILD-COMPLETENESS IS NOT A GATE, and the separation is load-bearing (GRILL R1). The runner captures
 // check-build-complete.mjs's exit so it is not model-typed, and records it under `aux.completeness` — a
@@ -269,7 +269,7 @@ export function logBasename(seq, id) {
 export const RESULTS_ENV = "PHARN_TEST_RESULTS";
 
 /** The file name of a gate's results file under `<out>/`: the log basename plus `.test-results.json`. ONE
- *  copy (L35): run-gates.mjs passes it to the gate and hashes it; test-results-core.mjs reads it back.
+ *  copy (L35): run-gates.mjs passes it to the gate and hashes it; per-test-results-core.mjs reads it back.
  *  Deliberately NOT `results.json` — that name would read as a second store of the gate map. */
 export function resultsFileName(seq, id) {
   return `${logBasename(seq, id)}.test-results.json`;
@@ -329,7 +329,13 @@ export const REUSED_BLOCK_KEYS = Object.freeze(["stage", "side", "seq", "stamp_s
 export const MAX_REUSABLE_EXIT = 125;
 /** Never reused, whatever a source says — DERIVED from the sets below, never re-listed (L29/L35):
  *    • every AC level gate (LEVEL_GATES) — the AC gate reads their per-test records from VERIFY's OWN `<out>` and requires
- *      their pinned run;
+ *      their pinned run. That is not the only reason `test` is never reused (6.72.2, audit LOOP-8, closed won't-fix):
+ *      regress HEAD runs `test` over `outside_tests` alone (run-gates.mjs, regress/head), the test files NOT changed
+ *      since the base, so it never runs this feature's own AC tests, and its ordered `files` differ from verify's
+ *      whole-suite `npm run test` — the execution identity already MISSes it (gate-reuse-core.test.mjs, "files differ
+ *      (a test subset)"). Copying its per-test results file into verify's `<out>` would hand the AC gate a record with
+ *      none of the AC tests in it. Any reuse needs regress to run the whole suite and judge outside tests per test
+ *      first — the follow-up `regress-per-test-product`;
  *    • every style gate (STYLE_SET) — a whole-tree style run reads the feature's fingerprint-EXCLUDED artifacts, which
  *      differ between the regress HEAD run and verify (REGRESSION.md is written after the head drain; an earlier
  *      iteration's VERIFY.md is removed by verify's fresh start), so an equal fingerprint is not an equal input (grill B1);
@@ -761,7 +767,7 @@ export const MAX_BUILD_TARGETS = 4096;
 /** Why these are not usable `build` arguments, or null. No `--extra` and no `--skip-style` (a human's `--gates` is
  *  accepted, as at verify — review R1); `targets` is null (full) or a NON-EMPTY array (L34 — an empty list handed to
  *  a runner means "the whole suite", L16) of distinct clean tokens, none led by `-` (a runner would read it as a flag)
- *  and none glob-shaped. The PATH rule proper (normalized, repo-relative, outside `.pharn/`) is ac-tests-core.mjs
+ *  and none glob-shaped. The PATH rule proper (normalized, repo-relative, outside `pharn/.run/`) is ac-tests-core.mjs
  *  `badPath`, which run-gates.mjs applies when it reads `--targets` — this module imports nothing. TOTAL (L62): names
  *  a position, never a value. */
 function buildArgsError({ extras, skipStyle, targets }) {
@@ -1163,8 +1169,8 @@ export function timedOutRunIds(stamp) {
  *  exit — a gate that traps the group's SIGTERM can exit 0, which read as a pass before 6.59.0), else `not-started` when
  *  the exit is in NOT_STARTED_EXITS. A signal exit (>= 128) the runner did not cause is a MEASURED failure — the runner
  *  records nothing for a harness signal it forwarded, so a signal in a stamp came from inside the gate's group or the
- *  kernel (a segfault, an abort, an OOM kill). The ONE owner of this predicate: check-verify.mjs's stamp path reads it;
- *  check-regress.mjs reads `timedOutRunIds` alone (its 126/127 handling is unchanged — the regression-report contract). */
+ *  kernel (a segfault, an abort, an OOM kill). The ONE owner of this predicate: check-verify.mjs's stamp path reads it, and so
+ *  does entry-gates-core.mjs `entryVerdict` (6.75.0, minus the `base:test` slot); check-regress.mjs reads `timedOutRunIds` alone (its 126/127 handling is unchanged — the regression-report contract). */
 export function unmeasuredRuns(stamp) {
   const out = [];
   for (const r of stamp.runs) {

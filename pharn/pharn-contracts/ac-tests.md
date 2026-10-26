@@ -85,7 +85,7 @@ without joining the build's scope, and a second extractor would mean editing a p
 | `in-plan-files`     | a test file is in PLAN.md `## Files`, so the build would be scoped to it                                                                                                                |
 | `claimed-elsewhere` | another feature's AC-TESTS.md `## Files` already names the file                                                                                                                         |
 | `no-files`          | there is no `## Files`, or it names nothing                                                                                                                                             |
-| `bad-path`          | a `## Files` entry is a placeholder or glob, absolute, led by `-`, not normalized, or under `.pharn/` or `pharn/features/`                                                              |
+| `bad-path`          | a `## Files` entry is a placeholder or glob, absolute, led by `-`, not normalized, or under `pharn/.run/` or `pharn/features/`                                                          |
 
 **One more kind, since 6.36.0 — `level-excluded`:** a mapping row whose level's gates the project's
 `pharn.config.json` `gates.exclude` leaves nothing of. The rule is `gate-run-core.mjs` `levelExcludedGates`, which the
@@ -99,7 +99,7 @@ ROOT runner config the test-infrastructure pin covers (below) — since 6.31.0 a
 covers (`.npmrc`, `.yarnrc`, `.yarnrc.yml`), or a file a level gate's script NAMES (the token pass, below: the
 `pharn-json` reporter a `test` script loads, say). Every write the build could make there changes the pin, so the plan
 could never reach green: `/pharn-verify` would read `test-infra-changed`. The remedy is to split the change into a
-`spec_kind: test-infra` increment first. The name test is `test-infra-core.mjs`'s own predicate and the named files
+`spec_kind: test-infra` increment first. The name test is `ac-test-infra-core.mjs`'s own predicate and the named files
 are its own `scriptNamedFiles()` over the tree at the invoking directory — every named file that is not an existing
 directory, absent ones included, since a file the build creates there is one the pin reads at verify — imported,
 never a second rule. A tree the pin cannot read (an unparseable `package.json`, a chain past the hop bound) prints an
@@ -332,7 +332,7 @@ The lock pins the test FILES; this pins the parts of what RUNS them listed below
 is a `--check` RED ("test infrastructure changed — …", which the test-stage gate reads as `lock-red`) and reads
 `test-infra-changed` at the AC gate, and the test's pass no longer counts. It is not the whole runner: what the pin
 does not see is stated after the list. `--write` takes it (before the red run, which therefore runs under it) and `--check` and the AC gate recompute it from
-the live tree and compare EXACTLY. Computed by `pharn/floor/test-infra-core.mjs`:
+the live tree and compare EXACTLY. Computed by `pharn/floor/ac-test-infra-core.mjs`:
 
 - **`levels`** — the mapped levels the pin was taken for, so a recompute ranges over the same candidate gates.
 - **`gates`** — for each gate its levels map to (`test` for unit/integration, `test:e2e`/`e2e` for e2e) that
@@ -368,7 +368,7 @@ script, pre, post }`, sorted by id, the level gates' own ids not repeated. `"tes
   partition, and `--quick`'s `check-quick-scope.mjs`, read it `scope-escaped` unless the PLAN declares
   `pharn.config.json`.
   **Two windows, stated:**
-  - `/pharn-test` runs before the reconcile anchor (`LIMITS.md §9`), so an exclusion written DURING it is pinned as if
+  - `/pharn-test` runs before the reconcile anchor (`pharn/LIMITS.md §9`), so an exclusion written DURING it is pinned as if
     it were legitimate. The backstop holds only CONDITIONALLY. It is regress's scope partition (under `--quick`,
     `check-quick-scope.mjs`), which has no exemption for `pharn.config.json`, so a change since base reads
     `scope-escaped`. It does NOT hold in three cases:
@@ -398,10 +398,10 @@ script, pre, post }`, sorted by id, the level gates' own ids not repeated. `"tes
   `tsconfig.json`, a Prettier or markdownlint config). Those are usually source a feature legitimately edits — a
   bundler's entry (`tsup src/index.ts`) — so pinning them would turn ordinary features RED.
 
-**The token pass — ONE closed, literal rule, never a shell parse** (`test-infra-core.mjs`'s header is its spec):
+**The token pass — ONE closed, literal rule, never a shell parse** (`ac-test-infra-core.mjs`'s header is its spec):
 `scriptTokens()` splits a value on whitespace and `; & | ( )` and strips one pair of matching quotes. A FILE is a
 token (split on `=`, a leading `./` stripped) that is a clean relative path — not led by `-` or `/`, no `.`/`..`/empty
-segment, no whitespace, quote, shell or glob character, first segment not `node_modules` or `.pharn` — with an
+segment, no whitespace, quote, shell or glob character, first segment not `node_modules` or `pharn/.run` — with an
 extension a gate executes (`.bash .cjs .cts .js .jsx .mjs .mts .sh .ts .tsx .zsh`); the token after an OUTPUT redirect (`>`,
 `>>`, `2>`), `-o` or an `--out…` flag (and an `--out…=` value) is an OUTPUT and is skipped, while an input redirect's
 target is not (`node < tools/x.mjs` executes it). A CHAIN is `npm`/`pnpm`/`yarn`, its flags skipped, then
@@ -412,7 +412,7 @@ id already pinned and REFUSES past 8 hops (real chains are one or two), or at a 
 
 A difference names the gate id, the chained script's id (quoted and bounded), the config path or the script-named
 path, never a script's text or a file's content. **What it does NOT catch, stated** — restated from
-`test-infra-core.mjs`'s header, the one copy:
+`ac-test-infra-core.mjs`'s header, the one copy:
 
 - **The in-process bound, the widest:** code the build writes runs INSIDE the test process, so it can switch off the
   assertion library or the reporter there — `assert.equal = () => {}` in the only in-scope file made verify PASS with
@@ -642,7 +642,7 @@ check and `/pharn-loop`'s freshness check I refuse it.
 `/pharn-regress` does not report them as build escapes; `/pharn-regress` also declares AC-TESTS.md's `## Files`
 alongside PLAN.md's, because those test files are `/pharn-test`'s writes.
 
-The red run's scratch, `.pharn/pharn-test/gates`, is git-ignored runtime state that the next run wipes; the evidence
+The red run's scratch, `pharn/.run/pharn-test/gates`, is git-ignored runtime state that the next run wipes; the evidence
 lives in the lock.
 
 For **reconcile** the two differ, deliberately. `AC-TESTS.md` is exempt, like `PLAN.md`: it is a plan file, and a
@@ -653,7 +653,7 @@ leaves the lock stale is caught by `ac-tests-lock.mjs --check`. **Since 6.31.0 n
 (`ac-artifact-in-plan`), so a Write-tool rewrite of either is DENIED by the write guard, and a Bash rewrite of the lock
 is DETECTED by reconcile — before, a PLAN naming the lock scoped the build to it, reconcile read that write as
 in-scope, and a rewritten lock passed every check. Detected, never prevented, as for every Bash write
-(`LIMITS.md §6`); the AC-TESTS.md half rests on the lock pinning its bytes.
+(`pharn/LIMITS.md §6`); the AC-TESTS.md half rests on the lock pinning its bytes.
 
 ## What it proves, and what it does not (P0)
 
@@ -677,7 +677,7 @@ in-scope, and a rewritten lock passed every check. Detected, never prevented, as
   whose files it sits in (enum membership over the record's `anomalies`).
 - **Bounded:** the build exclusion holds for the PLAN.md the checker read. An edit to PLAN.md after `/pharn-test`
   reopens it until something re-checks; since 6.19.0 `/pharn-build` does, first thing (the test-stage gate, below). A Bash write bypasses every
-  write hook (`LIMITS.md §6`), and `/pharn-test` runs before the reconcile anchor, so its own Bash writes are not
+  write hook (`pharn/LIMITS.md §6`), and `/pharn-test` runs before the reconcile anchor, so its own Bash writes are not
   reconciled. **`/pharn-verify` does not re-run the mapping check** (its chain phase is `check-plan-spec-agree.mjs`
   alone), so a run that ignores the plan check and the test-stage gate — both RED for a PLAN naming the lock — and
   sets the build's scope itself still reaches a verify PASS over a build that re-pinned the lock (measured, 6.31.0).

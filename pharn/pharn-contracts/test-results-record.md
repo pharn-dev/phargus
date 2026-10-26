@@ -2,7 +2,7 @@
 name: test-results-record
 trust: trusted
 layer: pharn-contracts
-purpose: "Single source of truth for the per-test record: how a project opts in, where its test run writes a machine-readable results file, how pharn/floor/test-results-core.mjs derives {test-id → passed | failed | skipped} from it, and the closed reasons it refuses with. Schema only, zero behavior (P3, pharn/ARCHITECTURE.md §4)."
+purpose: "Single source of truth for the per-test record: how a project opts in, where its test run writes a machine-readable results file, how pharn/floor/per-test-results-core.mjs derives {test-id → passed | failed | skipped} from it, and the closed reasons it refuses with. Schema only, zero behavior (P3, pharn/ARCHITECTURE.md §4)."
 ---
 
 # Contract — test-results-record
@@ -86,13 +86,13 @@ change the format. Treat a change to this block like a change to the test script
 The runner (`run-gates.mjs`) spawns **every** gate with one extra environment variable:
 
 - **`PHARN_TEST_RESULTS`** — the absolute path `<out>/<seq>-<id>.test-results.json`, where `<out>` is the
-  stage's runner directory under `.pharn/` (for example `.pharn/pharn-verify/gates`). Same name for every
+  stage's runner directory under `pharn/.run/` (for example `pharn/.run/pharn-verify/gates`). Same name for every
   gate, a different value per gate, so a later gate cannot overwrite an earlier gate's file.
 
 The project's reporter config reads the variable. PHARN chooses the path; the project never names one. That
 keeps every write and delete inside the runner's own state root, lets `init`'s wipe of `<out>` clear every
 earlier run's file (runner behaviour pinned by tests, not a floor primitive), and keeps the file out of the
-worktree fingerprint (`.pharn/` is excluded), so writing it never marks a gate as having mutated the tree.
+worktree fingerprint (`pharn/.run/` is excluded), so writing it never marks a gate as having mutated the tree.
 
 Before a gate runs, the runner removes whatever is at that path (a file, a symlink without following it, or a
 directory); `init`'s wipe does not cover an entry re-run after a stale lock. A path it still cannot remove is a
@@ -103,7 +103,7 @@ Both behaviours are runner code pinned by tests, not a floor primitive.
 
 ## The record
 
-`testRecord({ stamp, outDir, gateId, root })` in `test-results-core.mjs`. All four inputs are required;
+`testRecord({ stamp, outDir, gateId, root })` in `per-test-results-core.mjs`. All four inputs are required;
 `root` is the directory the gate ran in, because a finalized stamp does not record it, and it is where
 `pharn.config.json` is read. The result is either a record:
 
