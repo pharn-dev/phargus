@@ -14,8 +14,10 @@
 //   node pharn/floor/stage-agent.mjs report --command <c> --name '<name>' --stage <stage> [--iteration <N>]
 //                                          --status <done|refused|question> [--row <S4..S10>] [--gate <pass|fail>]
 //   node pharn/floor/stage-agent.mjs read   --command <c> --name '<name>' --stage <stage> [--iteration <N>]
-//   node pharn/floor/stage-agent.mjs start  <route's flags> [--no-agent-tool]          (6.43.0 — see START / FINISH)
-//   node pharn/floor/stage-agent.mjs finish <read's flags>                            (6.43.0)
+//   node pharn/floor/stage-agent.mjs start  <route's flags> [--no-agent-tool] [--no-foreground-agent]
+//                                                                                    (6.43.0 — see START / FINISH)
+//   node pharn/floor/stage-agent.mjs finish <read's flags> [--budget-ms <B>]          (6.43.0; --budget-ms 6.74.0,
+//                                                                                    see THE WAIT)
 // `--iteration` is required exactly for an iterated stage (build, regress, verify). `--mode` is spelled only
 // for a column the command's policy holds besides `full` (today: `quick`, for both commands — /pharn-loop's
 // since 6.28.0; the accepted set is read from ROUTE_POLICY, never listed here). Every flag
@@ -30,7 +32,8 @@
 //           `usage`) — one closed line on stdout; the stage-exit numbers (`stage-exit.md`). Anything else,
 //           1 included, is a crash, and a caller must read a crash as no verdict.
 //   start   `route`'s 0 / 3 with TWO stdout lines (the token, then the marker line) · 2 refused, nothing written.
-//   finish  `read`'s 0 / 2 / 3 / 4 with TWO stdout lines (the closed verdict line, then the marker line).
+//   finish  `read`'s 0 / 2 / 3 / 4 with TWO stdout lines (the closed verdict line, then the marker line); with
+//           `--budget-ms`, also 5 (`WAITING_LINE`, then `MARKER_WAITING`): no result yet, run the same line again.
 // Every path ends by setting `process.exitCode`, never `process.exit()` (the 6.20.4 flush rule).
 //
 // ── START / FINISH (6.43.0, orchestrator-direct-stage-calls — audit candidate C1) ─────────────────────
@@ -44,21 +47,46 @@
 //     `mark-phase.mjs`'s `tryMarkPhase` (the one printed encoding, so the line binds the run as the CLI's does), and
 //     prints the token, then the marker line. Three decisions the model used to make around the old lines are code:
 //     `--no-agent-tool` on an `agent` cell is `inline:no-agent-tool` with no config consulted (the model's reading of
-//     its own tool list stays ADVISORY, as before); a `route` refusal other than a skipped stage, or a leftover result
+//     its own tool list stays ADVISORY, as before), and so is `--no-foreground-agent` (6.73.2): an Agent tool that
+//     offers no `run_in_background` parameter, which launches every agent in the background (`stage-agent-core.mjs`,
+//     residual `stage-agent-background`) — `inline:no-foreground-agent`, again the model's ADVISORY reading, with
+//     `--no-agent-tool` winning when both are given; a `route` refusal other than a skipped stage, or a leftover result
 //     it cannot clear, is `inline:route-unavailable` (exit 3) with the reason on stderr; and a stage that is still
 //     OPEN — the run's latest marker is this stage's own stage-start, same stage and iteration — gets no second one
 //     (`MARKER_KEPT`), which is what lets /pharn-ship's question relay re-route a fresh agent without a second
 //     stage-start (`ship-outcome-core.mjs` reads a non-verdict stage started twice as `undetermined`). Neither the
 //     flag nor the open-stage rule is new behaviour: both keep what the four-line form did.
-//   * `finish` consumes the result exactly as `read` does, then writes the `orchestrator` return marker, and prints
+//   * `finish` consumes the result exactly as `read` does (with `--budget-ms`, after THE WAIT, below — and on its exit 5
+//     it consumes nothing and writes no marker), then writes the `orchestrator` return marker, and prints
 //     the closed verdict line, then the marker line — except after a `question` (exit 4), when the stage is not over
 //     (ship's round trip continues inside it, and its agent's later rows must bill to the stage): no marker
 //     (`MARKER_DEFERRED`); the round trip's own `finish` writes it, and a run that STOPS on the question runs the
 //     command's inline return line first.
 //   * A marker that cannot be written prints `MARKER_NOT_WRITTEN` and changes no exit: a marker is advisory.
-// BOUNDS: `start` reads the run's markers file, unauthenticated `.pharn/` state (`mark-phase.mjs`, TRUST BOUND): a
+// BOUNDS: `start` reads the run's markers file, unauthenticated `pharn/.run/` state (`mark-phase.mjs`, TRUST BOUND): a
 // forged last line can only make it keep instead of write a marker. A crash of either subcommand (node's exit 1)
 // leaves the marker unwritten, and the orchestrator runs the stage inline (`start`) or stops (`finish`), as before.
+//
+// ── THE WAIT — `finish --budget-ms <B>` (6.74.0, stage-agent-background-wait) ───────────────────────────────────
+// THE RECORDED FAILURE (P7): three interactive /pharn-loop attempts (Claude Code 2.1.308–2.1.310) sent
+// `run_in_background` as the STRING "false"; the harness launched the stage agent in the background and the loop,
+// which could not wait for it, stopped S9 at its first routed stage (`stage-agent-core.mjs`, residual
+// `stage-agent-background`). With `--budget-ms`, `finish` waits for the result INSIDE node before consuming it as
+// `read` does; the decision per round is `waitDecision` (`stage-agent-core.mjs`, THE WAIT), and this file supplies its
+// inputs: presence through the containment walk below (lstat only — a refused component or a non-absent result path
+// ends the wait at once and is consumed, so it is refused exactly as `read` refuses it), and the ANCHOR, this stage's
+// own open stage-start marker (`latestMarker`, the same reading `start`'s open-stage rule makes). The bounds, measured
+// (L24):
+//   * per call, `--budget-ms` at most FINISH_BUDGET_MAX_MS = 570 000 ms, which /pharn-loop pins and runs with the
+//     Bash tool's timeout at 600 000 — the `stage-direct.mjs` / `entry-gates.mjs --wait` precedent, 30 s under the
+//     tool's maximum for node's start and the final consume;
+//   * the cap, FINISH_WAIT_CAP_MS = 3 600 000 ms from the anchor: the longest routed stage measured ran 1,541.4 s
+//     (build; the five ran 211.1–1,541.4 s — `.dev/measurements/loop-wall-clock-2026-10-05.md` §2), so the cap is
+//     about 2.3 times that, and a stage costs at most ⌈3 600 / 570⌉ = 7 finish calls. A constant, not a flag, so no
+//     caller lengthens it; `--budget-ms` only shortens a call (the tests' knob), never past the cap;
+//   * POLL_MS = 250, the `entry-gates.mjs --wait` interval: it bounds how late a present result is noticed, and is
+//     not a measured optimum.
+// Without `--budget-ms` nothing waits — /pharn-ship's finish lines carry none, so ship's path is unchanged.
 //
 // ── THE CONFIG PROBE (`route`, for a routed cell only — a policy-inline cell never consults it) ────────
 // 1. `<config>` (default `pharn.config.json` in the invoking directory, `DEFAULT_CONFIG` below — the one
@@ -84,10 +112,10 @@
 // 10 000 ms — about 30 times the slowest spawn measured, headroom for a cold, loaded CI machine. Past it,
 // the child is killed (SIGKILL) and the stage runs inline as `resolve-failed`, never a hang.
 //
-// ── THE RESULT FILE — `.pharn/<command>/<name>/stage-result.json` (`RESULT_FILE`) ──────────────────────
+// ── THE RESULT FILE — `pharn/.run/<command>/<name>/stage-result.json` (`RESULT_FILE`) ──────────────────────
 // A BASH WRITE, OUTSIDE fix #7, declared (L19): `report` writes it and `route`/`read` remove it through
 // `fs`, reached through Bash, which `PreToolUse` never sees. All three stay inside the state root:
-//   * CONTAINMENT (L54, L59): `.pharn`, `.pharn/<command>` and `.pharn/<command>/<name>` are each tested
+//   * CONTAINMENT (L54, L59): `pharn/.run`, `pharn/.run/<command>` and `pharn/.run/<command>/<name>` are each tested
 //     with `lstat`, one component at a time. A symbolic link — dangling, looping, or to a directory — and
 //     anything that is not a directory is REFUSED, never followed and never read as absent; only an lstat
 //     ENOENT is absence. The result path itself must be absent or a regular file.
@@ -102,9 +130,9 @@
 //     for a new agent; a leftover it cannot clear makes it refuse (exit 2), and the orchestrator then runs
 //     the stage inline (`route-unavailable`).
 // BOUNDS, stated: the walk and the write are not atomic with each other (a component swapped in between is
-// a TOCTOU window this file does not close); `.pharn/` is unauthenticated state a Bash write reaches
-// (LIMITS.md §6), so a hand-written result is read like an honest one — the shape is floor, the content is
-// the stage agent's claim (advisory). No reconcile exemption is needed: `.pharn/` is outside the reconciled
+// a TOCTOU window this file does not close); `pharn/.run/` is unauthenticated state a Bash write reaches
+// (pharn/LIMITS.md §6), so a hand-written result is read like an honest one — the shape is floor, the content is
+// the stage agent's claim (advisory). No reconcile exemption is needed: `pharn/.run/` is outside the reconciled
 // set, and outside `check-regress.mjs scope`'s inside set (L17).
 //
 // ── Trust (P2) ────────────────────────────────────────────────────────────────────────────────────────
@@ -156,9 +184,13 @@ import {
   readVerdict,
   unusableVerdict,
   quote,
+  WAIT_EXIT,
+  WAITING_LINE,
+  waitDecision,
 } from "./stage-agent-core.mjs";
 import { inlineToken } from "./route-token-core.mjs";
 import { DEFAULT_BASE, markersPath, tryMarkPhase, latestMarker } from "./mark-phase.mjs";
+import { tsMs } from "./run-window-core.mjs";
 
 /** The checker spawn's bound — measured, with its margin, in the header. Exported so a test names it. */
 export const CHECKER_TIMEOUT_MS = 10_000;
@@ -180,6 +212,9 @@ export const READ_FILE_DEFECTS = Object.freeze([
   "too-large",
   "not-json",
   "not-removed",
+  // `finish --budget-ms` only (6.74.0): no result, and the wait had no anchor / reached its cap (THE WAIT).
+  "wait-unanchored",
+  "wait-capped",
 ]);
 
 /** Every code `read` may print on stderr (`stage-agent: read: <code>`): the file-level ones above, then the
@@ -191,18 +226,36 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECKER = join(HERE, "check-model-config.mjs");
 
 /** Each subcommand's closed flag set (every one takes a value). `start` takes `route`'s, plus the bare
- *  `NO_AGENT_TOOL`, which `main` removes before parsing; `finish` takes `read`'s. */
+ *  `NO_AGENT_TOOL` and `NO_FOREGROUND_AGENT`, which `main` removes before parsing; `finish` takes `read`'s. */
 const FLAGS = Object.freeze({
   route: Object.freeze(["--command", "--stage", "--name", "--iteration", "--mode", "--config"]),
   brief: Object.freeze(["--command", "--stage", "--name", "--iteration", "--mode"]),
   report: Object.freeze(["--command", "--stage", "--name", "--iteration", "--status", "--row", "--gate"]),
   read: Object.freeze(["--command", "--stage", "--name", "--iteration"]),
   start: Object.freeze(["--command", "--stage", "--name", "--iteration", "--mode", "--config"]),
-  finish: Object.freeze(["--command", "--stage", "--name", "--iteration"]),
+  finish: Object.freeze(["--command", "--stage", "--name", "--iteration", "--budget-ms"]),
 });
+
+/** `finish --budget-ms`'s largest value: one call stays under the Bash tool's 600 000 ms maximum (THE WAIT). */
+export const FINISH_BUDGET_MAX_MS = 570_000;
+
+/** How long after its stage-start a stage's result is waited for, across all its finish calls (THE WAIT). */
+export const FINISH_WAIT_CAP_MS = 3_600_000;
+
+/** The wait's poll interval (THE WAIT): the `entry-gates.mjs --wait` interval, not a measured optimum. */
+export const POLL_MS = 250;
+
+/** `finish`'s second line on `WAIT_EXIT`: the stage is still open, so its return marker waits. */
+export const MARKER_WAITING = "marker: deferred (waiting)";
+
+const BUDGET_RE = /^[1-9][0-9]{0,5}$/;
 
 /** `start`'s one bare flag: the orchestrator has no Agent tool, not even a deferred one (its own, ADVISORY, reading). */
 export const NO_AGENT_TOOL = "--no-agent-tool";
+
+/** `start`'s second bare flag (6.73.2): the Agent tool offers no `run_in_background` parameter, so it would launch
+ *  the stage agent in the background (its own, ADVISORY, reading of the tool's schema). */
+export const NO_FOREGROUND_AGENT = "--no-foreground-agent";
 
 /** `start`'s second line when the stage is still open (the run's latest marker is its own stage-start). */
 export const MARKER_KEPT = "marker: kept (stage already open)";
@@ -292,6 +345,16 @@ export function parseArgs(sub, argv) {
     o.config = c;
   }
 
+  if (sub === "finish") {
+    o.budgetMs = null;
+    if (need("--budget-ms")) {
+      const b = seen["--budget-ms"];
+      if (!cleanScalar(b, 6) || !BUDGET_RE.test(b) || Number(b) > FINISH_BUDGET_MAX_MS)
+        return { ok: false, reason: `--budget-ms must be an integer from 1 to ${FINISH_BUDGET_MAX_MS}` };
+      o.budgetMs = Number(b);
+    }
+  }
+
   if (sub === "report") {
     const st = seen["--status"];
     if (!cleanScalar(st, 16) || !RESULT_STATUSES.includes(st))
@@ -319,14 +382,14 @@ export function parseArgs(sub, argv) {
 
 // ── The containment walk ─────────────────────────────────────────────────────────────────────────────
 
-/** The three state-root components, relative, for messages. */
+/** The state-root components, relative, for messages. Both segments of the scratch root are walked (7.0.0). */
 function stateParts(command, name) {
-  return [".pharn", `.pharn/${command}`, `.pharn/${command}/${name}`];
+  return ["pharn", "pharn/.run", `pharn/.run/${command}`, `pharn/.run/${command}/${name}`];
 }
 
 /**
  * lstat each state-root component in turn. Returns `{ok: true, firstMissing}` — the index of the first
- * absent component, or -1 when all three exist as real directories — or `{ok: false, reason}` for a
+ * absent component, or -1 when every one exists as a real directory — or `{ok: false, reason}` for a
  * symbolic link, a non-directory, or an error other than ENOENT. Never follows a link (L54, L59).
  */
 export function walkStateDirs(root, command, name) {
@@ -357,7 +420,7 @@ function resultKind(path) {
 }
 
 function resultRel(command, name) {
-  return `.pharn/${command}/${name}/${RESULT_FILE}`;
+  return `pharn/.run/${command}/${name}/${RESULT_FILE}`;
 }
 
 /** Remove a leftover result (route, before a spawn). Returns null on success, else a reason. */
@@ -365,7 +428,7 @@ export function clearResult(root, command, name) {
   const walk = walkStateDirs(root, command, name);
   if (!walk.ok) return walk.reason;
   if (walk.firstMissing !== -1) return null;
-  const path = join(root, ".pharn", command, name, RESULT_FILE);
+  const path = join(root, "pharn", ".run", command, name, RESULT_FILE);
   const kind = resultKind(path);
   if (kind === "absent") return null;
   if (kind !== "file") return `${resultRel(command, name)} is not a regular file (${kind}) — clear it by hand`;
@@ -393,7 +456,7 @@ export function writeResult(root, result) {
       }
     }
   }
-  const dir = join(root, rel[2]);
+  const dir = join(root, rel[rel.length - 1]); // the run's own directory: the LAST component
   const path = join(dir, RESULT_FILE);
   const kind = resultKind(path);
   if (kind !== "absent" && kind !== "file") return `${resultRel(command, name)} is not a regular file (${kind}) — clear it by hand`;
@@ -426,7 +489,7 @@ export function consumeResult(root, expect) {
   const walk = walkStateDirs(root, command, name);
   if (!walk.ok) return { verdict: unusableVerdict("unreadable"), defect: "state-dir-refused" };
   if (walk.firstMissing !== -1) return { verdict: unusableVerdict("no-result"), defect: "no-state-dir" };
-  const path = join(root, ".pharn", command, name, RESULT_FILE);
+  const path = join(root, "pharn", ".run", command, name, RESULT_FILE);
   const kind = resultKind(path);
   if (kind === "absent") return { verdict: unusableVerdict("no-result"), defect: "no-result-file" };
   if (kind !== "file") return { verdict: unusableVerdict("unreadable"), defect: "not-a-regular-file" };
@@ -533,11 +596,12 @@ export function route(opts, root = process.cwd()) {
 
 /** The route `start` records: `route`'s decision, with the three decisions the header names made in code. Returns
  *  `{token, exit, reason?, why?}` or `{refuse}` (a skipped stage only). Never throws. */
-export function decideStart(opts, root = process.cwd(), noAgentTool = false) {
+export function decideStart(opts, root = process.cwd(), noAgentTool = false, noForegroundAgent = false) {
   const cell = policyCell(opts.command, opts.mode, opts.stage);
   if (cell === SKIPPED || cell === null)
     return { refuse: `${opts.stage} does not run in ${opts.command}'s ${opts.mode} mode, so it has no route` };
   if (noAgentTool && cell === AGENT) return { token: inlineToken("no-agent-tool"), exit: 3, reason: "no-agent-tool" };
+  if (noForegroundAgent && cell === AGENT) return { token: inlineToken("no-foreground-agent"), exit: 3, reason: "no-foreground-agent" };
   const unavailable = (why) => ({ token: inlineToken("route-unavailable"), exit: 3, reason: "route-unavailable", why });
   let d;
   try {
@@ -560,8 +624,11 @@ function stageIsOpen(opts, base) {
 }
 
 /** `start`: route, then the stage-start marker. Returns `{exit, out: [lines], err: [lines]}`. */
-export function startStage(opts, { root = process.cwd(), noAgentTool = false, sessionId = null, base = join(root, DEFAULT_BASE) } = {}) {
-  const d = decideStart(opts, root, noAgentTool);
+export function startStage(
+  opts,
+  { root = process.cwd(), noAgentTool = false, noForegroundAgent = false, sessionId = null, base = join(root, DEFAULT_BASE) } = {}
+) {
+  const d = decideStart(opts, root, noAgentTool, noForegroundAgent);
   if (d.refuse) return { exit: 2, out: [], err: [d.refuse] };
   const err = [];
   if (d.exit !== 0) err.push(`${opts.stage} runs inline (${d.reason}) — ${INLINE_REMEDIES[d.reason]}${d.why ? `; ${d.why}` : ""}`);
@@ -583,10 +650,54 @@ export function startStage(opts, { root = process.cwd(), noAgentTool = false, se
   return { exit: d.exit, out: [d.token, second], err };
 }
 
-/** `finish`: read, then the orchestrator return marker (deferred after a question). Returns `{exit, out, err}`. */
-export function finishStage(opts, { root = process.cwd(), sessionId = null, base = join(root, DEFAULT_BASE) } = {}) {
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** Is there something at the result path to consume now (THE WAIT)? True for a present result of any kind and for a
+ *  refused state directory — both end the wait and are judged by `consumeResult`; false only for lstat absence. */
+export function resultPresent(root, command, name) {
+  const walk = walkStateDirs(root, command, name);
+  if (!walk.ok) return true;
+  if (walk.firstMissing !== -1) return false;
+  return resultKind(join(root, "pharn", ".run", command, name, RESULT_FILE)) !== "absent";
+}
+
+/** The wait's anchor: this stage's own OPEN stage-start time in ms (the run's latest marker), or null. */
+export function waitAnchorMs(opts, base) {
+  const m = latestMarker(markersPath(opts.name, base));
+  if (m === null || m.kind !== "stage-start" || m.stage !== opts.stage || (m.iteration ?? null) !== (opts.iteration ?? null)) return null;
+  return tsMs(m.ts);
+}
+
+/** Wait for a result, bounded (THE WAIT). Returns `present`, or `waitDecision`'s `waiting` / `capped` / `unanchored`. */
+export function waitForResult(opts, { root, base, budgetMs }) {
+  const callStartMs = Date.now();
+  const anchorMs = waitAnchorMs(opts, base);
+  for (;;) {
+    if (resultPresent(root, opts.command, opts.name)) return "present";
+    const d = waitDecision({ anchorMs, nowMs: Date.now(), callStartMs, budgetMs, capMs: FINISH_WAIT_CAP_MS, pollMs: POLL_MS });
+    if (d.decision !== "poll") return d.decision;
+    sleepMs(d.sleepMs);
+  }
+}
+
+/** The no-result defects a wait outcome replaces with its own code (the stderr names WHY nothing was there). */
+const NO_RESULT_DEFECTS = Object.freeze(["no-state-dir", "no-result-file"]);
+
+/** `finish`: (with `budgetMs`, the wait), read, then the orchestrator return marker (deferred after a question, and
+ *  after `WAIT_EXIT`). Returns `{exit, out, err}`. */
+export function finishStage(opts, { root = process.cwd(), sessionId = null, base = join(root, DEFAULT_BASE), budgetMs = null } = {}) {
+  let waitDefect = null;
+  if (budgetMs !== null) {
+    const w = waitForResult(opts, { root, base, budgetMs });
+    if (w === "waiting") return { exit: WAIT_EXIT, out: [WAITING_LINE, MARKER_WAITING], err: [] };
+    if (w === "capped") waitDefect = "wait-capped";
+    else if (w === "unanchored") waitDefect = "wait-unanchored";
+  }
   const { verdict, defect } = consumeResult(root, { command: opts.command, name: opts.name, stage: opts.stage, iteration: opts.iteration });
-  const err = defect ? [`read: ${defect}`] : [];
+  const shown = waitDefect !== null && NO_RESULT_DEFECTS.includes(defect) ? waitDefect : defect;
+  const err = shown ? [`read: ${shown}`] : [];
   let second;
   if (verdict.exit === READ_EXIT.question) second = MARKER_DEFERRED;
   else {
@@ -613,16 +724,20 @@ function main(argv) {
     return 2;
   }
   let rest = argv.slice(1);
-  let noAgentTool = false;
+  const bare = { [NO_AGENT_TOOL]: false, [NO_FOREGROUND_AGENT]: false };
   if (sub === "start") {
-    const n = rest.filter((a) => a === NO_AGENT_TOOL).length;
-    if (n > 1) {
-      err(`${NO_AGENT_TOOL} was given more than once`);
-      return 2;
+    for (const flag of Object.keys(bare)) {
+      const n = rest.filter((a) => a === flag).length;
+      if (n > 1) {
+        err(`${flag} was given more than once`);
+        return 2;
+      }
+      bare[flag] = n === 1;
+      rest = rest.filter((a) => a !== flag);
     }
-    noAgentTool = n === 1;
-    rest = rest.filter((a) => a !== NO_AGENT_TOOL);
   }
+  const noAgentTool = bare[NO_AGENT_TOOL];
+  const noForegroundAgent = bare[NO_FOREGROUND_AGENT];
   const parsed = parseArgs(sub, rest);
   if (!parsed.ok) {
     if (sub === "read" || sub === "finish") out(unusableVerdict("usage").line);
@@ -634,7 +749,10 @@ function main(argv) {
 
   if (sub === "start" || sub === "finish") {
     const sessionId = process.env.CLAUDE_CODE_SESSION_ID ?? null;
-    const r = sub === "start" ? startStage(o, { root, noAgentTool, sessionId }) : finishStage(o, { root, sessionId });
+    const r =
+      sub === "start"
+        ? startStage(o, { root, noAgentTool, noForegroundAgent, sessionId })
+        : finishStage(o, { root, sessionId, budgetMs: o.budgetMs });
     for (const line of r.out) out(line);
     for (const line of r.err) err(line);
     return r.exit;
