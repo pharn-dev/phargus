@@ -530,7 +530,11 @@ bucket holds the orchestrator's own requests inside the bracket, `sidechain: fal
 call and the one that issues `finish` (whose first line precedes the marker it writes), plus a relayed question's
 requests. Since 6.74.0 `/pharn-loop`'s `finish` waits on disk for an agent launched in the background, and writes no
 marker while it waits (exit `5`), so such an agent's rows still fall inside its stage's bracket, with every `finish`
-request of the wait. An agent still running when the wait reaches its cap bills its later rows outside it.
+request of the wait. Since 7.2.0 the wait's cap writes no marker either (exit `6`) and `/pharn-loop` stops there, so
+the stage stays open until the stop's `run-stop`: an agent still running bills its later rows to the stage up to that
+marker and none after it, the orchestrator's own requests before that marker bill there too, and the stage's `executions` row
+is unmeasured (`no-return-marker`). Before 7.2.0 the cap wrote the return marker, and the agent's later rows billed
+outside the stage.
 
 **The floor-only stages' bracket (6.43.0).** `/pharn-loop` and `/pharn-ship` run `/pharn-regress` and `/pharn-verify` as
 one `stage-direct.mjs` call each, which writes the stage-start marker right before the stage script runs and the
@@ -909,7 +913,11 @@ silently reinterpreting files already written.
 - **`markers[]` is ADVISORY.** Markers are written by the orchestrator through `Bash`, outside the fix #7
   `PreToolUse` gate, so nothing on the floor forces a marker call. A missing marker is reported by the
   checker as a **WARN with a count** — never a RED, because an orchestration lapse is not a malformed
-  artifact, and never a silent merge into a neighbouring stage.
+  artifact, and never a silent merge into a neighbouring stage. **One record is not warned:** a blocked stop
+  before the first build. `loop-record.md` counts it as `iterations: 1`, and no iterated-stage marker can carry 1
+  there. The checker recognizes it as `outcome.blocked` present, `iterations` 1, and no `stage-start` naming
+  `pharn-build`, `pharn-regress` or `pharn-verify` (7.2.0, #411 A; narrowed to that shape in 7.3.0, so a non-blocked
+  record at 1, or a build `stage-start` with no iteration, warns).
 
 ---
 
