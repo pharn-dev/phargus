@@ -195,6 +195,7 @@ import { FEATURE_SLUG_RE } from "./gate-run-core.mjs";
 import { validateWork } from "./stage-work.mjs";
 import { buildExecutions } from "./stage-executions-core.mjs";
 import { validateEntryEvent, canonical, buildEntryView, isAdmitted } from "./entry-observations.mjs";
+import { ITERATED_STAGES } from "./stage-agent-core.mjs";
 
 const reds = [];
 const warns = [];
@@ -599,7 +600,21 @@ export function checkLedger(led, opts = {}) {
     // total, and the scan that lists the first missing ones stops after LIST_MAX finds, so it takes at most
     // |iters| + LIST_MAX steps whatever `total` is (GRILL R2-G3: `2^53` here allocated until the process died).
     const total = led.outcome.iterations;
-    const missingCount = Math.max(0, total - [...iters].filter((n) => n >= 1 && n <= total).length);
+    // A stop before the first build (issue #411 A): loop-record.md counts it as `iterations: 1`, and only an ITERATED
+    // stage's stage-start (build, regress, verify) carries an `iteration`, so a record that follows the contract has no
+    // marker that could carry 1. No iteration on any stage-start AND a total of exactly 1 is that record, and it is not
+    // warned. A larger total with no iteration marker at all still warns: iterated stages ran and every boundary is lost.
+    // NARROWED (7.3.0, audit 2026-11-03): loop-record.md counts a pre-build stop as 1 only for a BLOCKED stop, and a
+    // pre-build record has no stage-start of an iterated stage at all. So the exception also requires `outcome.blocked`
+    // and no stage-start naming one of ITERATED_STAGES; a non-blocked record at 1 (its build ran, its marker was lost)
+    // and a build stage-start that carries no iteration warn again, as before 7.2.0.
+    const preBuildStop =
+      iters.size === 0 &&
+      total === 1 &&
+      typeof led.outcome.blocked === "string" &&
+      led.outcome.blocked !== "" &&
+      !stageStarts.some((m) => ITERATED_STAGES.includes(m?.stage));
+    const missingCount = preBuildStop ? 0 : Math.max(0, total - [...iters].filter((n) => n >= 1 && n <= total).length);
     if (missingCount > 0) {
       const first = [];
       for (let n = 1; first.length < LIST_MAX && n <= total; n++) if (!iters.has(n)) first.push(n);

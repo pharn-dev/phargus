@@ -22,3 +22,6 @@ runs/
 # Local benchmark and soak output (bench/README.md).
 bench-results/
 soak-results/
+# PHARN run state and update backups (added by pharn)
+pharn/.run/
+pharn/.backup/
