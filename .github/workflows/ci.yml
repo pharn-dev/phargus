@@ -92,7 +92,7 @@ jobs:
       # Only on pull requests and merge groups: on a push it would gate main against the previous commit.
       - id: pharn-ci
         if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
-        uses: pharn-dev/pharn-ci@0873ce23f3595a3497325635b7bf3ee93ea77687 # v0.2.0
+        uses: pharn-dev/pharn-ci@a9314e9fda1ae220e42fa0d7e6ff5c0a04e1d756 # v0.4.0
         timeout-minutes: 5
         with:
           # A weakened test (deleted, skipped, focused, or a loosened script, workflow or config) fails the check;
