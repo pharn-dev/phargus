@@ -7,6 +7,7 @@ export default tseslint.config(
   {
     ignores: [
       '.claude/**',
+      '.agents/**',
       'pharn/**',
       '.pharn/**',
       '.pharn-backup/**',
