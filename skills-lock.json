@@ -47,13 +47,13 @@
       "source": "pharn-dev/skills",
       "sourceType": "github",
       "skillPath": "plugins/pharn-ci/skills/pharn-ci-install/SKILL.md",
-      "computedHash": "650ed4d0702e23f98de5fe1109461e370392c8797bdcf45651eec36b45ad0102"
+      "computedHash": "3d66c84de56245b555c7a175a4c8215491e19489718b3c4142f2b493b6655c27"
     },
     "pharn-cli": {
       "source": "pharn-dev/skills",
       "sourceType": "github",
       "skillPath": "plugins/pharn/skills/pharn-cli/SKILL.md",
-      "computedHash": "ba9e4c07e5b2833601a8e2a0dd4403757fe2c8cc02d99b8a03aa9500a64097e9"
+      "computedHash": "7b78be99778ebdb517bafed53c0d8355c3748b74a5fcdc3add60545e289add14"
     }
   }
 }
