@@ -7,6 +7,17 @@ All notable changes to Phargus are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-08
+
+### Fixed
+
+- The backpressure probe no longer double-counts a stall on `http.ServerResponse` and
+  `http.ClientRequest`. On newer Node releases the message flushes to its underlying socket after
+  `write()` returns, outside the synchronous window the probe's wrapper suppresses, so the probe
+  started a second, separate stall for that socket even though it was the same write already
+  tracked as a stall on the message. `createBackpressureProbe` now recognizes a socket covered by
+  an open stall on its `_httpMessage` and skips observing it, so one slow write is reported once.
+
 ## [0.2.0] - 2026-10-18
 
 ### Security
