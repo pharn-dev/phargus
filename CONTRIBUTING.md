@@ -38,6 +38,14 @@ npm run lint
 npm run format        # or format:check in CI
 ```
 
+## Dogfooding
+
+Phargus watches itself: `npm run build && npm run dogfood` runs `examples/express-app`'s agent-instrumented
+app piped into the real `phargus` CLI (the exact command in
+[`examples/express-app/README.md`](examples/express-app/README.md#with-the-cli)), and prints the
+dashboard URL on stderr. Open it, then hit `http://127.0.0.1:3000/slow` a few times to see event
+loop lag show up live. Stop it with Ctrl-C.
+
 ## What CI checks
 
 Every PR runs these as separate jobs, and all of them are required status checks on `main`:

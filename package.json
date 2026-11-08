@@ -113,7 +113,7 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8 --coverage.reporter=lcov --coverage.include=\"src/**/*.ts\" --coverage.exclude=\"src/**/*.test.ts\" --exclude \"**/pharn-ci-coverage.ac1.integration.test.ts\"",
+    "test:coverage": "vitest run --coverage.enabled --coverage.provider=v8 --coverage.reporter=lcov --coverage.include=\"src/**/*.ts\" --coverage.exclude=\"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "build": "node scripts/build.mjs",
     "check:exports": "node scripts/check-exports.mjs",
@@ -121,6 +121,7 @@
     "check:pins": "node scripts/check-action-pins.mjs",
     "bench": "node bench/overhead.mjs",
     "soak": "node bench/soak.mjs",
+    "dogfood": "APP_PORT=3000 node examples/express-app/app.mjs | node dist/esm/cli/bin.js serve",
     "prepack": "npm run build",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
