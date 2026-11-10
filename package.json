@@ -105,6 +105,9 @@
   "peerDependencies": {
     "isolated-vm": "^6.1.0"
   },
+  "overrides": {
+    "minimatch": "^11.0.1"
+  },
   "peerDependenciesMeta": {
     "isolated-vm": {
       "optional": true
