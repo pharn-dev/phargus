@@ -58,6 +58,47 @@ function idText(v) {
   }
 }
 
+/** The per-test comparison's section (7.17.0, regress-per-test-product) — `pt` is the report's `per_test` block, or
+ *  absent (nothing rendered, so every report without it keeps its bytes). Counts are integers from the record builder;
+ *  `new_failures` ids are repository test titles — untrusted DATA — so they are rendered ONLY inside a fence
+ *  (`quoteData`), one per line, each JSON-escaped so a newline in an id cannot forge a second entry. TOTAL (L62). */
+function perTestLines(pt) {
+  if (pt === null || typeof pt !== "object" || Array.isArray(pt)) return [];
+  const side = (s) =>
+    s && typeof s === "object"
+      ? `passed ${dataText(s.passed)}, failed ${dataText(s.failed)}, skipped ${dataText(s.skipped)}, suite errors ${dataText(s.suite_errors)}`
+      : "(not recorded)";
+  const fails = Array.isArray(pt.new_failures) ? pt.new_failures : [];
+  // 7.18.0 — a whole-suite HEAD run (head_run) is compared whenever it is red; its BASE record is not read (null) when no
+  // compared test failed at head and head reported no suite error, since nothing at head could then be new.
+  const whole = pt.head_run === "whole-suite";
+  const lines = [
+    whole
+      ? `gate (quoted, untrusted): ${dataText(pt.gate)} — HEAD ran the WHOLE suite (one execution /pharn-verify can reuse) and is red there, so its outside tests are compared test by test; inside tests are ignored.`
+      : `gate (quoted, untrusted): ${dataText(pt.gate)} — compared test by test because it is red at both base and head.`,
+    `base: ${whole && pt.base === null ? "(not read — no compared test failed at head and head reported no suite error, so nothing at head can be new)" : side(pt.base)}`,
+    `head: ${side(pt.head)}`,
+    `still failing (failed at base and head): ${dataText(pt.still_failing)}`,
+  ];
+  if (pt.ignored && typeof pt.ignored === "object") {
+    lines.push(
+      `ignored by file membership (a file the gate was not given: inside the feature, or a path not mapped to one): base ${dataText(pt.ignored.base)}, head ${dataText(pt.ignored.head)}`
+    );
+  }
+  lines.push("", `new failures at head (${fails.length}) — each failed at head and was passed, skipped or absent at base:`, "");
+  lines.push(
+    fails.length
+      ? quoteData(
+          "",
+          fails
+            .map((f) => `${idText(f && typeof f === "object" ? f.base : null)}\t${idText(f && typeof f === "object" ? f.id : null)}`)
+            .join("\n")
+        )
+      : "_(none — the gate stays pre_existing unless head has more suite errors than base)_"
+  );
+  return section("Per-test comparison", lines);
+}
+
 function section(title, lines) {
   return [`## ${title}`, "", ...lines, ""];
 }
@@ -284,11 +325,13 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
       `declared (${scope.declared.length}):`,
       "",
       scope.declared.length ? quoteData("", scope.declared.join("\n")) : "_(none)_",
-      // regress-base-integrity: the declared globs the write hook drops (set-writes-scope.cjs keeps concrete paths only).
+      // regress-base-integrity: the declared globs the write hook allows none of (set-writes-scope.cjs scopes concrete paths
+      // only, and since 7.22.0 refuses a plan holding one — so these arrive only from a plan the setter never judged:
+      // one edited after the build's Step 0, or a run that skipped that advisory Bash step, L19).
       ...(Array.isArray(scope.unenforced_globs) && scope.unenforced_globs.length
         ? [
             "",
-            `not enforced by the write hook (${scope.unenforced_globs.length}) — globs this partition honors but set-writes-scope.cjs drops, so a Write-tool write they cover is denied:`,
+            `not enforced by the write hook (${scope.unenforced_globs.length}) — globs this partition honors but set-writes-scope.cjs does not scope, so a Write-tool write they cover is denied:`,
             "",
             quoteData("", scope.unenforced_globs.join("\n")),
           ]
@@ -309,7 +352,26 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
   const gateIds = Object.keys(report.outside_gates ?? {}).sort();
   const gateLines = gateIds.map((id) => {
     const g = report.outside_gates[id];
-    const cls = g.base !== 0 ? "pre-existing (already red at base)" : g.head !== 0 ? "REGRESSION" : "ok";
+    // 7.17.0 — a gate red at base that the per-test comparison classified a regression says so, never "pre-existing".
+    const perTestRegression = g.base !== 0 && Array.isArray(report.regressions) && report.regressions.includes(id);
+    // 7.18.0 — a gate green at base and red at head that is NOT a regression exists only in the whole-suite mode: every
+    // head failure is in a file inside the feature (Per-test comparison, below), which /pharn-verify judges.
+    // Only when that comparison completed (CodeRabbit, PR #448): a report without its `head_run` never earns the label.
+    const insideOnly =
+      g.base === 0 &&
+      g.head !== 0 &&
+      report.per_test?.head_run === "whole-suite" &&
+      Array.isArray(report.regressions) &&
+      !report.regressions.includes(id);
+    const cls = perTestRegression
+      ? "REGRESSION (red at base too; a test failed at head that did not fail at base, or head has more suite errors than base — Per-test comparison, below)"
+      : g.base !== 0
+        ? "pre-existing (already red at base)"
+        : insideOnly
+          ? "ok outside the feature (head ran the whole suite; every head failure is in a file inside the feature — Per-test comparison, below; /pharn-verify judges it)"
+          : g.head !== 0
+            ? "REGRESSION"
+            : "ok";
     return `gate: base exit ${dataText(g.base)} -> head exit ${dataText(g.head)} — ${cls} — id (quoted, untrusted): ${dataText(id)}`;
   });
   out.push(
@@ -328,6 +390,7 @@ export function renderDone({ feature, base, baseSource = null, report, scope, pr
       `regressions (${(report.regressions ?? []).length}): ${(report.regressions ?? []).length ? report.regressions.map(dataText).join(", ") : "(none)"}`,
     ])
   );
+  out.push(...perTestLines(report.per_test));
 
   if (report.verdict === "inconclusive" && report.reason) {
     out.push(...section("Why inconclusive", [quoteData("reason, quoted as DATA:", dataText(report.reason))]));

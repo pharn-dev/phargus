@@ -69,6 +69,15 @@
 // runs exactly as before. No retained record is published over entry-derived evidence. The report's `base_evidence`
 // gains `source` (fresh | reused | entry) and `entry`.
 //
+// ==================================== PER-TEST RESULTS (7.17.0) ====================================
+// With `pharn.config.json` `testResults.test` declared, `check-regress.mjs verdict` compares `test` test by test when it
+// is red on both sides (regress-per-test-product). This script passes nothing new: each side's results file is already
+// beside its stamp — run-gates.mjs writes it to `<out>` (PHARN_TEST_RESULTS) and records its `results_sha256` — and an
+// entry-derived BASE stamp carries the entry `base:test` run's file, copied and verified (entry-base-evidence.mjs).
+// Since 7.18.0 (head-test-single-run) the declaration also makes head-init pass `run-gates.mjs --test-whole-suite`
+// (unless --no-tests): HEAD runs `test` as the WHOLE suite, with the outside tests recorded as `compare_files`, so the
+// offer below can hand /pharn-verify that one execution of `test` too; the BASE side still runs the outside tests.
+//
 // ==================================== THE HEAD OFFER (6.34.0) ====================================
 // /pharn-verify may record a gate result from a completed HEAD execution of THIS delivery run instead of spawning the
 // gate again (gate-reuse-core.mjs). It does so only through the OFFER this stage keeps in the git dir
@@ -161,7 +170,7 @@ import { detailText } from "./install-drift-core.mjs";
 import { renderDone, renderRefused } from "./render-regression.mjs";
 import { loadRegressInstall } from "./regress-install-config-core.mjs";
 import { shelledVerdict } from "./shelled-verdict-core.mjs";
-import { spawnGate } from "./run-gates.mjs";
+import { spawnGate, reapLeftoverGate } from "./run-gates.mjs";
 import { declaredWrites, changedPaths } from "./scope-inputs.mjs";
 // 6.49.0 — the default test universe's one owner (the entry check's base:test slot lists with it too).
 import { defaultTestUniverse } from "./scope-inputs.mjs";
@@ -175,6 +184,7 @@ import { discardOffer, publishOffer } from "./head-reuse-offer.mjs";
 import { decideEntryFromDisk, materializeEntryBase } from "./entry-base-evidence.mjs";
 import { entryEvidenceBlock } from "./entry-base-evidence-core.mjs";
 import { regressWork, recordWork } from "./stage-work.mjs";
+import { formatFor, loadResultsConfig } from "./per-test-results-core.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const CHECK_PLAN_SPEC_AGREE = join(HERE, "check-plan-spec-agree.mjs");
@@ -430,11 +440,28 @@ function clearScratchKeepingBaseEvidence() {
   mkdirSync(root, { recursive: true });
 }
 
+/** 7.15.1 — stop a gate an earlier run left running, BEFORE the directory holding its record goes. A runner killed during
+ *  a gate leaves that gate alive in its own process group, and /pharn-loop's takeover re-runs this fresh argv; the clear
+ *  below deletes `head/` (and so `head/lock.child`), and a retained `base-gates/` is discarded after the HEAD side, before
+ *  the base `init` (`discardRetained`), so `run-gates.mjs init` found no record and the new gate ran beside the survivor.
+ *  Both gate directories, before the base worktree a base gate runs in is removed. The rule (an absent or stale lock only)
+ *  and the kill are run-gates.mjs's `reapLeftoverGate`, which reads a real directory only (L54): a link at either path is
+ *  never read through, and the clear below removes it as before; the parents are `containmentGuard`'s walk. A group still
+ *  alive after SIGKILL, or a lock record that is not a regular file (a FIFO is never waited on), is refused
+ *  `child-refused`. */
+function stopLeftoverGates(feature) {
+  for (const rel of [REGRESS_PATHS.head, REGRESS_PATHS.baseGates]) {
+    const r = reapLeftoverGate(rel);
+    if (!r.ok) emitUnusable(feature, "child-refused", `${rel}: ${r.reason}`);
+  }
+}
+
 function phaseFreshLate(cfg) {
   // A leftover base worktree — locked or not — is cleared (clearBaseWorktree); then the scratch directory
   // is cleared, all but a retained `base-gates/` (clearScratchKeepingBaseEvidence). One run per worktree at a
   // time (GRILL G14) — a second fresh start destroys the first run's in-progress record, matching run-gates.mjs
-  // init's own recreate of <out>.
+  // init's own recreate of <out>. A gate an earlier run left running is stopped first (stopLeftoverGates).
+  stopLeftoverGates(cfg.feature);
   clearBaseWorktree();
   clearScratchKeepingBaseEvidence();
   // 6.34.0 — no offer may name a HEAD stamp this run is about to replace. A failure is reported, never a crash: reuse
@@ -756,6 +783,10 @@ function phaseHeadInit(cfg, base, scope, tests) {
     args.push("--discover", "package.json");
   }
   if (skipStyle) args.push("--skip-style");
+  // 7.18.0 (head-test-single-run) — with `testResults.test` declared, HEAD runs `test` as the whole suite (one execution
+  // /pharn-verify can reuse), its outside tests kept as the comparison set. Not declared, unreadable, or --no-tests: the
+  // flag is absent and the run is the outside subset, byte-identical to before.
+  if (!cfg.noTests && formatFor(loadResultsConfig("."), "test").ok) args.push("--test-whole-suite");
 
   const r = runGatesInit(args);
   let parsed;

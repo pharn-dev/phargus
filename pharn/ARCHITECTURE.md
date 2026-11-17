@@ -142,7 +142,8 @@ pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. s
        ├─ pharn-pipeline      grillers (plan-time interrogation, one axis each)
        └─ pharn-review        lenses (post-build review, one hunt each)
 .claude/commands/                              the stages: pharn-spec … pharn-ship (+ loop, review, memory-promote)
-.claude/agents/                                PHARN's subagent types: pharn-review-lens (/pharn-review's lens groups)
+.claude/agents/                                PHARN's subagent types: pharn-review-lens (/pharn-review's lens groups),
+                                               pharn-stage (the routed stage agents of /pharn-ship and /pharn-loop)
 ```
 
 - `pharn-contracts` is a separate **bottom**, not a leaf. This fixes the v1 inversion where the
@@ -161,8 +162,9 @@ pharn/pharn-contracts   L-1  schemas only, ZERO behavior: finding-shape (incl. s
 - **Stages live in commands, not in a module.** `spec → … → ship` are `.claude/commands/pharn-*`
   files; the modules under `pharn/` hold only the capabilities those stages invoke. The `pharn-dev-*`
   twins are contributor apparatus (`.dev/`) and are not product surface. PHARN's own subagent types are
-  `.claude/agents/pharn-*.md` definitions, such as `pharn-review-lens` (`/pharn-review`'s lens groups): a
-  definition states a role and its fences, and the stage's prompt carries the task.
+  `.claude/agents/pharn-*.md` definitions: `pharn-review-lens` (`/pharn-review`'s lens groups) and `pharn-stage`
+  (the routed stage agents of `/pharn-ship` and `/pharn-loop`). A definition states a role and any fences, and the
+  stage's prompt carries the task.
 
 > Caveat the build agent must respect: in markdown there is no `import` statement to lint, so "no
 > sibling imports" is partly a **convention** — a sibling reference is a path in `reads:` or a
@@ -240,7 +242,7 @@ linking back to the spec:
 | ------- | -------------------- | -------------------------------------------- |
 | spec    | `SPEC.md`            | intent (Draft → Approved) + `spec_template` (provenance; a templated SPEC's criteria are `AC-<n>` items, one verify level each) + optional `spec_kind` (hashed into the approval pin, 6.18.0) |
 | plan | `PLAN.md` | `spec_id` **+ `spec_content_hash`** (fix #4) + `applied_lessons` (floor-shaped: `none` \| `[L<n>…]`; content advisory) |
-| grill   | grill-log            | the two floor stops' results + findings vs plan (findings only when the plan is interrogated — not under `--quick` / `--floor-only`) |
+| grill   | grill-log            | the two floor stops' results + findings vs plan (findings only when the plan is interrogated — not under `--quick` / `--floor-only`), each with an id in `grill-findings.json` (7.6.0) |
 | test    | `AC-TESTS.lock.json` | the spec pin + the AC tests' digests + the test-infrastructure pin (6.20.0) + the red-run evidence: each AC's test failed before the build (6.18.0) — or a bootstrap record for a `spec_kind: test-infra` SPEC |
 | build   | `BUILD.md`           | per-phase results                            |
 | regress | regression-report    | regressions outside the feature              |
@@ -252,6 +254,20 @@ excludes, and requires each to fail; its mapping, `AC-TESTS.md`, is written by `
 SPEC, and a legacy SPEC gets neither. `build` runs `pharn/floor/check-test-stage.mjs` first and refuses
 without that evidence (6.19.0) — obeying it is command discipline, and `/pharn-loop` re-reads it after
 every build. Shape and bounds: `pharn-contracts/ac-tests.md` (cited, not restated — P4; `pharn/LIMITS.md §9`).
+
+**Triage** (7.7.0, a full `/pharn-loop` only): after the grill, `/pharn-triage` gives each grill finding one
+disposition — `proceed`, `replan` or `spec` — in `grill-triage.json`, bound to the findings file by its sha256.
+`pharn/floor/grill-triage.mjs` derives the verdict from the dispositions; the floor checks their shape, their
+coverage of every finding id and the binding, and each disposition is the model's judgment (advisory). A `replan` verdict sends the plan back to `/pharn-plan` for a re-plan round — at most two, each round's
+plan and grill outputs archived by `pharn/floor/grill-round.mjs` (7.8.0). A `spec` verdict, or a `replan` with no
+round left, goes to `/pharn-supervise` (7.9.0), whose decision — `proceed-at-risk`, `stop` or, once per run, `amend-spec` (7.10.0), in
+`SUPERVISOR.json` — `pharn/floor/supervisor.mjs` checks: `stop` stops the run, and `proceed-at-risk` goes on to
+the build with every escalated finding carried as KNOWN RISK into the commit message (its ids), `RUN-REPORT.md`
+and the loop record. `amend-spec` archives the SPEC and the round's files under `.a1` names
+(`pharn/floor/spec-amend.mjs`), a routed `/pharn-spec` appends acceptance criteria — the intent, the scope and
+every earlier criterion held unchanged by the floor — and the front re-runs from `/pharn-plan`. The decision is
+the model's (advisory). Shapes: `pharn-contracts/grill-triage.md`,
+`pharn-contracts/supervisor.md`.
 
 **Quick mode** (`/pharn-ship --quick`, 6.25.0) runs a shorter spine for a small change: a `spec_kind: quick`
 SPEC (one to three criteria, each `unit` or `integration`), `plan`, the grill's floor stops without its

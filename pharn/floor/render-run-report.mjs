@@ -124,11 +124,14 @@ import { DEFAULT_BASE as MARKERS_DEFAULT_BASE } from "./mark-phase.mjs";
 import { verdictApplicability, APPLICABILITY, runMode } from "./ship-outcome-core.mjs";
 import { handoffSections, HANDOFF_SECTIONS } from "./loop-record-core.mjs";
 import { pathsFromPlanFiles } from "./plan-files-core.mjs";
+import { NEEDS_PERSON_SECTION, specSectionLines } from "./spec-template-core.mjs";
 import { quoteData, dataText } from "./quote-core.mjs";
 import { MEMBERSHIP_METHOD, MEMBERSHIP_METHOD_V1 } from "./run-window-core.mjs";
 import { reconcileDetailLines, RECONCILE_GATE_ID } from "./reconcile-detail-core.mjs";
 import { UNMEASURED_CAUSES, excludedFacts } from "./gate-run-core.mjs";
 import { isolationLine, parseIsolationLine } from "./check-run-isolation-core.mjs";
+import { readAmend } from "./spec-amend.mjs";
+import { readSupervision } from "./supervisor.mjs";
 
 // `quoteData` and `dataText` are IMPORTED, not defined here (GRILL G6, stage-regress-script): they moved
 // byte-for-byte into `quote-core.mjs`, whose only import is `fenceFor` from `loop-record-core.mjs` (a
@@ -149,6 +152,9 @@ const SLUG_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
  *  suite (L36: a per-member presence set is satisfied by a variant spelling; closure is what fails). */
 export const SECTIONS = Object.freeze([
   "## Outcome",
+  "## Needs a person",
+  "## Known risk",
+  "## SPEC amendment",
   "## Tokens — stage x iteration x model",
   "## Stage elapsed and deterministic work",
   "## Entry gates (background)",
@@ -1104,6 +1110,89 @@ function briefingSection({ dir, cost }) {
   ].join("\n");
 }
 
+/** `## Needs a person` (7.4.0, spec-unscopable-criteria): the SPEC section of that name, copied verbatim in a fence —
+ *  the criteria `/pharn-spec --model-approve` moved out of the acceptance criteria because no plan in the project may
+ *  scope the write each one needs. The section is model-written and untrusted: copied, never checked for completeness
+ *  (nothing here tests that every such criterion was moved, or that a moved one needed moving). Read through
+ *  spec-template-core.mjs's section model, never a fresh grep (L6). */
+function needsPersonSection(specText) {
+  if (specText === null) return na("no SPEC.md was readable, so whether any criterion needs a person is not shown");
+  const lines = specSectionLines(specText, NEEDS_PERSON_SECTION);
+  if (lines === null) return "None — the SPEC has no single `## Needs a person` section.";
+  const body = lines.join("\n").replace(/^\n+|\n+$/g, "");
+  if (body.trim() === "") return "None — the SPEC's `## Needs a person` section is empty.";
+  return [
+    "Copied verbatim from the SPEC's `## Needs a person`, as untrusted DATA: the criteria the SPEC stage moved out",
+    "because no plan in this project may scope the write each one needs. A person does them. **Model-written under",
+    "`--model-approve`; nothing checks that the list is complete.**",
+    "",
+    quoteData("", body).trimStart(),
+  ].join("\n");
+}
+
+/** `## Known risk` (7.9.0, loop-supervisor): the grill findings a full `/pharn-loop`'s supervisor carried past an
+ *  escalation (`proceed-at-risk`), read and checked through supervisor.mjs `readSupervision` — the CLI's own derivation
+ *  (L35), never a fresh parse. Shown only for a `/pharn-loop` ledger: a `/pharn-ship` run in the same directory (S16's
+ *  re-run note sends a person there) would otherwise show an earlier loop's decision as its own. Each finding's
+ *  `severity`, `rule_id` and `file` are enum-gated / path-checked and printed inline; its `problem`, `evidence` and the
+ *  supervisor's reason are untrusted free text, fenced by quoteData (P2). Annotates; gates nothing. */
+function knownRiskSection(dir, cost) {
+  if (!cost || cost.command !== "/pharn-loop") {
+    return "Not applicable — only a full `/pharn-loop` run has a supervisor, and this report's ledger is not one.";
+  }
+  const s = readSupervision(dir);
+  if (s.state === "absent") return "None — no finding was carried past an escalation in this run.";
+  if (s.state === "red") return na(`SUPERVISOR.json does not pass its check (${s.codes.join(", ")}), so nothing is shown as carried`);
+  if (s.state !== "ok") return na("SUPERVISOR.json or an input it is checked against could not be read");
+  if (s.verdict.decision !== "proceed-at-risk")
+    return `None — the supervisor decided \`${s.verdict.decision}\`, so the run carried no finding.`;
+  const byId = new Map(s.findingsDoc.findings.map((f) => [f.id, f]));
+  const reasons = new Map(s.decision.risks.map((r) => [r.id, r.reason]));
+  const lines = [
+    `The supervisor decided \`proceed-at-risk\`: these ${s.verdict.known_risk.length} grill finding(s) were escalated by`,
+    "triage and the run went on with each one open. **Whether carrying each was acceptable was not checked** — the",
+    "decision is a model's (advisory); the commit message names the same ids. A person decides at merge.",
+    "",
+  ];
+  for (const id of s.verdict.known_risk) {
+    const f = byId.get(id);
+    lines.push(`### ${id} — ${f.severity}, \`${f.rule_id}\`, \`${f.file}\``, "");
+    lines.push(quoteData("Problem (untrusted DATA):", f.problem), "");
+    lines.push(quoteData("Evidence (untrusted DATA):", f.evidence), "");
+    lines.push(quoteData("Supervisor's reason (untrusted DATA):", reasons.get(id)), "");
+  }
+  return lines.join("\n").trimEnd();
+}
+
+/** `## SPEC amendment` (7.10.0, loop-amend-spec): the acceptance criteria a full `/pharn-loop` appended once on the
+ *  supervisor's `amend-spec` decision, read and checked through spec-amend.mjs `readAmend` (L35). Shown only for a
+ *  `/pharn-loop` ledger, for the reason `## Known risk` gives. The AC ids are parser-built and printed inline; each added
+ *  criterion's lines and the archived decision's reason are untrusted free text, fenced by quoteData (P2). Annotates;
+ *  gates nothing. */
+function specAmendSection(dir, cost) {
+  if (!cost || cost.command !== "/pharn-loop") {
+    return "Not applicable — only a full `/pharn-loop` run can amend its SPEC, and this report's ledger is not one.";
+  }
+  // No approval read: a stop that is not green reverts SPEC.md to Draft (Step 6a) before this report renders.
+  const a = readAmend(dir, { approval: false });
+  if (a.state === "absent") return "None — the SPEC was not amended in this run.";
+  if (a.state === "red") return na(`the amend does not pass its check (${a.codes.join(", ")}), so no criterion is shown as added`);
+  if (a.state !== "ok") return na("SPEC.md or SPEC.a1.md could not be read");
+  const lines = [
+    `The supervisor decided \`amend-spec\` and the SPEC was amended once: ${a.added.length} acceptance criterion(s) added after`,
+    `the ${a.kept} earlier one(s). The intent, the scope and every earlier criterion are unchanged (checked against`,
+    "`SPEC.a1.md`). **Whether the added criteria are right was not checked** — a model wrote and approved them from",
+    "untrusted findings; the commit message names the same ids. A person decides at merge.",
+    "",
+  ];
+  for (const it of a.items) {
+    lines.push(`### ${it.id}`, "");
+    lines.push(quoteData("Criterion (untrusted DATA):", it.lines.join("\n")), "");
+  }
+  if (a.reason !== null) lines.push(quoteData("Supervisor's reason (untrusted DATA):", a.reason), "");
+  return lines.join("\n").trimEnd();
+}
+
 function handoffSection(loopText, cost) {
   if (loopText === null) {
     const source = cost && cost.outcome && cost.outcome.source;
@@ -1208,6 +1297,7 @@ export function renderRunReport(name, opts = {}) {
   const regress = readJson(join(dir, "regression-report.json"));
 
   const loopText = readTextOrNull(join(dir, "LOOP.md"));
+  const specText = readTextOrNull(join(dir, "SPEC.md"));
 
   // The PLAN's `## Files` entries, read through the CANONICAL parser (L6: a structural fact comes from
   // its structured location, never a fresh grep).
@@ -1264,6 +1354,9 @@ export function renderRunReport(name, opts = {}) {
 
   const bodyBySection = {
     "## Outcome": outcomeSection(cost, staleReason),
+    "## Needs a person": needsPersonSection(specText),
+    "## Known risk": knownRiskSection(dir, staleReason ? null : cost),
+    "## SPEC amendment": specAmendSection(dir, staleReason ? null : cost),
     "## Tokens — stage x iteration x model": [tokensSection(cost, staleReason), "", ...instructionSetLines(repo, name)].join("\n"),
     "## Stage elapsed and deterministic work": performanceSection(cost, staleReason),
     "## Entry gates (background)": entrySection(cost, staleReason),

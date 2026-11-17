@@ -86,6 +86,16 @@ but the gate's integrity here rests on _who may write the enum field_, and in pu
   cannot forge (e.g. a `PreToolUse` hook admitting the Draft→Approved transition only against a
   human-supplied signed marker) — that is **harness-layer**, environment-dependent, not expressible in
   markdown methodology. Until an environment supplies it, this stays a named limit, not a guarantee.
+- **`proceed-at-risk` (7.9.0)** is one model overruling another model's escalation. It is a recorded decision,
+  not a safety property: the floor checks its shape, coverage and binding, never that carrying a finding was
+  right. It extends this section's residual — the run that carries the risk was also approved by a model — and
+  creates no new trust level; what bounds it is that every carried finding is named in the commit message and
+  `RUN-REPORT.md`, and that nothing is merged or pushed.
+- **`amend-spec` (7.10.0)** lets a model change the approved SPEC it is building against, once per run (while
+  the run's `SPEC.a1.md` stays on disk: a Bash `rm` of every `.a1` file the amend left is neither prevented nor detected; removing `SPEC.a1.md` alone reads as `partial-archive`) and append-only: the
+  floor holds the intent, the scope and every earlier criterion line for line equal to the archived SPEC (the `##`
+  heading lines and trailing blank lines aside) and names the added criteria in the commit; it does not hold that the added criteria are right, and the
+  run's approval stays a model's (this section's residual), never a person's.
 
 A related bound on the same checker: a valid AC grammar means the AC is PHRASED testably — not that
 any test exists, runs, or passes. That bound is `check-spec.mjs`'s, not the pipeline's: for a
@@ -102,6 +112,12 @@ reaches it (§6). Since 6.53.0 `check-bash-reconcile.mjs` compares the file agai
 (`reconciliation-record.md` §4a), so an uncommitted write, an added untracked file included, is reported whoever
 made it and whatever its baseline entry says, unless the file is git-ignored. That check runs at `/pharn-*verify`,
 after `/pharn-spec` ran, so a write that steered the current SPEC is reported after it steered it, never prevented. A change landed by a merge, a pull or a human editor is obeyed as-is.
+
+A model-approved SPEC (`/pharn-spec --model-approve`, 7.4.0) is first checked for criteria no plan may scope:
+`check-spec-unscopable.mjs` asks `set-writes-scope.cjs --check` which path tokens in each criterion it would refuse
+from a plan in this project, and the model moves a criterion that needs such a write into `## Needs a person`. The
+check proves a mention, never a required write; the move is the model's judgment, and nothing verifies the list is
+complete. It is triage before the pin, not a gate: the setter's refusal at the plan stage stays the backstop.
 
 ---
 
@@ -151,8 +167,9 @@ those contexts in full (`/pharn-review` Step 1b states it; no cap exists).
 > SPEC still needs a regression verdict. It keeps the grill's floor stops, the test-first evidence, the scope check
 > (within the bounds §6 states for that check; it leaves no record, so nothing after its iteration re-checks it) and
 > the freshness check (a quick run's verify evidence must still describe the live tree and reproduce from its
-> stamp). It leaves out the regression check and `RUN-REPORT.md` (`cost.json` is still written). Like every
-> `/pharn-loop` run since 6.45.0, it does not interrogate the plan: the grill runs its two floor stops only. Its
+> stamp). It leaves out the regression check and `RUN-REPORT.md` (`cost.json` is still written). Like a full
+> `/pharn-loop` run before 7.7.0, it does not interrogate the plan: its grill runs its two floor stops only, and no
+> triage runs. Its
 > green stop is `STOP_GREEN_QUICK`, which is not `STOP_GREEN` and claims no regression check; the
 > record, the commit message and the summary name the mode after the run. Under `/pharn-loop` the SPEC's kind is the
 > model's: it writes and approves the quick SPEC. Since 7.3.0 the run's Stop-guard marker records the mode the run was
@@ -232,14 +249,25 @@ orchestrator's whole context so far. Neither depends on the size of the change.
   three real `/pharn-loop` runs in a user project on 6.35.0, every stage agent's first request carried
   288,489–304,974 tokens; in the run measured in depth, about half of that prefix was the project's own instruction
   files, by a bytes/4 estimate (`.dev/measurements/loop-wall-clock-2026-10-05.md` §3). The total scales with the
-  number of fresh contexts a run opens: five stage agents in a one-iteration full loop, one more per further
-  iteration.
+  number of fresh contexts a run opens: six stage agents in a one-iteration full loop (spec, plan, grill, triage,
+  test and build), one more per further iteration, and more on a re-plan round or an escalation. Since 7.19.0 each
+  is requested as the `pharn-stage` subagent type where the session offers it (eight tools, the project's
+  instruction files kept), else as `general-purpose`. How much smaller its first request is than
+  `general-purpose`'s is not measured in this document.
 - **The orchestrator's re-sends, estimated.** Counted on the code of 2026-09-29, a green one-iteration full
   `/pharn-loop` made at least 70 pinned or mandated orchestrator tool calls (a static lower bound, not the run's
   request count; the pipeline-performance audit §4). The 57 of them that run a pinned line run one per turn, because
   each branches on the exit code of the one before, so each is a model request that re-sends the orchestrator's
   context. Later releases that folded pinned lines may have moved both figures. The run measured in depth made 52
   orchestrator requests before it stopped in verify; the first carried 434,842 tokens.
+- **The orchestrator's context at entry, measured, and the stop on it.** In 36 `/pharn-loop` runs on 7.1.4 and
+  7.3.0 in one user project, the first orchestrator request of the 12 runs started in a main session carried
+  210,150–904,823 tokens (median 484k), and of the 24 started inside an agent 162,620–280,210
+  (`.dev/measurements/loop-baseline-2026-11-11.md` §4). Since 7.13.0 `/pharn-loop` stops at entry (S15b,
+  `blocked: context-too-large`) when its own context holds more than `budget.entryContextTokens` (default 320,000),
+  and `/pharn-ship` warns. The compare and the exit code are floor; that the counts read are this context's size is
+  not: they come from an undocumented transcript the agent can write, bound to the context by the run-start line's
+  tool result, and a context that cannot be measured lets the run go on.
 - **What this does not say.** Which of the two dominates a run is not established; of the prefix's composition only
   the instruction-file share above is measured; no figure here is priced; and every token figure is the ledgers'
   count, while a bytes-to-tokens conversion is an estimate (§1c).
@@ -270,8 +298,10 @@ scanners; there is no `scan-code-*` counterpart, and no lens in `pharn/pharn-rev
 telemetry wiring.
 
 The consequence, stated plainly: **a plan may declare telemetry, pass the grill, and the diff that
-results may wire none — with every floor green.** Under an unattended `/pharn-loop` (since 6.45.0) the grill runs
-only the observability scanner, not the griller's judgment, so there the plan's telemetry is not judged at all.
+results may wire none — with every floor green.** Under `/pharn-loop --quick` the grill runs only
+the observability scanner, not the griller's judgment, so there the plan's telemetry is not judged at all. A full
+`/pharn-loop` (7.7.0) runs the griller again, and its findings reach the run only through triage's dispositions, the re-plan rounds those dispositions start
+(7.8.0) and the supervisor's decision on an escalation (7.9.0).
 Nothing downstream re-checks the promise against the code. `/pharn-verify` runs the project's own discovered gates,
 less any the project excludes in `pharn.config.json` `gates.exclude` (6.36.0); a gate result can also be reused from
 the same delivery run's `/pharn-regress` (6.34.0). If the project has no telemetry test, or excludes the gate that
@@ -635,9 +665,9 @@ Each thing that reads it answers a different question:
   directly. That check is real and it is floor (enum/regex, `ARCHITECTURE.md §2` primitive #3).
 - **Stage routing (6.27.0).** `/pharn-ship` and `/pharn-loop` run each stage their routing policy routes as a
   Claude Code subagent, and `pharn/floor/stage-agent.mjs` reads the block at run time, through that checker's
-  `resolve`, to choose the model that subagent is requested on. The DECISION is floor (a closed policy table
-  and the checker's own exit codes, tested); APPLYING it is the platform's, and the orchestrating model passes
-  the model to the Agent call — advisory.
+  `resolve`, to choose the model, and since 7.20.0 the effort, that subagent is requested on. The DECISION is
+  floor (a closed policy table and the checker's own exit codes, tested); APPLYING it is the platform's, and the
+  orchestrating model passes the model and the effort to the Agent call — advisory.
 
 What either certifies is narrower than the config's presence suggests.
 
@@ -645,13 +675,19 @@ What either certifies is narrower than the config's presence suggests.
   `check-model-config`, or of an `agent:<alias>` route on a marker, as evidence that `/pharn-plan` ran on
   Opus. The checker's own stdout carries the disclaimer: `NOTE (P0): this is config↔frontmatter EQUALITY —
   never proof a stage RAN under that model.`
-- **True statement:** for a routed stage PHARN REQUESTS the configured model, and the stage's marker records
-  that request; `cost.json` records the model each request was SERVED — evidence from a transcript format the
+- **True statement:** for a routed stage PHARN REQUESTS the configured model, and the configured effort where
+  the Agent tool takes one; the stage's marker records the model request, and `cost.json` records the model
+  each request was SERVED — evidence from a transcript format the
   platform does not document, not a floor primitive. Model and effort are applied by the Claude Code
   platform, invisible to any hook, hash or enum, so **no floor primitive in PHARN observes what a stage
   actually ran under**. An agreement check is also structurally blind to both copies being wrong together.
-- **Effort is not routed.** The Agent tool takes no effort, so a routed stage runs at the effort it inherits;
-  the declared `effort` reaches a stage only when a person invokes the stage command directly.
+- **Effort is requested where the Agent tool takes it, and never observed by the floor.** For a routed stage,
+  `pharn/floor/stage-agent.mjs start` prints the effort the block resolves beside the route token, and the
+  orchestrating model passes it as the Agent call's `effort` — advisory, like the model. Where the tool lists no
+  `effort` parameter, the stage still routes, runs at the effort it inherits, and the run's summary says the
+  effort was not applied. What effort a request was sent with appears, at most, in the session's transcript —
+  evidence from a format the platform does not document, never proof. A stage that runs inline runs at the
+  session's effort; the declared `effort` reaches it only when a person invokes the stage command directly.
 - **What is not routed runs on the session's model, and the run records why.** A stage the routing policy
   keeps inline, a stage that falls back (the inline reasons `pharn/floor/stage-agent-core.mjs`'s header
   lists), and the orchestrators themselves all run on the model of the session running the orchestrator, not
@@ -723,6 +759,11 @@ discipline, as everywhere (§1d). What the verdicts certify is narrower than "th
   configuration read from the environment, a chain through another runner (`npm-run-all`, `turbo`), npm
   configuration outside the project root or the runner's version (`pharn/floor/ac-test-infra-core.mjs` states
   the full list).
+- **One run of `test` can serve both stages (7.18.0).** When `pharn.config.json` declares `testResults.test`,
+  `/pharn-regress` runs the whole `test` suite once at HEAD, and inside one `/pharn-loop` or `/pharn-ship` run
+  `/pharn-verify` can record that run as reused instead of running `test` again. The AC gate then reads the per-test
+  results file copied from the regress run and bound to its `results_sha256`. Verify has no independent second sample
+  of `test` in that case: a flaky test that passed once reads as passed. `VERIFY.md` says when it happened.
 - **Those commands run with your environment.** The project's gate scripts and `/pharn-regress`'s base install
   (`npm ci` or the lockfile's equivalent, unless `--no-install`) run with your full process environment
   (`pharn/floor/run-gates.mjs` passes `process.env` through), so any secret in it reaches the project's scripts.

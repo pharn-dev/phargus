@@ -30,16 +30,24 @@
 // A policy-inline cell NEVER consults the config (policy precedence). THE LOOP'S QUICK COLUMN (6.28.0,
 // loop-quick-mode — added by the second of the two increments to merge): `/pharn-loop --quick` routes what
 // its full column routes and never runs /pharn-regress; its spec agent is briefed with the quick invocation,
-// `/pharn-spec --quick --model-approve`. THE LOOP'S GRILL IS FLOOR-ONLY IN BOTH COLUMNS (6.45.0,
-// front-grill-concurrent — a decision made by the orchestrating model under the maintainer's delegation): the full
-// loop runs `/pharn-grill <name> --floor-only` inline — its two floor stops plus the five deterministic `scan-plan-*`
-// scanners (pharn/floor/grill-scan.mjs, findings advisory), and no grill agent. THE TRADE: the plan interrogation and
-// the model-driven grillers (the security griller's judgment half included) no longer run in an unattended loop.
-// Why: unattended, the grill's findings gate nothing, and since 6.27.0 routing split the stages into separate
-// contexts no stage reads them before the build (GRILL.md is still read afterwards — the loop's summary points at
-// it). The 92-minute run's ledger (pharn-starter billing-plan-catalog cost.json) shows the grill stage at 361.0 s,
-// 43 opus requests, cache_write 391,438 and cache_read 16,097,324 tokens; an inline floor-only grill measured 8.5 s
-// in that project's quick run. /pharn-ship keeps its routed full grill: a person reads GRILL.md at GATE 2.
+// `/pharn-spec --quick --model-approve`. THE FULL LOOP'S GRILL IS READ BY TRIAGE (7.7.0, loop-grill-triage): the full
+// column routes `/pharn-grill <name>` (interrogation and every griller) and then `/pharn-triage <name>`, a stage that
+// gives each finding in grill-findings.json one disposition; grill-triage.mjs derives the verdict: `spec` stops the
+// run, and `replan` re-routes these same plan, grill and triage cells for up to two re-plan rounds (7.8.0,
+// grill-round.mjs) before it stops (contract: pharn/pharn-contracts/grill-triage.md). THE ESCALATION GOES TO A
+// SUPERVISOR (7.9.0, loop-supervisor): a `spec` verdict, or a `replan` with no round left, routes
+// `/pharn-supervise <name>` once, whose decision (`proceed-at-risk` | `stop` | `amend-spec`, checked by supervisor.mjs) replaces the
+// stop for a person; it is a fresh agent so the arbiter is not the orchestrating session whose context holds every
+// stage's returned text (contract: pharn/pharn-contracts/supervisor.md). Its third decision, `amend-spec` (7.10.0,
+// loop-amend-spec), routes the spec cell once more — `/pharn-spec --model-approve` appends criteria — and then the whole
+// front again (spec-amend.mjs). Before 7.7.0 (6.45.0,
+// front-grill-concurrent) the full loop's grill was floor-only, because unattended its findings gated nothing and no
+// stage read them before the build; four pharn-starter runs wrote 26 findings that way, three ending green
+// (.dev/features/loop-grill-triage/PLAN.md, "The failure"). The trade, measured: a full grill took 229-284 s in five
+// headless 7.6.0 runs (.dev/features/loop-grill-triage/GRILL-CHECK-MEASUREMENT.md; the 92-minute run's ledger showed
+// 361.0 s and 43 opus requests) against 8.5 s for an inline floor-only grill. THE QUICK LOOP'S GRILL STAYS FLOOR-ONLY:
+// `/pharn-grill <name> --quick`, its two floor stops, no interrogation and no triage. /pharn-ship keeps its routed
+// full grill and runs no triage: a person reads GRILL.md at GATE 2.
 //
 // ============================ THE FALLBACK — every inline reason, with its remedy ============================
 // Every case runs the stage inline, exactly as before 6.27.0, and SAYS SO: a routed stage's stage-start marker
@@ -61,9 +69,11 @@
 //                                                 run check-model-config.mjs resolve <stage> by hand
 //   no-agent-tool     the orchestrating model (ADVISORY): no Agent tool, not even a deferred one — since 6.43.0
 //                     passed to `start` as `--no-agent-tool`      allow the Agent tool
-//   no-foreground-agent the orchestrating model (ADVISORY): an Agent tool that offers no `run_in_background`
-//                     parameter — since 6.73.2 passed to `start` as `--no-foreground-agent` (residual
-//                     `stage-agent-background`)  run /pharn-loop where the Agent tool takes `run_in_background`
+//   no-foreground-agent RETIRED (inline-fallback-stop): no `start` or `route` records it now; it stays a member so
+//                     the markers and ledgers written before still validate. It recorded the orchestrating model's
+//                     reading (ADVISORY) of an Agent tool with no `run_in_background` parameter, passed to `start`
+//                     as `--no-foreground-agent` from 6.73.2; `start` now accepts and ignores that flag
+//                                                 none needed: a record from an earlier version
 //   route-unavailable `start`: a `route` refusal or a leftover result it cannot clear, its reason after the
 //                     remedy (before 6.43.0, the orchestrating model when `route` exited outside 0/3)
 //                                                 run the route line by hand
@@ -146,8 +156,15 @@
 // NEVER A GUARANTEE: "a routed stage ran on its configured model". The platform applies the model (and a
 //   declined model's behaviour is undocumented); `cost.json`'s served `requests[].model` is evidence from
 //   an undocumented transcript format, agreement with the marker's requested route and never proof (L43).
-// STRUCK: "effort is routed". The Agent tool takes no effort; a routed stage runs at the effort it
-//   inherits (observed: the parent session's). Effort still applies when a person runs a stage directly.
+// EFFORT, REQUESTED (7.20.0, stage-effort-routing): `routeFromResolved` keeps the resolved effort beside the alias
+//   (an effort outside AGENT_EFFORTS, which the checker cannot print, is `resolve-failed`), and `stage-agent.mjs start`
+//   prints it as its third line, `effort:<level>`; the orchestrator passes it as the Agent call's `effort`. FLOOR: the
+//   printed level is a member of AGENT_EFFORTS, the checker's EFFORT_ENUM (parity-tested). ADVISORY: that the call
+//   carries it. Where the Agent tool lists no `effort` parameter, or refuses the value without starting an agent, the
+//   call goes without it, the stage still routes at the effort it inherits (observed before 7.20.0: the parent
+//   session's), and the run's summary says `effort not applied`. NEVER A GUARANTEE: "a routed stage ran at its
+//   configured effort" — the transcript's `output_config.effort` is evidence from an undocumented format, read once
+//   for a direct Agent call (.dev/features/stage-effort-routing/EFFORT-PROBE.md), never for a routed stage yet.
 //
 // ================================ RESIDUALS (named, not built) ================================
 //   stage-agent-hang        — a hung foreground stage agent hangs the run; only a person's interrupt recovers it.
@@ -200,9 +217,31 @@
 //                             session ended while the build agent ran, and the first `finish` a day later was past
 //                             the cap. 7.2.0 leaves such a stage open (`CAPPED_EXIT`) and /pharn-loop stops S9b
 //                             (stop the agent, set its work aside, re-run); resuming a stage agent is not built.
+//                             RULE REMOVED 2026-11-12 (inline-fallback-stop; a decision of the orchestrating model
+//                             under the maintainer's delegation, citing the baseline below): /pharn-loop no longer
+//                             appends `--no-foreground-agent`, so a routed stage runs as a stage agent and is waited
+//                             out on disk whatever the Agent tool lists; `start` accepts and ignores the flag. WHY:
+//                             .dev/measurements/loop-baseline-2026-11-11.md §4 — 11 of 12 runs started in a main
+//                             session recorded `inline:no-foreground-agent` (37 stages), and the 8 that reached build
+//                             carried a median of 643k tokens per orchestrator request, against 267k for the 8 routed
+//                             runs started inside an agent that reached build. MEASURED: 7.1.2's six background
+//                             launches waited out (above); the baseline's 24 runs started inside an agent ran 66 stages
+//                             as `agent:<alias>` with no S9b stop — their orchestrator was itself a subagent. NOT
+//                             MEASURED: the wait in a MAIN session whose Agent tool lists no `run_in_background`, the
+//                             setting of those 11 runs (Claude Code 2.1.309 and 2.1.317; the client is not recorded).
+//                             Until it is, such a session that fails the wait stops S9b at a routed stage with no
+//                             inline fallback, the failure 6.73.2 had fixed. And an edited 6.73.2 `pharn-loop.md`
+//                             (the one version with the flag and no wait) kept through every update would now route
+//                             and could stop S9 on a background launch.
 //   agent-model-set-drift   — AGENT_MODELS is the Agent tool's enum read in one harness; a harness taking a
 //                             different set fails the spawn (unusable → STOP), never swaps silently.
-//   stage-agent-effort      — routing effort needs `.claude/agents/` definitions `pharn update` would install.
+//   agent-effort-set-drift  — AGENT_EFFORTS is the Agent tool's `effort` enum read in two clients on 2026-11-16; a
+//                             harness taking a different set refuses the value, and the orchestrator makes the call
+//                             once more without `effort` (`effort not applied`), never a silent swap.
+//   agent-effort-param-absent — a harness whose Agent tool lists no `effort` (the terminal CLI 2.1.323's embedded
+//                             schema omits it when CLAUDE_CODE_EFFORT_LEVEL is set — read from the binary, not run): the
+//                             stage routes at the inherited effort, and the summary says so. Replaces the 6.27.0
+//                             residual `stage-agent-effort` (it assumed an agent definition was the only way).
 //   pharn-cli's vendored check-model-config.mjs — pinned there by sha256; a header-only edit here makes that
 //                             copy lag until it is refreshed in pharn-cli (no rule or output changes).
 //
@@ -212,17 +251,20 @@
 // orchestrator's context — `pharn/THREAT-MODEL.md §5`'s free-text residual, in a new place. That the orchestrator's
 // control flow never uses it is the orchestrator's discipline, not something this module can enforce.
 
-import { agentToken, inlineToken } from "./route-token-core.mjs";
+import { agentToken, inlineToken, AGENT_EFFORTS } from "./route-token-core.mjs";
 import { shelledVerdict } from "./shelled-verdict-core.mjs";
 
 /** The two orchestrators that spawn stage agents. */
 export const STAGE_AGENT_COMMANDS = Object.freeze(["pharn-ship", "pharn-loop"]);
 
-/** The seven pipeline stages, in spine order. */
+/** The pipeline stages, in spine order. `pharn-triage` (7.7.0) and `pharn-supervise` (7.9.0) run in the full loop
+ *  only, the supervisor only on an escalation. */
 export const STAGES = Object.freeze([
   "pharn-spec",
   "pharn-plan",
   "pharn-grill",
+  "pharn-triage",
+  "pharn-supervise",
   "pharn-test",
   "pharn-build",
   "pharn-regress",
@@ -242,6 +284,8 @@ export const STAGE_CONFIG_KEYS = Object.freeze({
   "pharn-spec": "spec",
   "pharn-plan": "plan",
   "pharn-grill": "grill",
+  "pharn-triage": "triage",
+  "pharn-supervise": "supervise",
   "pharn-test": "ac-test",
   "pharn-build": "build",
   "pharn-regress": "regress",
@@ -264,6 +308,8 @@ export const ROUTE_POLICY = Object.freeze({
       "pharn-spec": "interactive",
       "pharn-plan": AGENT,
       "pharn-grill": AGENT,
+      "pharn-triage": SKIPPED,
+      "pharn-supervise": SKIPPED,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": "floor-only",
@@ -273,6 +319,8 @@ export const ROUTE_POLICY = Object.freeze({
       "pharn-spec": "interactive",
       "pharn-plan": AGENT,
       "pharn-grill": "floor-only",
+      "pharn-triage": SKIPPED,
+      "pharn-supervise": SKIPPED,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": SKIPPED,
@@ -280,11 +328,14 @@ export const ROUTE_POLICY = Object.freeze({
     }),
   }),
   "pharn-loop": Object.freeze({
-    // 6.45.0 (front-grill-concurrent): the full loop's grill is floor-only too — the header says why.
+    // 7.7.0 (loop-grill-triage): the full loop routes its grill and then triage — the header says why. 7.9.0: and the
+    // supervisor, on an escalation only.
     full: Object.freeze({
       "pharn-spec": AGENT,
       "pharn-plan": AGENT,
-      "pharn-grill": "floor-only",
+      "pharn-grill": AGENT,
+      "pharn-triage": AGENT,
+      "pharn-supervise": AGENT,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": "floor-only",
@@ -296,6 +347,8 @@ export const ROUTE_POLICY = Object.freeze({
       "pharn-spec": AGENT,
       "pharn-plan": AGENT,
       "pharn-grill": "floor-only",
+      "pharn-triage": SKIPPED,
+      "pharn-supervise": SKIPPED,
       "pharn-test": AGENT,
       "pharn-build": AGENT,
       "pharn-regress": SKIPPED,
@@ -326,6 +379,9 @@ export const INVOCATIONS = Object.freeze({
     full: Object.freeze({
       "pharn-spec": "/pharn-spec --model-approve",
       "pharn-plan": "/pharn-plan <name>",
+      "pharn-grill": "/pharn-grill <name>",
+      "pharn-triage": "/pharn-triage <name>",
+      "pharn-supervise": "/pharn-supervise <name>",
       "pharn-test": "/pharn-test <name> --unattended",
       "pharn-build": "/pharn-build <name>",
     }),
@@ -351,7 +407,7 @@ export const INLINE_REMEDIES = Object.freeze({
   "resolve-failed": "run `node pharn/floor/check-model-config.mjs resolve <stage key>` by hand and read what it prints",
   "no-agent-tool": "allow the Agent tool in this session",
   "no-foreground-agent":
-    "run the command in a Claude Code session whose Agent tool takes `run_in_background` (Claude Code 2.1.309's terminal CLI did); as this session read its Agent tool, it takes no such parameter",
+    "none needed: no current start records this reason; a marker or ledger carrying it was written by an earlier version, whose /pharn-loop ran the stage inline when its Agent tool listed no background parameter",
   "route-unavailable": "run the route line by hand and read its refusal",
 });
 
@@ -478,9 +534,10 @@ export function modesOf(command) {
 }
 
 /**
- * Map a resolved `{model, effort}` stdout to a route. Only an AGENT_MODELS alias routes; `inherit` and a
- * `claude-*` id are valid config values that go inline, each with its own reason; anything else — which a
- * checker that validated the config cannot print — is `resolve-failed` (fail-closed).
+ * Map a resolved `{model, effort}` stdout to a route. Only an AGENT_MODELS alias routes, and its route carries the
+ * effort (7.20.0); `inherit` and a `claude-*` id are valid config values that go inline, each with its own reason;
+ * anything else — an effort outside AGENT_EFFORTS included, which a checker that validated the config cannot print —
+ * is `resolve-failed` (fail-closed).
  */
 function routeFromResolved(stdout) {
   let parsed;
@@ -492,7 +549,10 @@ function routeFromResolved(stdout) {
   if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return inline("resolve-failed");
   if (typeof parsed.model !== "string" || typeof parsed.effort !== "string") return inline("resolve-failed");
   const agent = agentToken(parsed.model);
-  if (agent !== null) return { token: agent, exit: 0, model: parsed.model };
+  if (agent !== null) {
+    if (!AGENT_EFFORTS.includes(parsed.effort)) return inline("resolve-failed");
+    return { token: agent, exit: 0, model: parsed.model, effort: parsed.effort };
+  }
   if (parsed.model === "inherit") return inline("inherit");
   if (/^claude-[a-z0-9][a-z0-9-]*$/.test(parsed.model)) return inline("model-id");
   return inline("resolve-failed");
@@ -517,7 +577,8 @@ function spawnResult(obs) {
  * cannot load included — is a crash, which is `resolve-failed`, never `config-red` (GATE-2 review A4).
  * When an observation the decision needs is missing it returns `{need: "config" | "resolve" | "validate"}`
  * and the CLI gathers exactly that one — so a routed stage costs one checker spawn, and `validate` runs only
- * after a `resolve` RED. Returns `{token, exit}` (0 agent, 3 inline) or `{refuse: "skipped" | "unknown-cell"}`.
+ * after a `resolve` RED. Returns `{token, exit}` (0 agent, with its `model` and `effort`; 3 inline) or
+ * `{refuse: "skipped" | "unknown-cell"}`.
  * POLICY PRECEDENCE: a policy-inline cell returns before reading `obs` at all.
  */
 export function decideRoute(cell, obs = {}) {

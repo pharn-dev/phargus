@@ -11,3 +11,6 @@ runs/
 package-lock.json
 *.tsbuildinfo
 .tsbuildinfo
+# Files installed and rewritten by pharn (added by pharn)
+/LIMITS.md
+/THREAT-MODEL.md

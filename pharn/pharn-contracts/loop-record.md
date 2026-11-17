@@ -109,7 +109,7 @@ could be a previous iteration's stale reports. The record then carries `decision
 member) plus the extra frontmatter key `blocked: <id>`, which exists so a reader can tell a blocked stop from a
 malformed-report stop. **Since 7.3.0 `<id>` is a closed set** — before, any value passed, and any value made
 `check-loop-decision.mjs` skip its re-derivation, so a measured red could be recorded as a blocked stop under an
-invented id. The set is the ids of `/pharn-loop`'s stuck-point rows S1–S15, owned in code by
+invented id. The set is the ids of `/pharn-loop`'s stuck-point rows S1–S18, owned in code by
 `pharn/floor/loop-record-core.mjs` `BLOCKED_IDS` and rendered here; tests hold this list, that constant and the
 command's stuck-point table equal both ways:
 
@@ -132,7 +132,12 @@ command's stuck-point table equal both ways:
 - `ac-evidence-invalid`
 - `gates-red-at-entry`
 - `gates-unmeasured-at-entry`
+- `gates-red-cached`
 - `not-isolated`
+- `context-too-large`
+- `grill-escalation`
+- `supervisor-red`
+- `spec-amend-red`
 
 <!-- LOOP-BLOCKED-IDS:END -->
 
