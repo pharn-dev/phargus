@@ -17,7 +17,7 @@ Conflating these is the most common security mistake in agentic systems.
 
 - **Threat model A — does the app PHARN _builds_ defend itself.** OWASP LLM Top 10 in the _user's
   product_: prompt injection, output handling, unbounded consumption. This is **methodology
-  delivered to the user** — the security griller (in an unattended `/pharn-loop`, since 6.45.0, only its
+  delivered to the user** — the security griller (in `/pharn-loop --quick`, only its
   deterministic secret scan) and the (deferred) AI/LLM-security lens. It is
   triggered by a real dogfood failure, not built speculatively (P7). **Not the subject of this
   document.**
@@ -213,7 +213,24 @@ from the floor verdicts on disk; that neither orchestrator's control flow uses t
 (`pharn-loop.md`, `pharn-ship-stages.md`). (5) The **handoff** channel
 (`pharn/pharn-contracts/loop-record.md`, Residual): `/pharn-loop` Step 1b reads the latest prior `LOOP.md`'s
 `## Handoff`, free text a past run wrote, and no person reads it first. Bounded — no branch reads it, it never gates
-or sets a flag, it is scoped to one feature's record and quoted as DATA — and not zeroed. The quantifier is corrected in the heading
+or sets a flag, it is scoped to one feature's record and quoted as DATA — and not zeroed. (6) The **triage** channel (7.7.0): a full
+`/pharn-loop` hands the grill's free-text findings to `/pharn-triage`, whose disposition decides whether the run
+proceeds. An injected finding can steer that disposition toward `proceed`. The floor holds the shape, the coverage
+of every finding id, the sha256 binding, and that a `blocking` finding is never `proceed`; a steer toward stopping
+is the safe direction, and a steer toward proceeding is the residual. Since 7.8.0 the same
+findings, with triage's reasons, also reach `/pharn-plan` in a re-plan round, which revises the plan from them: an
+injected finding can steer a revision as well as a disposition. The floor holds the round count, the archive set and
+the binding between each round's files; the revised plan passes the same spec-hash and lessons checks and a fresh
+grill and triage, and what it changed is the model's judgment. Since 7.9.0 an escalation goes to
+`/pharn-supervise`, which reads the same findings, dispositions and reasons and may decide `proceed-at-risk`: an
+injected finding can steer that decision toward carrying itself past the stop. The floor holds the decision enum,
+one reason per escalated id, the sha256 binding to the triage file, and that the supervisor runs only on an
+escalation; every carried id is named in the commit message and `RUN-REPORT.md`, so a person sees it at merge.
+Since 7.10.0 the supervisor may decide `amend-spec`, and `/pharn-spec` writes new acceptance criteria from the
+same findings: an injected finding can steer what the amended SPEC asks for. The floor holds that the intent,
+the scope and every earlier criterion are line for line equal to the archived SPEC (the `##` heading lines and
+trailing blank lines aside), that at least one criterion is added, and that it happens once per run while the
+run's `SPEC.a1.md` stays on disk; the added criteria are named in the commit message and `RUN-REPORT.md`. The quantifier is corrected in the heading
 rather than contradicted by a paragraph beneath it: an unchanged "the one residual" would have left
 a false quantifier standing above text that disagrees with it. It is replaced by an OPEN form rather
 than by a new count — "two" would be exactly as brittle as "one" the day a third is found, and

@@ -69,7 +69,8 @@ initialize at all.
       "fp_after": "<sha256>",
       "stdout_sha256": "<sha256>",
       "stderr_sha256": "<sha256>",
-      "results_sha256": "<sha256> | null"
+      "results_sha256": "<sha256> | null",
+      "duration_ms": 1234
     }
   ],
   "aux": { "completeness": 0 }
@@ -92,7 +93,9 @@ initialize at all.
 | `runs[].results_sha256`  | Optional (6.15.0). The sha256 of the gate's results file, or `null`. See below.                                                   |
 | `runs[].identity_sha256` | Optional (6.34.0). The entry's execution identity (`gate-reuse-core.mjs`). See "Reused entries".                                  |
 | `runs[].reused`          | Only on a reused entry (6.34.0): `{stage, side, seq, stamp_sha256}` naming the source execution.                                  |
+| `runs[].duration_ms`     | Optional (7.12.0). The runner's monotonic wall time for a process it spawned; only on `ran: true`. See "Gate duration".           |
 | `excluded`               | Optional (6.36.0): `{declared_in, ids}` — the discovered gates the project's `gates.exclude` removed. See below.                  |
+| `runs[].compare_files`   | Optional (7.18.0): on a regress/head `test` run that ran the WHOLE suite, the outside test files it is compared over. See below.  |
 
 ## Per-test results (`results_sha256`, 6.15.0)
 
@@ -117,6 +120,31 @@ The field is **optional and additive**. `SCHEMA` is unchanged: `validateStamp` c
 only by a forged or corrupted stamp, never by one the runner wrote. What the file means, and when it can be
 read, is `test-results-record.md`'s contract, not this one.
 
+## Gate duration (`duration_ms`, 7.12.0)
+
+`run-gates.mjs` reads `performance.now()` immediately before it spawns a gate and again when the gate settles (the
+child's `close`, or a spawn error), and records `duration_ms`, the floor of the difference in milliseconds, on every run
+it spawned. A `no-files` run and a reused run spawned nothing here, so they carry no `duration_ms`. `run --next` also
+prints the value (`null` when nothing was spawned).
+
+- **The shape is floor; the value is an observation.** `validateStamp` admits the field only when present, so every
+  stamp written before it still validates and `SCHEMA` is unchanged. Present, it must be a non-negative safe integer on
+  a run with `ran: true`. On a `ran: false` run, or with any other value, the stamp is `stamp-malformed`. What the number
+  measured is ADVISORY: one monotonic interval in the runner process, process start-up and teardown included, never CPU
+  time, in `pharn/.run/` state a Bash write reaches (`pharn/LIMITS.md §6`). Under machine load it measures the machine as
+  much as the gate.
+- **A timed-out run's duration is at least `--timeout-ms`.** The kill timer re-arms while less than the timeout has
+  passed on that same clock, so the runner never sends SIGTERM earlier. This is tested runner behaviour, not a floor
+  claim.
+- **It decides nothing.** It is outside the execution identity (`identity_sha256` is computed from inputs read before the
+  spawn) and outside `/pharn-regress`'s BASE requirement (`regress-base-reuse-core.mjs` reads a run's `id`, `shell`,
+  `argv` and `files` only). No verdict, reuse decision or route reads it: `pharn/floor/gate-durations.test.mjs` compares
+  the verdict CLIs and the reuse and identity functions over stamps with the field absent and perturbed, and scans
+  `pharn/floor/` for the modules that name it. That pins the readers that exist today, never one added later.
+- **Where it goes next.** A stamp is cleared at each stage's fresh start, so the cost ledger copies the durations at the
+  moment of the act: `/pharn-regress` and `/pharn-verify` into their work rows, and the entry runner into one `gate`
+  observation per gate (`cost-ledger.md`).
+
 ## Reused entries (`identity_sha256`, `reused`, 6.34.0)
 
 `run-gates.mjs` records on every run it executes `identity_sha256`: a sha256 over the entry's execution inputs — the
@@ -139,13 +167,45 @@ the runner recorded its result and spawned nothing. The entry is:
 `validateStamp` admits exactly that shape — with an `exit` in 0..125, a completed process exit — only in a `verify`
 stamp, and never for an id in `NON_REUSABLE_IDS` (every
 AC level gate, every style gate, `reconcile`, `instruction-growth`; the reasons are that constant's comment in
-`gate-run-core.mjs`). `test` could not be reused from regress HEAD even outside that set: regress HEAD runs it over the
-test files not changed since the base, never this feature's own AC tests, so its file list differs from verify's
-whole-suite run and the execution identity misses it (6.72.2, audit LOOP-8, closed won't-fix). Both fields are **optional and additive**: `SCHEMA` is unchanged, a stamp
+`gate-run-core.mjs`), with the one exception below for `test`. A `test` run over a SUBSET could not be reused from
+regress HEAD even outside that set: such a run covers the test files not changed since the base, never this feature's
+own AC tests, so its file list differs from verify's whole-suite run and the execution identity misses it (6.72.2, audit
+LOOP-8, closed won't-fix then; reopened in 7.18.0, below). Both fields are **optional and additive**: `SCHEMA` is unchanged, a stamp
 without them validates as before, and a floor older than 6.34.0 reads a reused entry as `entry-not-run` (a LAPSE code,
 so a re-run — the fail-closed direction). The in-progress record's `reuse` binding (the offered path and digest) is
 dropped at finalize. While a verify chain is paused at `continue`, that in-progress binding is ordinary `pharn/.run/` state
 the write tools reach, as the in-progress `runs` already are — the named residual `verify-paused-chain-integrity`.
+
+### One execution of `test` for regress and verify (`compare_files`, 7.18.0)
+
+Audit LOOP-8 (reuse the regress HEAD `test` run at verify) was closed won't-fix at 6.72.2 for the two reasons above. It
+was reopened in 7.18.0 (head-test-single-run, Linear CORE-89) on measured gate durations: on the measured project `test`
+took 286.3 s of a 346.7 s gate sum (`.dev/features/head-test-single-run/PLAN.md`). The decision was made by a model
+orchestrator under the maintainer's delegation.
+
+- **The whole-suite HEAD run.** When `pharn.config.json` declares `testResults.test` (and `--no-tests` was not given),
+  `/pharn-regress` initializes its HEAD side with `run-gates.mjs init --test-whole-suite`. The `test` entry then has
+  `files: []` and `compare_files`: the outside tests it used to run. The runner's `no-files` rule skips such an entry, so
+  it runs as the plain command `/pharn-verify` runs. The run records `compare_files` beside `files: []`. `validateStamp`
+  admits the field only on the `test` run of a `regress`/`head` stamp, as a list of file paths beside `files: []`
+  (`gate-run-core.mjs` `wholeSuiteTestRun`, the one owner). Anywhere else it is `stamp-malformed`. `baseSpecFrom` hands
+  the BASE side `compare_files` as the files to run, so the BASE spec, the retained-BASE requirement and the entry-derived
+  mapping keep their pre-7.18.0 bytes. Not declared: the subset run as before, byte-identical.
+- **The reuse.** `test` stays in `NON_REUSABLE_IDS`, with exactly one exception: a whole-suite source run that recorded a
+  results file (`gate-reuse-core.mjs` `findReusable`; a whole-suite run without one is the miss `results-absent`). The
+  runner copies that results file into verify's `<out>` under verify's own `resultsFileName`. The copy is the last step,
+  verified against the source's `results_sha256` before and after the write. A copy that does not verify is removed again
+  (the miss `log-unverified`, and the gate runs). The reused `test` entry records the source's digest: `validateStamp`
+  requires one on a reused `test` and refuses one on any other reused verify run. The AC gate
+  (`per-test-results-core.mjs` `gateResults`) and `check-loop-fresh.mjs` J then bind the copy to the verify stamp
+  exactly as they bind a fresh run's file.
+- **Bounds (P0).** The copy is bound to the source run's digest only when the decision is made. Afterwards it is bound to
+  the verify stamp's own digest, and a verify stamp's reused `test` cannot show that its source was a whole-suite run
+  (`verify-reuse-rederive`). Verify has no independent second sample of `test` (`pharn/LIMITS.md` §9; `VERIFY.md` says so
+  when it happens). A suite that reads the feature's fingerprint-excluded artifacts (`REGRESSION.md` is written after the
+  HEAD drain) saw other bytes than verify would. A standalone `/pharn-regress`, or a verify that misses, pays the whole
+  suite at HEAD with nothing reused. The time saved per iteration is the outside-subset run that HEAD no longer makes,
+  roughly the whole suite minus the inside tests.
 
 ### The closed reuse matrix, and the entry-derived BASE stamp (6.49.0)
 
@@ -168,6 +228,16 @@ evidence with explicit provenance, never an entry stamp relabelled: each run car
 digests, and its logs are copied under the regress slot's own names, each verified before and after the write.
 `check-regress.mjs` and `check-loop-fresh.mjs` read it unchanged. A historical `regress/base` stamp (no reused run)
 validates exactly as before.
+
+**The one exception to `results_sha256: null` (7.17.0, regress-per-test-product).** On the `test` slot alone
+(`ENTRY_RESULTS_SLOT` in `gate-run-core.mjs`), a reused run may record a sha256 digest: the entry `base:test` run's
+own `results_sha256`, its results file copied under the regress slot's name (`resultsFileName`) and verified before and
+after the write, exactly as the logs are (`entry-base-evidence-core.mjs` `resultsPlan`). It is carried only when the entry
+run recorded one; otherwise the slot records `null`, as before. `validateStamp` refuses a digest on any other reused run,
+and every `verify ← regress/head` reused run still records `null`. Why: `/pharn-regress`'s per-test comparison of `test`
+reads the BASE side's record (`regression-report.md`, "The `per_test` block on the product path"), and without the copy
+every both-red `test` over entry evidence would be `inconclusive`. The field stays optional and additive; `SCHEMA` is
+unchanged.
 
 ## Excluding a discovered gate (`gates.exclude`, `excluded`, 6.36.0)
 
@@ -230,6 +300,52 @@ re-resolves the set. An excluded gate is not evidence either way: the map holds 
 agent-editable project input. `/pharn-test` pins it in the AC lock (`ac-tests.md`, "The test-infrastructure pin"),
 and that pin is agreement, never provenance (**L43**).
 
+## A longer per-gate timeout (`gates.timeoutMs`, 7.16.0)
+
+**The declaration** sits beside `exclude` in the same block:
+
+```json
+{ "gates": { "timeoutMs": 900000 } }
+```
+
+`pharn/floor/gate-exclusion-core.mjs` reads the block, and `pharn/floor/gate-timeout-core.mjs`'s header owns the
+value rule, its bounds and how it combines with the pinned `--timeout-ms` (cited, not restated — P4). Both runners
+apply it through that module's one `resolveRunTimeout`. A malformed value makes the block refuse, like a malformed `exclude`
+(`bad-gate-exclusion` at `init`). An unknown key in the block now names the remedy: a key a newer PHARN added needs
+that PHARN (`npx @pharn-dev/pharn@latest update`), otherwise remove it. A floor older than 7.16.0 refuses the key
+with its own message (its only key is `exclude`), which names the key but not the update.
+
+**Where it applies.** Only in the two runners that do not run their gates inside a Bash call:
+
+- the entry runner, `entry-gates.mjs --start`, which puts the value in `runner.json` `timeout_ms`, the runner's
+  argv and the cached-evidence inputs (a declaration below the pinned value is `unusable bad-gate-timeout`);
+- the regress/verify stage runner, `stage-direct.mjs`, which puts it in the fresh argv `runner.json` records, so
+  `stage-regress.mjs` keeps it in its progress record and reads it on the BASE and the HEAD side of one comparison,
+  and for its base-side install. When this run's entry record (`pharn/.run/pharn-entry/runner.json`, this feature)
+  holds another value, the call refuses `timeout-changed`; a value below the pinned one is `timeout-unusable`.
+
+Every other caller keeps its pinned value: the thin `/pharn-regress` and `/pharn-verify` a person runs, `/pharn-build`'s
+`build-gate.mjs` and `/pharn-test`'s red run. With no declaration every argv, record and stamp is byte-identical to
+before, given the same pinned `--timeout-ms` at entry and at the stage (every pinned line carries 540000; a stage call
+pinned to another value than its run's entry check refuses `timeout-changed`).
+
+A declaration below the pinned value is refused at entry, but `/pharn-loop` reads an entry exit 2 as "go on", so such a
+run first stops at regress, after the build (follow-up `entry-timeout-refusal-stop`); `/pharn-ship` asks at its entry
+read.
+
+**What it costs.** A longer timeout lengthens a HUNG gate too: a gate that hangs runs the declared time before it is
+killed, at entry, on each side of regress (and a hung base install) and at verify. A takeover — the entry check's
+`--wait` takeover or the stage runner's — always starts its first gate (L58), so its one foreground invocation can then
+run past the 600 s Bash call by up to the declared value (`stage-exit.md`).
+
+**What it proves, and what it does not (P0).** The range test on the value is FLOOR (an integer range and a closed key
+set, enum/regex class). That both runners apply the resolved value is tested runner behaviour, not a floor primitive.
+The value itself is chosen by whoever edits `pharn.config.json`,
+agent-editable project input: never proven to be the project owner's choice (**L43**). The run pin is integer
+equality between two `pharn/.run/` records a Bash writer reaches, so it narrows a mid-run change of the declaration and
+proves nothing about who wrote either record (**L65**); an entry record that is absent, unreadable or another
+feature's pins nothing.
+
 ## Build-completeness is NOT a gate
 
 The runner **captures** `check-build-complete.mjs`'s exit code — so it is not model-typed — and records it
@@ -272,6 +388,11 @@ gate — it already is one today.
   `base:test` (`ENTRY_BASE_TEST_ID`, reserved): the discovered `test` command handed regress's own default test list,
   right after the style part; the entry verdict never counts it. Any other tree change between two gates still refuses (`tree-changed-between-gates`). What
   counts as red at entry, and why a style gate's red is weighed differently, is `entry-gates-core.mjs`'s header.
+  Since 7.14.0 a completed `entry` stamp whose verdict holds a non-style red, with no unmeasured and no mutated run, is
+  also the source of the repository's one cached-red record (`entry-gate-cache-core.mjs`, in the git common dir): a
+  later `--start` whose bound inputs are all equal stops on it without running a gate. That record is evidence for no
+  stage — no row of the matrix above, never an offer, never a green — and one record per repository, last writer wins:
+  a clear only ever removes a hit, never adds a stop.
 - **`build` (6.39.0), `/pharn-build`'s own gate, run by `pharn/floor/build-gate.mjs`:** `--discover` or a human's
   `--gates` is required, and `--extra`, `--skip-style`, `--scope-json`, `--spec-from`, `--side` and `--base` are
   refused. The set is the DISCOVERED ids minus `E2E_SET` (the regress rule — e2e runs at `/pharn-verify`), then the
@@ -303,9 +424,11 @@ a terminal stop. The set is defined once in `gate-run-core.mjs` (`REASON_CODES`)
   report or stamp carrying one of these is re-run, under `/pharn-loop`'s counted budget. Every other
   member but the `UNMEASURED_CODES` below is a stop: a stamp that exists and is **wrong** is evidence to stop on, never
   to paper over.
-- **`UNMEASURED_CODES`** (6.59.0) — `base-timed-out`, `gate-not-measured`, `head-timed-out`: an inconclusive VERDICT a
-  checker computed from stamps it accepted, because a run was not measured (killed at `--timeout-ms`, or, for
-  `gate-not-measured`, exit 126/127; `verify-report.md`, `regression-report.md`). Not a refusal and not stale evidence:
+- **`UNMEASURED_CODES`** (6.59.0) — `base-timed-out`, `gate-not-measured`, `head-timed-out`, and since 7.17.0
+  `per-test-record-refused`, `per-test-unaccounted-red`: an inconclusive VERDICT a checker computed from stamps it
+  accepted, because a run was not measured (killed at `--timeout-ms`, or, for `gate-not-measured`, exit 126/127;
+  `verify-report.md`, `regression-report.md`) or, for the two per-test codes, because the per-test comparison of `test`
+  could not be given (`regression-report.md`, "The `per_test` block on the product path"). Not a refusal and not stale evidence:
   check B lets a report carrying one through, the remaining checks run as for any report, and `check-loop.mjs` stops
   `STOP_TERMINAL` / `unmeasured`. A coded report that is also stale is still re-run at F/G, once, inside the budget —
   so a hang can cost one more stage timeout before the stop. Disjoint from `LAPSE_CODES`. Before 6.59.0
@@ -373,7 +496,8 @@ release line; `check-loop-fresh.mjs`'s log check is now its emitter.
   the spawn and that record is not covered, and a group that had already exited may have had its id reused, which
   nothing can tell apart. The invoking command's Bash timeout must still exceed `--timeout-ms`.
 - **`--timeout-ms` is required.** Floor code carries no harness-specific default, so there is no default
-  for a test to leave unexercised (**L41**).
+  for a test to leave unexercised (**L41**). Since 7.16.0 the entry and stage runners pass a project's declared
+  `gates.timeoutMs` in its place ("A longer per-gate timeout", above); the runner itself still takes only the flag.
 - Gate stdout/stderr are **untrusted free text** (P2): written by fd, only their sha256 reaches the
   record, and no verdict reads their content.
 - **Log growth** is bounded _within_ a stage by `init`'s recreate of `<out>`; across `/pharn-loop`

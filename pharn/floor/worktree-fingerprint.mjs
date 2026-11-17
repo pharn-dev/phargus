@@ -153,7 +153,44 @@ export const EXCLUDED_ARTIFACTS = Object.freeze([
 ]);
 
 /** PRE-GATE artifacts: reconcile exempts these, this INCLUDES them. The divergence is the point (L39). */
-export const INCLUDED_ARTIFACTS = Object.freeze(["SPEC.md", "PLAN.md", "GRILL.md", "BUILD.md", "AC-TESTS.md", "AC-TESTS.lock.json"]);
+// grill-findings.json (7.6.0) is written by the grill beside GRILL.md, before any gate runs, so it is classified with it;
+// grill-triage.json (7.7.0) is written by the triage stage right after the grill, also before any gate runs; the
+// re-plan round archives (7.8.0, grill-round-core.mjs ARCHIVE_NAMES) are written by grill-round.mjs in the front too.
+// The amend archive (7.10.0, spec-amend-core.mjs AMEND_NAMES) is written by spec-amend.mjs begin, also in the front.
+export const INCLUDED_ARTIFACTS = Object.freeze([
+  "SPEC.md",
+  "PLAN.md",
+  "GRILL.md",
+  "grill-findings.json",
+  "grill-triage.json",
+  "PLAN.r1.md",
+  "GRILL.r1.md",
+  "grill-findings.r1.json",
+  "grill-triage.r1.json",
+  "PLAN.r2.md",
+  "GRILL.r2.md",
+  "grill-findings.r2.json",
+  "grill-triage.r2.json",
+  "SUPERVISOR.json",
+  // The amend archive (7.10.0): spec-amend-core.mjs AMEND_NAMES, written out; a test binds the two.
+  "SPEC.a1.md",
+  "PLAN.a1.md",
+  "GRILL.a1.md",
+  "grill-findings.a1.json",
+  "grill-triage.a1.json",
+  "PLAN.r1.a1.md",
+  "GRILL.r1.a1.md",
+  "grill-findings.r1.a1.json",
+  "grill-triage.r1.a1.json",
+  "PLAN.r2.a1.md",
+  "GRILL.r2.a1.md",
+  "grill-findings.r2.a1.json",
+  "grill-triage.r2.a1.json",
+  "SUPERVISOR.a1.json",
+  "BUILD.md",
+  "AC-TESTS.md",
+  "AC-TESTS.lock.json",
+]);
 
 /** /pharn-review writes one findings.json per lens, NESTED. An exact-filename set cannot express that,
  *  so it gets its own narrow shape: exactly one segment for the lens name, filename still findings.json.
@@ -197,17 +234,28 @@ export function isExcluded(file, feature) {
  * Returns `{ok: true, digest, algo, paths}` or `{ok: false, reason}`; the caller maps the failure onto a
  * closed reason_code. Fail-closed: an enumeration this module cannot trust is never hashed partially.
  */
-export function fingerprint(baseDir, { feature = null, stage = null } = {}) {
+export function fingerprint(baseDir, { feature = null, stage = null, alsoExclude = null } = {}) {
   // The entry exclusion needs a slug the shape gate accepts; without one there is no directory to exclude, and an
   // entry fingerprint is refused rather than computed over a set it could not narrow (fail-closed).
   const entry = stage === FEATURE_DIR_EXCLUDED_STAGE;
   if (entry && !(typeof feature === "string" && FEATURE_SLUG_RE.test(feature))) {
     return { ok: false, reason: "an entry fingerprint requires a feature slug" };
   }
+  // gate-evidence-cache: `alsoExclude` names a SECOND feature whose directories the entry digest leaves out the same way
+  // — the source run of a cached red (entry-gate-cache-core.mjs, "FEATURE-NEUTRAL"). Entry stage only, slug-gated; equal
+  // to `feature` or null it changes nothing, so every existing digest is byte-identical (the golden test pins it).
+  if (alsoExclude !== null && !(entry && typeof alsoExclude === "string" && FEATURE_SLUG_RE.test(alsoExclude))) {
+    return { ok: false, reason: "alsoExclude requires the entry stage and a feature slug" };
+  }
   const e = enumerate(baseDir);
   if (!e.ok) return { ok: false, reason: e.reason };
   const dir = entry ? productFeatureDir(feature) : null;
-  const kept = e.paths.filter((p) => !isExcluded(p, feature) && !(dir !== null && p.startsWith(dir))).sort();
+  const also = alsoExclude !== null && alsoExclude !== feature ? alsoExclude : null;
+  const alsoDir = also !== null ? productFeatureDir(also) : null;
+  const kept = e.paths
+    .filter((p) => !isExcluded(p, feature) && !(dir !== null && p.startsWith(dir)))
+    .filter((p) => also === null || !(isExcluded(p, also) || p.startsWith(alsoDir)))
+    .sort();
   const h = createHash("sha256");
   for (const rel of kept) {
     // The length-prefixed field separator is load-bearing: without it the pairs

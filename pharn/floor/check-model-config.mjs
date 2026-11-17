@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // pharn/floor/check-model-config.mjs — the deterministic PRODUCT-surface model/effort configuration
 // checker: `pharn.config.json`'s `models.stages` block VALIDATED, RESOLVED per stage, and held in
-// EQUALITY with the eleven `/pharn-*` product commands' platform `model:` / `effort:` frontmatter.
+// EQUALITY with the `/pharn-*` product commands (PRODUCT_STAGES below)' platform `model:` / `effort:` frontmatter.
 //
 // ── THE MECHANISM, read live rather than assumed (P6) ────────────────────────────────────────────────
 // Claude Code selects a COMMAND's model through STATIC FRONTMATTER and nothing else. `model:` accepts
@@ -11,8 +11,8 @@
 // frontmatter is held to, which is what this checker's `agreement` mode enforces.
 // SINCE 6.27.0 THE BLOCK HAS A SECOND READER, at run time: `pharn/floor/stage-agent.mjs route` shells THIS
 // checker's `resolve <stage>` to pick the model a `/pharn-ship` or `/pharn-loop` STAGE AGENT is REQUESTED on —
-// the Agent tool takes a `model` parameter (it takes no effort). The two readers ask different questions
-// (L39): the frontmatter agreement accepts `inherit` and `claude-*` ids and the Agent tool does not, so
+// the Agent tool takes a `model` parameter, and since 7.20.0 the resolved effort is passed as its `effort` too.
+// The two readers ask different questions (L39): the frontmatter agreement accepts `inherit` and `claude-*` ids and the Agent tool does not, so
 // `route` sends those stages inline, each with its own reason. Simulating routing in prose — a command
 // "consulting" the config — would still be the exact P0 disease: the route decision is tested code, and
 // what a routed stage was SERVED is read from the transcript (`cost.json`), never asserted from this file.
@@ -26,7 +26,7 @@
 // NON-LLM, dependency-free (Node stdlib only). No network, no child_process, no eval, no dynamic import.
 //
 // ── Honest scope (P0) — what GREEN does and does NOT buy ─────────────────────────────────────────────
-// FLOOR: the config is shape/enum-valid; a stage resolves deterministically; and each of the eleven product
+// FLOOR: the config is shape/enum-valid; a stage resolves deterministically; and each of the product
 //   commands' static `model:` / `effort:` frontmatter EQUALS its config-resolved value, in both
 //   directions (no product command carries model/effort outside the map, no mapped command is missing).
 // NOT guaranteed — and these are real holes, not formalities:
@@ -38,8 +38,8 @@
 //     A stage run INLINE as a step inside `/pharn-ship` or `/pharn-loop` runs inside the ORCHESTRATOR's turn
 //     and does not get its frontmatter model: every stage the routing policy keeps inline, every routing
 //     fallback, and the orchestrators themselves. Since 6.27.0 a ROUTED stage gets its model from the Agent
-//     call instead (`stage-agent.mjs`); its EFFORT keeps this bound, because the Agent tool takes none. This
-//     checker cannot see any of it. OBSERVED, 2026-10-05, one session (`.dev/features/orchestrator-direct-stage-calls/
+//     call instead (`stage-agent.mjs`), and since 7.20.0 its effort as a request on that call where the tool
+//     takes one. This checker cannot see any of it. OBSERVED, 2026-10-05, one session (`.dev/features/orchestrator-direct-stage-calls/
 //     PLAN.md`, "Why"): "directly" means a PERSON's slash invocation. A person's `/pharn-loop` (frontmatter `sonnet`)
 //     was served `claude-sonnet-5-5` for that turn; in the next turn, served the session's `claude-opus-5-5`, the
 //     MODEL invoked `/pharn-loop` through the Skill tool, and every request after it — through the `/pharn-regress`
@@ -79,11 +79,19 @@
 //   node pharn/floor/check-model-config.mjs resolve <stage> [--config <path>]
 //        print {"model":..,"effort":..} for <stage>, via the own-property pick with a `default` fallback
 //   node pharn/floor/check-model-config.mjs agreement [--config <path>] [--commands-dir <dir>]
-//        validate + BIDIRECTIONAL config↔frontmatter agreement over the eleven product commands
+//        validate + BIDIRECTIONAL config↔frontmatter agreement over the product commands
 //
 // Exit: 1 on any RED / unreadable / malformed; 0 otherwise (including the two GREEN-by-design
 // no-configuration states).
+//
+// ── Importable since 7.21.0 (install-manifest, Linear CORE-193) ──────────────────────────────────────
+// The rule bindings below (PRODUCT_STAGES, MODEL_ALIASES, MODEL_ID_RE, EFFORT_ENUM) are EXPORTED, so
+// `.dev/floor/install-manifest-core.mjs` copies them into `pharn-install.json` from these bindings rather than
+// from a second list. Importing runs nothing: `main()` returns at once unless this file is the entry point
+// (`import.meta.main`), so the pinned `process.exitCode = main();` line leaves the exit code unset in an importer.
+// Run as a CLI, every mode, message and exit code is unchanged.
 
+import "./runtime-floor.mjs";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { looseFrontmatter, looseScalar } from "./frontmatter-core.mjs";
@@ -96,6 +104,8 @@ const PRODUCT_STAGES = {
   spec: "pharn-spec.md",
   plan: "pharn-plan.md",
   grill: "pharn-grill.md",
+  triage: "pharn-triage.md",
+  supervise: "pharn-supervise.md",
   build: "pharn-build.md",
   regress: "pharn-regress.md",
   verify: "pharn-verify.md",
@@ -324,7 +334,7 @@ function doAgreement(configPath, commandsDir) {
 
   // Forward pass (config → command), over the CLOSED product enumeration — every stage, whether it has
   // its own config entry or resolves through `default`. That is what makes the config the source of
-  // truth for all eleven rather than only for the keys someone remembered to write down.
+  // truth for every one of them rather than only for the keys someone remembered to write down.
   const checked = [];
   for (const [stage, fileName] of Object.entries(PRODUCT_STAGES)) {
     const cmdPath = join(commandsDir, fileName);
@@ -411,6 +421,7 @@ function getOpt(args, name, dflt) {
 }
 
 function main() {
+  if (!import.meta.main) return undefined; // imported for its exports: run nothing (7.21.0)
   const args = process.argv.slice(2);
   const configPath = getOpt(args, "--config", DEFAULT_CONFIG);
   const commandsDir = getOpt(args, "--commands-dir", DEFAULT_COMMANDS_DIR);
@@ -433,6 +444,9 @@ function main() {
   console.log(`RED — unknown mode ${JSON.stringify(mode)} (expected: validate | resolve <stage> | agreement)`);
   return 1;
 }
+
+// The rule bindings, for an importer (7.21.0). A separate list, so each `const` line above stays as the parity tests read it.
+export { PRODUCT_STAGES, MODEL_ALIASES, MODEL_ID_RE, EFFORT_ENUM };
 
 // THE FLUSH RULE (6.20.4; this CLI since 6.71.1): the exit code is SET and the process ends naturally, after Node has
 // drained stdout — stage-agent-core.mjs JSON.parses `resolve`'s document through spawnSync, and an immediate exit

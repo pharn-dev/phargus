@@ -436,7 +436,9 @@ function checkB(ctx) {
     // is a verdict the checker computed, not a refusal and not stale evidence: B lets it through, the remaining checks
     // run as for any report (so a stale one is still re-run at F/G, once, inside the budget), and check-loop.mjs stops
     // on the inconclusive verdict — STOP_TERMINAL / unmeasured. Before 6.59.0 `base-timed-out` fell to the STOP below,
-    // which /pharn-loop recorded as S11 "stale-evidence".
+    // which /pharn-loop recorded as S11 "stale-evidence". Since 7.17.0 the set also holds the two per-test refusals of
+    // check-regress.mjs's stamp path (`per-test-record-refused`, `per-test-unaccounted-red`): verdicts over accepted stamps
+    // too, so E re-derives them like any report.
     if (UNMEASURED_SET.has(code)) continue;
     if (LAPSE_SET.has(code)) {
       return failure({
@@ -564,6 +566,10 @@ function checkJ(ctx) {
       }
       // The per-test results file (6.15.0) is evidence the AC gate reads (6.20.0): a recorded digest must still be the
       // file's, or E's re-derivation would read a verdict mismatch where the truth is an edited results file (grill G6).
+      // Since 7.18.0 (head-test-single-run) that includes a REUSED verify `test`: its digest is the regress HEAD run's,
+      // and its file is the copy run-gates.mjs wrote into verify's `<out>` — this binds the copy to the verify stamp, never
+      // back to the source run (verify-reuse-rederive). E's check-regress re-run reads the whole-suite mode and its
+      // `compare_files` from the HEAD stamp itself, so it needs no new input.
       if (typeof run.results_sha256 === "string") {
         const file = resultsFileName(run.seq, run.id);
         // Read as the runner and per-test-results-core read it — O_NOFOLLOW|O_NONBLOCK, a regular file only (REVIEW

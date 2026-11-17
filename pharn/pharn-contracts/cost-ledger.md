@@ -124,12 +124,26 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
   },
   "work": [
     {
-      "schema": "pharn-stage-work/1",
+      "schema": "pharn-stage-work/2", // `/1` (no `durations`) is still admitted
       "stage": "pharn-regress",
       "ts": "…",
       "session_id": "…",
-      "head": { "required": 4, "executed": 3, "reused": 0, "no_files": 1 },
-      "base": { "evidence": "fresh", "miss": "no-record", "required": 4, "executed": 3, "reused": 0, "no_files": 1 },
+      "head": {
+        "required": 2,
+        "executed": 1,
+        "reused": 0,
+        "no_files": 1,
+        "durations": [{ "seq": 1, "id": "build", "duration_ms": 48211 }],
+      },
+      "base": {
+        "evidence": "fresh",
+        "miss": "no-record",
+        "required": 2,
+        "executed": 1,
+        "reused": 0,
+        "no_files": 1,
+        "durations": [{ "seq": 1, "id": "build", "duration_ms": 50937 }],
+      },
       "install": { "exit": 0, "timed_out": false, "ms": 41234 },
     },
   ],
@@ -192,44 +206,44 @@ tagged `pharn-loop`**, with no sub-stage named anywhere. The field is therefore 
 the keys above, no more and no fewer, asserted in **both** directions. A per-member presence set would be
 satisfied by a variant spelling of any member; closure is what makes a variant fail.
 
-| field                                                               | shape                                                                                                                                                                                           | class                                                                                |
-| ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| `schema`                                                            | `pharn-cost-ledger/2` (or the legacy `/1`, see Compatibility)                                                                                                                                   | FLOOR (enum)                                                                         |
-| `name`                                                              | the feature slug                                                                                                                                                                                | FLOOR (present)                                                                      |
-| `command`                                                           | the emitting command — `/pharn-loop` or `/pharn-ship`                                                                                                                                           | FLOOR (present)                                                                      |
-| `base_sha`                                                          | the run's base SHA, or the literal `unknown`                                                                                                                                                    | FLOOR (present)                                                                      |
-| `outcome`                                                           | `{decision, iterations, source, blocked?}`, or `null` — see below                                                                                                                               | FLOOR (shape, rule 5)                                                                |
-| `skills_version`                                                    | the version string, or `null`                                                                                                                                                                   | **ADVISORY** (shape unchecked; a value beside an `unknown` source is RED)            |
-| `skills_version_source`                                             | `pharn.config.json` \| `SKILLS_VERSION` \| `unknown`                                                                                                                                            | FLOOR (enum)                                                                         |
-| `claude_code_versions`                                              | sorted distinct `version` values seen on the records, each a rule-3 token                                                                                                                       | FLOOR (array + enum-regex, rule 3)                                                   |
-| `sessions`                                                          | sorted distinct session ids, each a rule-3 token                                                                                                                                                | FLOOR (array + enum-regex, rule 3)                                                   |
-| `window_start` / `_end`                                             | ISO timestamps from the **records' own** values, or `null`                                                                                                                                      | **ADVISORY** (written from data; no checker op)                                      |
-| `coverage`                                                          | `partial` \| `unavailable` — **there is no `complete`**                                                                                                                                         | FLOOR (enum)                                                                         |
-| `dedup_key`                                                         | the literal `requestId`                                                                                                                                                                         | FLOOR (enum)                                                                         |
-| `attribution.method`                                                | the versioned method name                                                                                                                                                                       | FLOOR (enum)                                                                         |
-| `pricing_note`                                                      | must state the file carries tokens, never prices                                                                                                                                                | FLOOR (regex)                                                                        |
-| `markers[].seq`                                                     | integers, **strictly increasing**                                                                                                                                                               | FLOOR (integer compare)                                                              |
-| `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`                                                                                                                                    | FLOOR (enum)                                                                         |
-| `markers[].mode`                                                    | (6.25.0) absent, or a `MARKER_MODES` member (today: `quick`)                                                                                                                                    | **ADVISORY** (a marker field — see "Mode" below)                                     |
-| `markers[].route`                                                   | (6.27.0) absent, or a route token (`agent:<alias>` \| `inline:<reason>`)                                                                                                                        | **ADVISORY** (a marker field — see "Route" below)                                    |
-| `requests[].request_id`                                             | a rule-3 token, **unique across the array**                                                                                                                                                     | FLOOR (set membership + enum-regex)                                                  |
-| `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token; every key a short token other than `__proto__`; no node deeper than `USAGE_MAX_DEPTH`                                                      | FLOOR (enum-regex + integer compare, rule 2)                                         |
-| `requests[].model`                                                  | a bounded identity token (<=128 chars, no C0 control char or DEL, no path)                                                                                                                      | FLOOR (enum-regex)                                                                   |
-| `requests[].attribution_skill` / `agent_id` / `session_id`          | the same bound, or `null`                                                                                                                                                                       | FLOOR (enum-regex)                                                                   |
-| `requests[].tokens.*`                                               | the six classes, each a non-negative safe integer                                                                                                                                               | FLOOR (shape, rule 7)                                                                |
-| `requests[].sidechain`                                              | a boolean; with `agent_id` it names the row's CONTEXT (`main` for `false`, `agent:<agent_id>` for `true`)                                                                                       | FLOOR (shape)                                                                        |
-| `requests[].stage/iteration`                                        | a string or `null` / a number or `null`; the VALUE is the derived VIEW                                                                                                                          | FLOOR (type, rule 7); the value **ADVISORY** (see below)                             |
-| `totals` / `by_model` / `by_stage_iteration_model` / `unattributed` | equal to a recompute from `requests[]`                                                                                                                                                          | FLOOR (recompute + equality)                                                         |
-| `dropped[]`                                                         | key paths of values the emitter refused (vocabulary below)                                                                                                                                      | FLOOR (array); the vocabulary is the emitter's output, not a rule                    |
-| the whole document                                                  | no node deeper than `WALK_MAX_DEPTH`                                                                                                                                                            | FLOOR (integer compare, rule 8)                                                      |
-| `membership`                                                        | `method` `run-window/2`: closed `{method, status, reason, session, start, end, excluded_requests, context, contexts}`; `run-window/1`: the first seven                                          | FLOOR (shape + recompute)                                                            |
-| `membership.method`                                                 | `run-window/2`, or the legacy `run-window/1` (never written since 6.29.0, see Compatibility)                                                                                                    | FLOOR (enum)                                                                         |
-| `membership.status/reason/start/end`                                | equal to `runWindow()` recomputed over the file's own `markers[]`; under `run-window/2` a known window may instead be `unknown` for a context reason, and then only `start`/`end` must equal it | FLOOR (recompute + equality)                                                         |
-| `membership.context` / `contexts`                                   | a measured ledger: a context key and a sorted, duplicate-free, non-empty list of context keys that includes it; otherwise both `null`                                                           | FLOOR (shape + set membership); the VALUE **ADVISORY** without `--verify-transcript` |
-| every `requests[]` row                                              | a MEMBER of that recomputed window, and (`run-window/2`) its context one of `contexts`                                                                                                          | FLOOR (ordering test + set membership)                                               |
-| `membership.excluded_requests`                                      | an integer (known window) or `null` (unknown) — its VALUE                                                                                                                                       | **ADVISORY** without `--verify-transcript`; with it, a RANGE (rule 6)                |
-| `executions`                                                        | (6.35.0) `{method, status, reason, rows}`, equal to `buildExecutions` recomputed from `markers[]` and `work[]`                                                                                  | FLOOR (recompute + equality, rule 9); what an interval MEANS **ADVISORY**            |
-| `work[]`                                                            | (6.35.0) `pharn-stage-work/1` records: closed keys, enums, `executed + reused + no_files = required`; each a MEMBER of the recomputed window                                                    | FLOOR (enum + integer compare, rule 9); that the record is true **ADVISORY**         |
+| field                                                               | shape                                                                                                                                                                                                        | class                                                                                |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `schema`                                                            | `pharn-cost-ledger/2` (or the legacy `/1`, see Compatibility)                                                                                                                                                | FLOOR (enum)                                                                         |
+| `name`                                                              | the feature slug                                                                                                                                                                                             | FLOOR (present)                                                                      |
+| `command`                                                           | the emitting command — `/pharn-loop` or `/pharn-ship`                                                                                                                                                        | FLOOR (present)                                                                      |
+| `base_sha`                                                          | the run's base SHA, or the literal `unknown`                                                                                                                                                                 | FLOOR (present)                                                                      |
+| `outcome`                                                           | `{decision, iterations, source, blocked?}`, or `null` — see below                                                                                                                                            | FLOOR (shape, rule 5)                                                                |
+| `skills_version`                                                    | the version string, or `null`                                                                                                                                                                                | **ADVISORY** (shape unchecked; a value beside an `unknown` source is RED)            |
+| `skills_version_source`                                             | `pharn.config.json` \| `SKILLS_VERSION` \| `unknown`                                                                                                                                                         | FLOOR (enum)                                                                         |
+| `claude_code_versions`                                              | sorted distinct `version` values seen on the records, each a rule-3 token                                                                                                                                    | FLOOR (array + enum-regex, rule 3)                                                   |
+| `sessions`                                                          | sorted distinct session ids, each a rule-3 token                                                                                                                                                             | FLOOR (array + enum-regex, rule 3)                                                   |
+| `window_start` / `_end`                                             | ISO timestamps from the **records' own** values, or `null`                                                                                                                                                   | **ADVISORY** (written from data; no checker op)                                      |
+| `coverage`                                                          | `partial` \| `unavailable` — **there is no `complete`**                                                                                                                                                      | FLOOR (enum)                                                                         |
+| `dedup_key`                                                         | the literal `requestId`                                                                                                                                                                                      | FLOOR (enum)                                                                         |
+| `attribution.method`                                                | the versioned method name                                                                                                                                                                                    | FLOOR (enum)                                                                         |
+| `pricing_note`                                                      | must state the file carries tokens, never prices                                                                                                                                                             | FLOOR (regex)                                                                        |
+| `markers[].seq`                                                     | integers, **strictly increasing**                                                                                                                                                                            | FLOOR (integer compare)                                                              |
+| `markers[].kind`                                                    | `run-start` \| `stage-start` \| `orchestrator` \| `run-stop`                                                                                                                                                 | FLOOR (enum)                                                                         |
+| `markers[].mode`                                                    | (6.25.0) absent, or a `MARKER_MODES` member (today: `quick`)                                                                                                                                                 | **ADVISORY** (a marker field — see "Mode" below)                                     |
+| `markers[].route`                                                   | (6.27.0) absent, or a route token (`agent:<alias>` \| `inline:<reason>`)                                                                                                                                     | **ADVISORY** (a marker field — see "Route" below)                                    |
+| `requests[].request_id`                                             | a rule-3 token, **unique across the array**                                                                                                                                                                  | FLOOR (set membership + enum-regex)                                                  |
+| `requests[].usage`                                                  | every leaf: number \| bool \| null \| a short token; every key a short token other than `__proto__`; no node deeper than `USAGE_MAX_DEPTH`                                                                   | FLOOR (enum-regex + integer compare, rule 2)                                         |
+| `requests[].model`                                                  | a bounded identity token (<=128 chars, no C0 control char or DEL, no path)                                                                                                                                   | FLOOR (enum-regex)                                                                   |
+| `requests[].attribution_skill` / `agent_id` / `session_id`          | the same bound, or `null`                                                                                                                                                                                    | FLOOR (enum-regex)                                                                   |
+| `requests[].tokens.*`                                               | the six classes, each a non-negative safe integer                                                                                                                                                            | FLOOR (shape, rule 7)                                                                |
+| `requests[].sidechain`                                              | a boolean; with `agent_id` it names the row's CONTEXT (`main` for `false`, `agent:<agent_id>` for `true`)                                                                                                    | FLOOR (shape)                                                                        |
+| `requests[].stage/iteration`                                        | a string or `null` / a number or `null`; the VALUE is the derived VIEW                                                                                                                                       | FLOOR (type, rule 7); the value **ADVISORY** (see below)                             |
+| `totals` / `by_model` / `by_stage_iteration_model` / `unattributed` | equal to a recompute from `requests[]`                                                                                                                                                                       | FLOOR (recompute + equality)                                                         |
+| `dropped[]`                                                         | key paths of values the emitter refused (vocabulary below)                                                                                                                                                   | FLOOR (array); the vocabulary is the emitter's output, not a rule                    |
+| the whole document                                                  | no node deeper than `WALK_MAX_DEPTH`                                                                                                                                                                         | FLOOR (integer compare, rule 8)                                                      |
+| `membership`                                                        | `method` `run-window/2`: closed `{method, status, reason, session, start, end, excluded_requests, context, contexts}`; `run-window/1`: the first seven                                                       | FLOOR (shape + recompute)                                                            |
+| `membership.method`                                                 | `run-window/2`, or the legacy `run-window/1` (never written since 6.29.0, see Compatibility)                                                                                                                 | FLOOR (enum)                                                                         |
+| `membership.status/reason/start/end`                                | equal to `runWindow()` recomputed over the file's own `markers[]`; under `run-window/2` a known window may instead be `unknown` for a context reason, and then only `start`/`end` must equal it              | FLOOR (recompute + equality)                                                         |
+| `membership.context` / `contexts`                                   | a measured ledger: a context key and a sorted, duplicate-free, non-empty list of context keys that includes it; otherwise both `null`                                                                        | FLOOR (shape + set membership); the VALUE **ADVISORY** without `--verify-transcript` |
+| every `requests[]` row                                              | a MEMBER of that recomputed window, and (`run-window/2`) its context one of `contexts`                                                                                                                       | FLOOR (ordering test + set membership)                                               |
+| `membership.excluded_requests`                                      | an integer (known window) or `null` (unknown) — its VALUE                                                                                                                                                    | **ADVISORY** without `--verify-transcript`; with it, a RANGE (rule 6)                |
+| `executions`                                                        | (6.35.0) `{method, status, reason, rows}`, equal to `buildExecutions` recomputed from `markers[]` and `work[]`                                                                                               | FLOOR (recompute + equality, rule 9); what an interval MEANS **ADVISORY**            |
+| `work[]`                                                            | (6.35.0) `pharn-stage-work/1` or (7.12.0) `/2` records: closed keys, enums, `executed + reused + no_files = required`, `/2`'s `durations` exactly `executed` entries; each a MEMBER of the recomputed window | FLOOR (enum + integer compare, rule 9); that the record is true **ADVISORY**         |
 
 **One row per request, and which of its transcript lines each value comes from (6.24.1).** `dedup_key` names
 the grouping. The platform writes one API request to the transcript as several lines, sometimes in more than one
@@ -538,7 +552,10 @@ outside the stage.
 
 **The floor-only stages' bracket (6.43.0).** `/pharn-loop` and `/pharn-ship` run `/pharn-regress` and `/pharn-verify` as
 one `stage-direct.mjs` call each, which writes the stage-start marker right before the stage script runs and the
-`orchestrator` marker right after it ends (not after a `continue`, which a resume call closes). So such a stage's
+`orchestrator` marker right after it ends (not after a `continue`). Since 7.15.0 both are written by the call's
+detached runner, which resumes the script itself on a `continue`, right before its first invocation and right after
+its last; only a call that takes over from a dead runner writes either instead (the return marker only when none
+follows the recorded start). So such a stage's
 `executions` row spans the script's run plus the scope release (the scope is set before the start marker is written, so
 the set is outside it), no longer the orchestrator's requests between
 its pinned lines, and its bucket holds only the requests that issue a resume. An answered `question` is a second call,
@@ -553,7 +570,8 @@ platform's, and an alias is a mutable pointer. For an `inline:<reason>` marker t
 **Bound, and it is the point.** `route` is a REQUEST; `requests[].model` is an OBSERVATION read from a transcript
 format the platform does not document (the reader's own stated assumption). The two agreeing is agreement
 between two records, never proof that a stage ran on a model, and `check-cost-ledger.mjs` still certifies
-internal consistency only. The effort a routed stage ran at is not routed at all.
+internal consistency only. Since 7.20.0 a routed stage's effort is requested on the Agent call too, and neither the
+marker nor `cost.json` records it: what effort a stage ran at is not read here at all.
 
 **No schema bump, and the old-reader direction stated.** `check-cost-ledger.mjs`'s per-marker rule is the closed
 `kind` enum and the `seq` order; it asserts no closed key set over a marker OBJECT, and a token cannot carry a
@@ -986,7 +1004,7 @@ whose header holds the rule; in short, over the CURRENT run's markers (`currentR
 clock step moves it) — and it includes orchestration, subprocesses, waiting and any human answer given inside the
 stage. **Nothing decomposes it**: stage elapsed minus anything is not model time, and no such number is written.
 
-### `work[]` — FACTS a stage script records at `done` (`pharn-stage-work/1`)
+### `work[]` — FACTS a stage script records at `done` (`pharn-stage-work/2`; `/1` admitted)
 
 Whether a regress execution reused its BASE evidence and how many VERIFY results were reused is recorded in the two
 reports — which every iteration OVERWRITES — and the gate-run stamps are cleared at every fresh start. So
@@ -1007,8 +1025,18 @@ record's one owner, whose header is its spec) from the stamp the verdict just us
   null, and `miss` the retained decision's code. Those entry executions are counted once, in the `entry` view below;
   no BASE duration is synthesized for them, and nothing here reads the entry observations.
 - verify: `gates` (`reconcile` included).
-- `install.ms` is the ONE new timer: `performance.now()` around the install process, integer milliseconds, carried
-  through a budget `continue` by the progress record. No gate process is timed.
+- `install.ms` is `performance.now()` around the install process, integer milliseconds, carried through a budget
+  `continue` by the progress record.
+- **Per-gate durations (`pharn-stage-work/2`, 7.12.0).** Every side object (`head`, `base`, `gates`) carries
+  `durations`: one `{seq, id, duration_ms}` per stamp run with `ran: true`, in run order, so its length is `executed`.
+  `duration_ms` is the gate-run stamp's (`gate-run-record.md`, "Gate duration"), copied at `done` because the stamp is
+  cleared at the next fresh start; it is `null` when the stamp carries none, never `0`. `id` is the stamp's gate id only
+  when it is a member of the gate-id allowlist or the reserved ids, or `structural:` plus a relative path
+  (`stage-work.mjs ledgerGateId`), else `null`: a `--gates` id defaults to its command line, and a command line never
+  reaches this committed file. A `reused` or `entry` BASE has `durations: []`, because those processes ran in an
+  earlier execution or in the entry check. The emitter writes `/2` only. `work.jsonl` is never pruned, so
+  `validateWork` admits exactly two closed shapes by `schema`: `/1` (every side without `durations`) and `/2`. A reader
+  older than `/2` refuses a `/2` line and lists it in `dropped[]` as `work.jsonl[<n>]`.
 
 The emitter copies a record into `work[]` only when it passes `validateWork` and is a MEMBER of the run window
 (`isMember`, the test every request row passes). A line that fails is not a row: `work.jsonl[<n>]` joins `dropped[]`
@@ -1027,7 +1055,11 @@ throws, and a failure is one stderr note;
 nothing reads a record to decide a verdict, an exit, a reuse, a route or a commit. `work.jsonl` is `pharn/.run/` state a
 Bash write reaches (pharn/LIMITS.md §6): the checker certifies agreement between the file's facts and its view, never that
 the records or markers are true (L43). `--verify-transcript` does not compare either key: neither is
-transcript-derived. No per-gate duration is measured (`gate-process-duration`).
+transcript-derived. A per-gate duration is an OBSERVATION by the gate runner — one monotonic interval in its process,
+process start-up and teardown included, not CPU time, and under machine load a measure of the machine as much as the
+gate. What it still does not cover: the regress install (timed separately as `install.ms`), `/pharn-build`'s project
+gate and `/pharn-test`'s red run, neither of which writes a work row, and every gate of an execution that did not reach
+`done`. The residual `gate-process-duration` (named at 6.35.0: "no gate process is timed") is retired by 7.12.0.
 
 ## Entry gate observations (6.48.0)
 
@@ -1051,8 +1083,9 @@ Each process appends one line per lifecycle boundary it already has to `<pharn/.
 
 - `start`, once per `--start` that created an invocation. `run` is the current run-start `{seq, ts}` read from
   `markers.jsonl` AT `--start` (null when there is none); `ts` / `end_ts` are the call's wall-clock bounds and
-  `elapsed_ms` is its monotonic duration. `outcome` is `started`, `no-gates`, `init-refused` or `spawn-failed`. A
-  refusal before the nonce exists (`usage-error`, `path-containment`, `runner-unverifiable`) writes nothing.
+  `elapsed_ms` is its monotonic duration. `outcome` is `started`, `no-gates`, `init-refused`, `spawn-failed` or (7.14.0)
+  `cached-red` — the start stopped on an earlier run's red and spawned no runner. Every outcome but `started` ends the
+  invocation at the start. A refusal before the nonce exists (`usage-error`, `path-containment`, `runner-unverifiable`) writes nothing.
 - `segment-begin` / `segment-end`, one pair per runner or `--wait` takeover process, sharing a fresh 16-hex
   `segment`. The end is written AFTER `result.json`, with `elapsed_ms` monotonic in that process, `end` (`done`,
   `refused`, `crashed` or `budget`) and `gates` (the gate entries that process ran).
@@ -1060,6 +1093,15 @@ Each process appends one line per lifecycle boundary it already has to `<pharn/.
   fresh `call`, wall-clock `ts` / `end_ts`, a monotonic `elapsed_ms`, the document's `status`, and `takeover` (the
   segment it ran, or null).
 - `abort`, one per `--abort` that read this invocation's runner record: `stopped`, `wrote_result`.
+- `gate` (7.12.0), one per gate a runner or takeover segment ran to completion, written after its `run --next`
+  returned: the `segment` that ran it, the gate `id` (a `stage-work.mjs ledgerGateId` member, never a command line),
+  `ts` when written, and `duration_ms`, the runner's monotonic wall time for that process (`gate-run-record.md`, "Gate
+  duration"). An interrupted gate records nothing and runs again, so only the run that completed writes one. A runner
+  killed mid-run still leaves one for every gate it finished: that is what separates a slow gate from a hung runner.
+  `gate` is a FACT ONLY: the view below drops every `gate` event before it groups anything, so no view rule changes and
+  its method stays `entry-observations/1`. It was added under the same `pharn-entry-observation/1` schema because no
+  existing event's keys or meaning changed; a reader older than it refuses the line as an unknown event and lists it in
+  `dropped[]` as `entry.jsonl[<n>]`.
 
 Every event carries the invocation's `nonce` and the session id from the environment, and nothing else. No gate
 output, argument, environment value, prompt or path is written. The emitter admits a line only when it passes
@@ -1130,7 +1172,8 @@ segment `incomplete`. A `--start` that supersedes an earlier runner writes no ev
 invocation stays as it was recorded. An event whose session id matches no current-run marker of its session is not a
 window member and stays out (a resumed session with a new id is the case). The file is never pruned. `pharn/.run/` is
 Bash-reachable (pharn/LIMITS.md §6): the checker certifies agreement between the facts and the view, never that the events
-describe what ran (L43); a self-consistent fabricated file passes. Per-gate durations are not measured.
+describe what ran (L43); a self-consistent fabricated file passes. Per-gate durations are recorded as `gate` facts
+(7.12.0) and appear in no view; showing them on the screen table or in `RUN-REPORT.md` is not done yet.
 
 ## Size, disclosed rather than discovered
 
