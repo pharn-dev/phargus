@@ -361,4 +361,45 @@ describe('phargus serve: the token gate', () => {
     },
     TEST_TIMEOUT_MS,
   );
+
+  it(
+    'AC-3: a short --token exits 2 before a non-loopback server binds',
+    async () => {
+      await ensureFreshDist();
+      const run = startCli([
+        'serve',
+        '--host',
+        '0.0.0.0',
+        '--port',
+        '0',
+        '--token',
+        'secret-short',
+      ]);
+      const exit = await waitForExit(run, RUN_TIMEOUT_MS);
+
+      expect(exit.code, diagnostics(run)).toBe(2);
+      expect(run.stderr(), diagnostics(run)).toContain('16 characters');
+      expect(run.stderr(), diagnostics(run)).not.toContain('secret-short');
+      expect(run.stderr(), diagnostics(run)).not.toMatch(URL_LINE);
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'AC-3: a short PHARGUS_TOKEN exits 2 before a non-loopback server binds',
+    async () => {
+      await ensureFreshDist();
+      const run = startCli(
+        ['serve', '--host', '0.0.0.0', '--port', '0'],
+        cliEnv({ PHARGUS_TOKEN: 'secret-short' }),
+      );
+      const exit = await waitForExit(run, RUN_TIMEOUT_MS);
+
+      expect(exit.code, diagnostics(run)).toBe(2);
+      expect(run.stderr(), diagnostics(run)).toContain('16 characters');
+      expect(run.stderr(), diagnostics(run)).not.toContain('secret-short');
+      expect(run.stderr(), diagnostics(run)).not.toMatch(URL_LINE);
+    },
+    TEST_TIMEOUT_MS,
+  );
 });
