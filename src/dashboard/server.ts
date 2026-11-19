@@ -270,80 +270,96 @@ export async function createDashboardServer(
   };
 
   const server: Server = createServer((req, res) => {
-    // DNS rebinding defence: answer only the hosts this server is reachable as.
-    if (!hostPolicy.hostAllowed(req.headers.host)) {
-      plain(res, 421, MISDIRECTED_BODY, { connection: 'close' });
-      return;
-    }
-    const url = new URL(req.url ?? '/', 'http://localhost');
-    const origin = req.headers.origin;
-    if (
-      origin !== undefined &&
-      (url.pathname === '/events' || req.method !== 'GET') &&
-      !hostPolicy.originAllowed(origin)
-    ) {
-      plain(res, 403, 'forbidden\n');
-      return;
-    }
-    if (token !== undefined) {
-      const presented = url.searchParams.get('token');
-      if (presented !== null) {
-        // The token rides in a URL only on its way to becoming a cookie, and only to the page.
-        if (url.pathname === '/' && req.method === 'GET') {
-          exchangeToken(req, res, presented);
-        } else {
-          unauthorized(res);
+    try {
+      // DNS rebinding defence: answer only the hosts this server is reachable as.
+      if (!hostPolicy.hostAllowed(req.headers.host)) {
+        plain(res, 421, MISDIRECTED_BODY, { connection: 'close' });
+        return;
+      }
+      let url: URL;
+      try {
+        url = new URL(req.url ?? '/', 'http://localhost');
+      } catch {
+        plain(res, 400, 'bad request\n');
+        return;
+      }
+      const origin = req.headers.origin;
+      if (
+        origin !== undefined &&
+        (url.pathname === '/events' || req.method !== 'GET') &&
+        !hostPolicy.originAllowed(origin)
+      ) {
+        plain(res, 403, 'forbidden\n');
+        return;
+      }
+      if (token !== undefined) {
+        const presented = url.searchParams.get('token');
+        if (presented !== null) {
+          // The token rides in a URL only on its way to becoming a cookie, and only to the page.
+          if (url.pathname === '/' && req.method === 'GET') {
+            exchangeToken(req, res, presented);
+          } else {
+            unauthorized(res);
+          }
+          return;
         }
-        return;
+        // Before authentication: a visitor has no cookie yet. Neither route can leak the token.
+        if (url.pathname === '/session' && sessionValue !== undefined) {
+          handleSessionRequest(req, res, {
+            token,
+            sessionValue,
+            unauthorized,
+            onBodyError: (error): void => {
+              if (!isDisconnect(error)) {
+                report(error);
+              }
+            },
+          });
+          return;
+        }
+        const loginAsset = loginAssets.get(url.pathname);
+        if (loginAsset !== undefined) {
+          if (req.method === 'GET') {
+            serveAsset(req, res, loginAsset);
+          } else {
+            plain(res, 405, 'method not allowed\n', { allow: 'GET' });
+          }
+          return;
+        }
+        if (!authenticated(req)) {
+          unauthorized(res);
+          return;
+        }
       }
-      // Before authentication: a visitor has no cookie yet. Neither route can leak the token.
-      if (url.pathname === '/session' && sessionValue !== undefined) {
-        handleSessionRequest(req, res, {
-          token,
-          sessionValue,
-          unauthorized,
-          onBodyError: (error): void => {
-            if (!isDisconnect(error)) {
-              report(error);
-            }
-          },
-        });
-        return;
-      }
-      const loginAsset = loginAssets.get(url.pathname);
-      if (loginAsset !== undefined) {
+      if (url.pathname === '/events') {
         if (req.method === 'GET') {
-          serveAsset(req, res, loginAsset);
+          handleSse(req, res);
         } else {
           plain(res, 405, 'method not allowed\n', { allow: 'GET' });
         }
         return;
       }
-      if (!authenticated(req)) {
-        unauthorized(res);
+      // With a token the login assets were served above, before authentication; without one they
+      // are served like any other asset (and a login link there ends in the 404 for /session).
+      const asset = assets.get(url.pathname) ?? loginAssets.get(url.pathname);
+      if (asset !== undefined) {
+        if (req.method === 'GET') {
+          serveAsset(req, res, asset);
+        } else {
+          plain(res, 405, 'method not allowed\n', { allow: 'GET' });
+        }
         return;
       }
-    }
-    if (url.pathname === '/events') {
-      if (req.method === 'GET') {
-        handleSse(req, res);
+      plain(res, 404, 'not found\n');
+    } catch (error) {
+      const reported = error instanceof Error ? error : new Error(String(error));
+      report(reported);
+      if (!res.headersSent) {
+        plain(res, 500, 'internal server error\n');
       } else {
-        plain(res, 405, 'method not allowed\n', { allow: 'GET' });
+        res.destroy();
       }
-      return;
     }
-    // With a token the login assets were served above, before authentication; without one they
-    // are served like any other asset (and a login link there ends in the 404 for /session).
-    const asset = assets.get(url.pathname) ?? loginAssets.get(url.pathname);
-    if (asset !== undefined) {
-      if (req.method === 'GET') {
-        serveAsset(req, res, asset);
-      } else {
-        plain(res, 405, 'method not allowed\n', { allow: 'GET' });
-      }
-      return;
-    }
-    plain(res, 404, 'not found\n');
   });
 
   await new Promise<void>((resolve, reject) => {

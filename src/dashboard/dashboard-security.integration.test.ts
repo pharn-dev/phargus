@@ -1,6 +1,6 @@
 import { request, type IncomingHttpHeaders } from 'node:http';
 import { connect } from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollector } from '../collector/index.js';
 import { createDashboardServer, type DashboardServer } from './index.js';
 
@@ -320,5 +320,55 @@ describe('dashboard response headers and malformed requests', () => {
     await server.close();
     expect(reports.length).toBe(2);
     expect(reports[1]?.message).toMatch(/\b99\b/);
+  });
+});
+
+describe('malformed request targets and listener errors', () => {
+  it.each([undefined, TOKEN])(
+    'answers 400 and remains available for malformed targets',
+    async (token) => {
+      const server = await start(token === undefined ? {} : { token });
+      for (const target of ['//', '//[', '//x:y', 'http://a:b/']) {
+        const reply = await raw(
+          server.port,
+          `GET ${target} HTTP/1.1\r\nHost: 127.0.0.1:${server.port}\r\nConnection: close\r\n\r\n`,
+        );
+        expect(reply, target).toMatch(/^HTTP\/1\.1 400 Bad Request\r\n/);
+        expect(reply.toLowerCase(), target).toContain('x-content-type-options: nosniff');
+        expect(reply.toLowerCase(), target).toContain(
+          "content-security-policy: default-src 'none'",
+        );
+        expect(reply.toLowerCase(), target).toContain('referrer-policy: no-referrer');
+      }
+      const next = await send(
+        server.port,
+        '/',
+        token === undefined ? {} : { authorization: `Bearer ${token}` },
+      );
+      expect(next.status).toBe(200);
+    },
+  );
+
+  it('reports a throw during /events routing and closes the response without an uncaught exception', async () => {
+    const collector = createCollector({ windowMs: 1000, capacity: 10 });
+    const onError = vi.fn();
+    vi.spyOn(collector.windows, 'snapshot').mockImplementation(() => {
+      throw new Error('snapshot failed');
+    });
+    const server = await createDashboardServer({
+      collector,
+      host: '127.0.0.1',
+      port: 0,
+      onError,
+    });
+    servers.push(server);
+
+    const reply = await raw(
+      server.port,
+      `GET /events HTTP/1.1\r\nHost: 127.0.0.1:${server.port}\r\nConnection: close\r\n\r\n`,
+    );
+    expect(reply).toMatch(/^HTTP\/1\.1 200 OK\r\n/);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'snapshot failed' }));
   });
 });
