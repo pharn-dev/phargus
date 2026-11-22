@@ -7,6 +7,12 @@ All notable changes to Phargus are recorded here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
+  instead of turning `+` into a space, so base64 tokens work; other characters can be
+  percent-encoded.
+
 ### Security
 
 - The dashboard returns `400` for malformed request targets and catches request-handler errors, so one request cannot crash the process hosting it.

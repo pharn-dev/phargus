@@ -14,8 +14,17 @@ export const LOGIN_SCRIPT: string = String.raw`(function () {
     }
   }
 
-  var params = new URLSearchParams(window.location.hash.replace(/^#/, ''));
-  var token = params.get('token');
+  // Everything after '#token=' is the token. Not URLSearchParams: it turns '+' into a space.
+  var hash = window.location.hash;
+  var token = null;
+  if (hash.indexOf('#token=') === 0) {
+    var rawToken = hash.slice('#token='.length);
+    try {
+      token = decodeURIComponent(rawToken);
+    } catch (error) {
+      token = rawToken;
+    }
+  }
 
   // Before any other work: the fragment leaves the address bar and this history entry.
   window.history.replaceState(null, '', window.location.pathname + window.location.search);
