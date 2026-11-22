@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { isTlsRequest, sessionCookie, tokensMatch } from './auth.js';
+import { sessionCookie, tokensMatch } from './auth.js';
 import { plain } from './plain-response.js';
 import { ERROR_SECURITY_HEADERS } from './security-headers.js';
 
@@ -11,6 +11,8 @@ export type SessionEndpointDeps = {
   token: string;
   /** The per-server opaque value the session cookie carries. */
   sessionValue: string;
+  /** The session cookie's name, scoped to this server's bound port. */
+  cookieName: string;
   /** Answers a wrong token: 401 with `WWW-Authenticate`, no cookie. */
   unauthorized: (res: ServerResponse) => void;
   /** Reports a request stream error that is not a routine disconnect. */
@@ -123,7 +125,7 @@ export function handleSessionRequest(
     }
     res.writeHead(204, {
       ...ERROR_SECURITY_HEADERS,
-      'set-cookie': sessionCookie(deps.sessionValue, isTlsRequest(req)),
+      'set-cookie': sessionCookie(deps.cookieName, deps.sessionValue),
     });
     res.end();
   };

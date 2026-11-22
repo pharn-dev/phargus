@@ -243,7 +243,9 @@ describe('dashboard token exchange (no token in URLs)', () => {
     expect(cookies).toHaveLength(1);
     const setCookie = cookies[0] ?? '';
     const attributes = setCookie.split(';').map((part) => part.trim().toLowerCase());
-    expect(attributes[0]).toMatch(/^phargus_token=[A-Za-z0-9_-]{20,}$/i);
+    expect(attributes[0]).toMatch(
+      new RegExp(`^phargus_session_${server.port}=[A-Za-z0-9_-]{20,}$`, 'i'),
+    );
     expect(attributes).toContain('httponly');
     expect(attributes).toContain('samesite=strict');
     expect(attributes).toContain('path=/');
@@ -277,8 +279,14 @@ describe('dashboard token exchange (no token in URLs)', () => {
     const bearer = await send(server.port, '/events', { host, authorization: `Bearer ${TOKEN}` });
     expect(bearer.status).toBe(200);
     expect(bearer.headers['content-type']).toMatch(/^text\/event-stream/);
-    // A forged or stale cookie does nothing.
-    for (const forged of ['phargus_token=forged', `phargus_token=${TOKEN}`]) {
+    // A forged or stale cookie does nothing, nor the right value under the old or another port's name.
+    const value = cookie.slice(cookie.indexOf('=') + 1);
+    for (const forged of [
+      `phargus_session_${server.port}=forged`,
+      `phargus_session_${server.port}=${TOKEN}`,
+      `phargus_token=${value}`,
+      `phargus_session_${server.port + 1}=${value}`,
+    ]) {
       const response = await send(server.port, '/events', { host, cookie: forged });
       expect(response.status, forged).toBe(401);
     }

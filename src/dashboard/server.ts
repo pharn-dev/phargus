@@ -3,14 +3,13 @@ import type { AddressInfo } from 'node:net';
 import type { Duplex } from 'node:stream';
 import type { Collector } from '../collector/index.js';
 import {
-  SESSION_COOKIE,
   bearerToken,
   cookieValues,
   createHostPolicy,
   isLoopbackHost,
-  isTlsRequest,
   parseAuthority,
   sessionCookie,
+  sessionCookieName,
   sessionValueFor,
   tokensMatch,
   type HostPolicy,
@@ -67,6 +66,8 @@ export type DashboardServer = {
 
 const DEFAULT_HEARTBEAT_MS = 15_000;
 const DEFAULT_MAX_BUFFERED_EVENTS = 1000;
+/** Concurrent `/events` clients per server; past this a new one gets `503` until one closes. */
+const MAX_SSE_CLIENTS = 64;
 /** At most one malformed-request report (plus one summary) per this many milliseconds. */
 const CLIENT_ERROR_REPORT_INTERVAL_MS = 10_000;
 
@@ -170,6 +171,8 @@ export async function createDashboardServer(
   const assets = createStaticAssets();
   const loginAssets = createLoginAssets();
   const sessionValue = token === undefined ? undefined : sessionValueFor(token);
+  // Set again from the bound port once listening (a port 0 bind picks its port then).
+  let cookieName = sessionCookieName(port);
 
   const authenticated = (req: IncomingMessage): boolean => {
     if (token === undefined || sessionValue === undefined) {
@@ -179,7 +182,7 @@ export async function createDashboardServer(
     if (bearer !== undefined && tokensMatch(bearer, token)) {
       return true;
     }
-    return cookieValues(req, SESSION_COOKIE).some((value) => tokensMatch(value, sessionValue));
+    return cookieValues(req, cookieName).some((value) => tokensMatch(value, sessionValue));
   };
 
   const unauthorized = (res: ServerResponse): void => {
@@ -203,7 +206,7 @@ export async function createDashboardServer(
     }
     plain(res, 303, 'see other\n', {
       location: '/',
-      'set-cookie': sessionCookie(sessionValue, isTlsRequest(req)),
+      'set-cookie': sessionCookie(cookieName, sessionValue),
     });
   };
 
@@ -232,6 +235,10 @@ export async function createDashboardServer(
   const cleanups = new Set<() => void>();
 
   const handleSse = (req: IncomingMessage, res: ServerResponse): void => {
+    if (clients.size >= MAX_SSE_CLIENTS) {
+      plain(res, 503, 'too many dashboard event clients\n', { connection: 'close' });
+      return;
+    }
     // Snapshot, replay and subscribe in one synchronous block: nothing is missed or duplicated.
     // The replay is one write past the live-event drop queue, so a new client always gets the
     // whole history; most important first, in case the client goes away part-way. Taken
@@ -328,6 +335,7 @@ export async function createDashboardServer(
         handleSessionRequest(req, res, {
           token,
           sessionValue,
+          cookieName,
           unauthorized,
           onBodyError: (error): void => {
             if (!isDisconnect(error)) {
@@ -411,6 +419,7 @@ export async function createDashboardServer(
   });
 
   const boundPort = (server.address() as AddressInfo).port;
+  cookieName = sessionCookieName(boundPort);
   hostPolicy = createHostPolicy(host, boundPort, allowedHosts);
   const urlHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
 
