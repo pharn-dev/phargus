@@ -152,8 +152,11 @@ phargus serve [options] [file|-]
 
   A bare name matches on any port, so it also works behind a port mapping; `host:port` matches
   only that port. The value is a host, not a URL: an empty value, whitespace or `/` is a usage
-  error (exit `2`). `--allowed-host` does not replace the token. The dashboard is plain HTTP, so
-  across an untrusted network still use an SSH tunnel or a TLS-terminating proxy.
+  error (exit `2`). `--allowed-host` does not replace the token: a name that is not loopback needs
+  one of at least 16 characters even with the default loopback `--host`, or the command exits with
+  code 2 before binding.
+  The dashboard is plain HTTP, so across an untrusted network still use an SSH tunnel or a
+  TLS-terminating proxy.
 
 - **Diagnostics go to stderr only.** The dashboard URL, a line when the input ends, and a
   `counts:` line (`decoder.invalid`, `decoder.oversized`, `collector.ignored`,
@@ -194,8 +197,9 @@ The recording above is that example.
 
 **Dashboard access.**
 
-- On a loopback address (`127.x.x.x`, `localhost`, `::1`) the token is optional. Binding any other
-  address requires a token with at least 16 characters; generate one with `openssl rand -hex 16`.
+- On a loopback address (`127.x.x.x`, `localhost`, `::1`) the token is optional, unless
+  `allowedHosts` names a host that is not loopback. Binding any other address, or allowing such a
+  name, requires a token with at least 16 characters; generate one with `openssl rand -hex 16`.
   A shorter token is refused at startup.
 - With a token, open `http://<host>:<port>/login#token=<token>` once in a browser. The token is in
   the URL fragment, which the browser never sends to the server. The login page removes the
@@ -210,7 +214,8 @@ The recording above is that example.
   `localhost`, `127.0.0.1` and `[::1]` for a loopback or `0.0.0.0`/`::` bind); anything else gets
   `421`. A cross-origin `Origin` on `/events` gets `403`. Behind a reverse proxy, or when you
   reach the dashboard by another name, list that name in `allowedHosts` (`--allowed-host` for
-  `phargus serve`).
+  `phargus serve`). A name that is not loopback requires a `token` of at least 16 characters, even on a loopback
+  bind.
 - The dashboard is plain HTTP. For remote access use an SSH tunnel or a TLS-terminating proxy.
 
 ---

@@ -6,12 +6,20 @@ import { main, type MainIo } from './main.js';
 
 const URL_LINE = /^dashboard at http:\/\/127\.0\.0\.1:(\d+)$/;
 const TIMEOUT_MS = 15_000;
+const TOKEN = 'a'.repeat(16);
 
 /** Status code of a GET / sent to the dashboard on `port` with the given `Host` header. */
 function statusFor(port: number, host: string): Promise<number> {
   return new Promise((resolve, reject) => {
     const req = request(
-      { host: '127.0.0.1', port, path: '/', method: 'GET', headers: { host }, timeout: TIMEOUT_MS },
+      {
+        host: '127.0.0.1',
+        port,
+        path: '/',
+        method: 'GET',
+        headers: { host, authorization: `Bearer ${TOKEN}` },
+        timeout: TIMEOUT_MS,
+      },
       (res) => {
         res.resume();
         res.on('error', reject);
@@ -34,7 +42,7 @@ describe('phargus serve: --allowed-host reaches the dashboard Host check', () =>
     });
     const stdin = new PassThrough();
     const io: MainIo = {
-      env: {},
+      env: { PHARGUS_TOKEN: TOKEN },
       stdin: () => stdin,
       signals,
       write: (text) => {

@@ -13,6 +13,12 @@ All notable changes to Phargus are recorded here. The format follows
 
 - Dashboard binds outside loopback now require a token of at least 16 characters; short tokens are refused before the server binds.
 
+- A dashboard without a token now refuses to start when `allowedHosts` (`phargus serve --allowed-host`)
+  names a host that is not loopback, even on a loopback bind; `phargus serve` exits with code 2
+  before binding. Previously a loopback bind plus a public `allowedHosts` name served that name
+  with no token. Such a name now needs a token of at least 16 characters, as a non-loopback bind
+  does. The `421` body now says such a name needs a token.
+
 ## [0.2.1] - 2026-11-08
 
 ### Fixed
