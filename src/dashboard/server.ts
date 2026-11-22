@@ -212,6 +212,15 @@ export async function createDashboardServer(
   const cleanups = new Set<() => void>();
 
   const handleSse = (req: IncomingMessage, res: ServerResponse): void => {
+    // Snapshot, replay and subscribe in one synchronous block: nothing is missed or duplicated.
+    // The replay is one write past the live-event drop queue, so a new client always gets the
+    // whole history; most important first, in case the client goes away part-way. Taken
+    // before the headers, so a throwing snapshot still gets a clean 500 and leaves no client.
+    const replay = [
+      ...collector.alerts.snapshot().map((a) => formatEvent('alert', a)),
+      ...collector.windows.snapshot().map((w) => formatEvent('window', w)),
+      ...collector.spans.snapshot().map((s) => formatEvent('span', s)),
+    ].join('');
     res.writeHead(200, {
       ...EVENTS_SECURITY_HEADERS,
       'content-type': 'text/event-stream; charset=utf-8',
@@ -227,15 +236,6 @@ export async function createDashboardServer(
       },
     });
     clients.add(client);
-
-    // Snapshot, replay and subscribe in one synchronous block: nothing is missed or duplicated.
-    // The replay is one write past the live-event drop queue, so a new client always gets the
-    // whole history; most important first, in case the client goes away part-way.
-    const replay = [
-      ...collector.alerts.snapshot().map((a) => formatEvent('alert', a)),
-      ...collector.windows.snapshot().map((w) => formatEvent('window', w)),
-      ...collector.spans.snapshot().map((s) => formatEvent('span', s)),
-    ].join('');
     client.replay(replay);
     const unsubscribe = collector.subscribe({
       window: (w): void => client.send(formatEvent('window', w)),
@@ -269,13 +269,20 @@ export async function createDashboardServer(
     res.socket?.on('error', fail);
   };
 
-  const server: Server = createServer((req, res) => {
+  const handleRequest = (req: IncomingMessage, res: ServerResponse): void => {
     // DNS rebinding defence: answer only the hosts this server is reachable as.
     if (!hostPolicy.hostAllowed(req.headers.host)) {
       plain(res, 421, MISDIRECTED_BODY, { connection: 'close' });
       return;
     }
-    const url = new URL(req.url ?? '/', 'http://localhost');
+    let url: URL;
+    try {
+      url = new URL(req.url ?? '/', 'http://localhost');
+    } catch {
+      // `new URL` throws on targets such as `//[`: a bad request, not a crash of the host.
+      plain(res, 400, 'bad request\n');
+      return;
+    }
     const origin = req.headers.origin;
     if (
       origin !== undefined &&
@@ -344,6 +351,20 @@ export async function createDashboardServer(
       return;
     }
     plain(res, 404, 'not found\n');
+  };
+
+  // Nothing a request does may reach the host process as an uncaught exception.
+  const server: Server = createServer((req, res) => {
+    try {
+      handleRequest(req, res);
+    } catch (error) {
+      report(error instanceof Error ? error : new Error(String(error)));
+      if (!res.headersSent) {
+        plain(res, 500, 'internal server error\n');
+      } else {
+        res.destroy();
+      }
+    }
   });
 
   await new Promise<void>((resolve, reject) => {

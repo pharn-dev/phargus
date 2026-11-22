@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { connect } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 
@@ -230,6 +231,31 @@ async function runCli(args: readonly string[]): Promise<{ run: CliRun; exit: Exi
   return { run, exit };
 }
 
+async function waitForDashboardPort(run: CliRun): Promise<number> {
+  const deadline = Date.now() + 30_000;
+  for (;;) {
+    const match = /dashboard at http:\/\/127\.0\.0\.1:(\d+)/.exec(run.stderr());
+    if (match) return Number(match[1]);
+    if (run.exitInfo() !== undefined)
+      throw new Error(`CLI exited before dashboard start\n${diagnostics(run)}`);
+    if (Date.now() > deadline)
+      throw new Error(`timed out waiting for dashboard URL\n${diagnostics(run)}`);
+    await sleep(25);
+  }
+}
+
+function rawRequest(port: number, target: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const socket = connect({ host: '127.0.0.1', port });
+    const chunks: Buffer[] = [];
+    socket.on('data', (chunk: Buffer) => chunks.push(chunk));
+    socket.on('error', reject);
+    socket.on('close', () => resolve(Buffer.concat(chunks).toString('latin1')));
+    socket.setTimeout(5_000, () => socket.destroy(new Error('raw request timed out')));
+    socket.write(`GET ${target} HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`);
+  });
+}
+
 async function stopCli(run: CliRun): Promise<void> {
   if (run.exitInfo() !== undefined) return;
   run.child.kill('SIGTERM');
@@ -285,6 +311,33 @@ describe('phargus CLI: --help and --version', () => {
 
       expect(exit.code, diagnostics(run)).toBe(0);
       expect(run.stdout(), diagnostics(run)).toContain(version);
+    },
+    TEST_TIMEOUT_MS,
+  );
+});
+
+describe('phargus CLI: malformed dashboard requests', () => {
+  it(
+    'AC: malformed request targets do not stop the built CLI and SIGTERM exits 0',
+    async () => {
+      await ensureFreshDist();
+      const run = startCli(['serve', '--port', '0']);
+      run.child.stdin.end();
+      try {
+        const port = await waitForDashboardPort(run);
+        for (const target of ['//', '//[', '//x:y', 'http://a:b/']) {
+          const reply = await rawRequest(port, target);
+          expect(reply, target).toMatch(/^HTTP\/1\.1 400 Bad Request\r\n/);
+        }
+        expect(run.exitInfo(), diagnostics(run)).toBeUndefined();
+      } finally {
+        await stopCli(run);
+      }
+      // On Windows, process.kill() with SIGTERM terminates the process without running its signal
+      // handlers, so there is no graceful exit code to observe (see docs/LIMITS.md).
+      if (process.platform !== 'win32') {
+        expect(run.exitInfo(), diagnostics(run)).toEqual({ code: 0, signal: null });
+      }
     },
     TEST_TIMEOUT_MS,
   );
