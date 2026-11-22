@@ -134,7 +134,8 @@ export function parseServeArgs(argv: readonly string[], env: NodeJS.ProcessEnv):
   const envToken = env['PHARGUS_TOKEN'];
   const token = values.token ?? (envToken === undefined || envToken === '' ? undefined : envToken);
   if (!isLoopbackHost(host) && token !== undefined && token.length < 16) {
-    throw new UsageError('--token must be at least 16 characters for a non-loopback host');
+    const source = values.token === undefined ? 'PHARGUS_TOKEN' : '--token';
+    throw new UsageError(`${source} must be at least 16 characters for a non-loopback host`);
   }
   if (!isLoopbackHost(host) && token === undefined) {
     throw new UsageError(
