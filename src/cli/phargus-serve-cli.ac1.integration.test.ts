@@ -333,7 +333,11 @@ describe('phargus CLI: malformed dashboard requests', () => {
       } finally {
         await stopCli(run);
       }
-      expect(run.exitInfo()?.code, diagnostics(run)).toBe(0);
+      // On Windows, process.kill() with SIGTERM terminates the process without running its signal
+      // handlers, so there is no graceful exit code to observe (see docs/LIMITS.md).
+      if (process.platform !== 'win32') {
+        expect(run.exitInfo(), diagnostics(run)).toEqual({ code: 0, signal: null });
+      }
     },
     TEST_TIMEOUT_MS,
   );

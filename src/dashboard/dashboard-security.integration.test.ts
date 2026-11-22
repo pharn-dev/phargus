@@ -349,7 +349,7 @@ describe('malformed request targets and listener errors', () => {
     },
   );
 
-  it('reports a throw during /events routing and closes the response without an uncaught exception', async () => {
+  it('reports a throw during /events routing once and answers 500 without an uncaught exception', async () => {
     const collector = createCollector({ windowMs: 1000, capacity: 10 });
     const onError = vi.fn();
     vi.spyOn(collector.windows, 'snapshot').mockImplementation(() => {
@@ -367,8 +367,10 @@ describe('malformed request targets and listener errors', () => {
       server.port,
       `GET /events HTTP/1.1\r\nHost: 127.0.0.1:${server.port}\r\nConnection: close\r\n\r\n`,
     );
-    expect(reply).toMatch(/^HTTP\/1\.1 200 OK\r\n/);
+    expect(reply).toMatch(/^HTTP\/1\.1 500 Internal Server Error\r\n/);
     expect(onError).toHaveBeenCalledTimes(1);
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'snapshot failed' }));
+    expect(server.clientCount).toBe(0);
+    expect((await send(server.port, '/')).status).toBe(200);
   });
 });
