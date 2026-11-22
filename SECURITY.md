@@ -108,8 +108,8 @@ unless you ask to remain anonymous.
 ## Security best practices for users
 
 1. **Keep the dashboard on localhost** and reach it through an authenticated tunnel (such as SSH
-   port-forwarding) in production. Binding elsewhere requires a token; use a long random one, and
-   list the names you reach it by in `allowedHosts`.
+   port-forwarding) in production. Binding elsewhere requires a token of at least 16 characters;
+   generate one with `openssl rand -hex 16`, and list the names you reach it by in `allowedHosts`.
 2. **Treat heap snapshots as secrets.** They contain whatever was in memory.
 3. **Review plugin rules** before loading them, and keep the sandbox limits enabled.
 4. **Confine the symbolizer.** Its reads are confined to the working directory by default. Pass

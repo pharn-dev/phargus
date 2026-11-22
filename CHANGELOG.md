@@ -11,6 +11,8 @@ All notable changes to Phargus are recorded here. The format follows
 
 - The dashboard returns `400` for malformed request targets and catches request-handler errors, so one request cannot crash the process hosting it.
 
+- Dashboard binds outside loopback now require a token of at least 16 characters; short tokens are refused before the server binds.
+
 ## [0.2.1] - 2026-11-08
 
 ### Fixed

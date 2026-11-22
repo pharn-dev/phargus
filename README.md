@@ -118,24 +118,26 @@ plus one line per traced request. That is all the agent does on its own: it star
 phargus serve [options] [file|-]
 ```
 
-| Option                  | Default     | Meaning                                                                    |
-| ----------------------- | ----------- | -------------------------------------------------------------------------- |
-| `--port <n>`            | `7070`      | Port to listen on, `0` to `65535`. `0` picks a free port.                  |
-| `--host <address>`      | `127.0.0.1` | Address to bind. A non-loopback host needs a token.                        |
-| `--token <value>`       | none        | Require a token. Prefer `PHARGUS_TOKEN`: a flag shows in the process list. |
-| `--allowed-host <host>` | none        | Also answer this `Host` name. Repeatable; `host:port` matches exactly.     |
-| `--window-ms <n>`       | `1000`      | Aggregation window in milliseconds.                                        |
-| `--max-line-bytes <n>`  | `1048576`   | Longest accepted input line in bytes.                                      |
-| `-h`, `--help`          |             | Print the usage text.                                                      |
-| `-v`, `--version`       |             | Print the version.                                                         |
+| Option                  | Default     | Meaning                                                                                                                    |
+| ----------------------- | ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `--port <n>`            | `7070`      | Port to listen on, `0` to `65535`. `0` picks a free port.                                                                  |
+| `--host <address>`      | `127.0.0.1` | Address to bind. A non-loopback host needs a token.                                                                        |
+| `--token <value>`       | none        | Require a token. Non-loopback hosts need at least 16 characters. Prefer `PHARGUS_TOKEN`: a flag shows in the process list. |
+| `--allowed-host <host>` | none        | Also answer this `Host` name. Repeatable; `host:port` matches exactly.                                                     |
+| `--window-ms <n>`       | `1000`      | Aggregation window in milliseconds.                                                                                        |
+| `--max-line-bytes <n>`  | `1048576`   | Longest accepted input line in bytes.                                                                                      |
+| `-h`, `--help`          |             | Print the usage text.                                                                                                      |
+| `-v`, `--version`       |             | Print the version.                                                                                                         |
 
 - **Input.** stdin by default (or `-`). Give a file path to replay a capture: redirect the app's
   stdout to a file, then run `npx phargus serve capture.ndjson`. The server keeps running after
   the input ends, serving what it collected, until you stop it.
-- **Token.** On loopback no token is needed. For any other `--host` set one, with
-  `PHARGUS_TOKEN=... npx phargus serve --host 0.0.0.0`; without it the command exits with code 2
-  before binding. `PHARGUS_TOKEN` and `PHARGUS_DEBUG` belong to `phargus serve`; the agent
-  ignores both, so they can sit in an environment shared with the app. See **Dashboard access**
+- **Token.** On loopback no token is needed. For any other `--host` set one with at least 16
+  characters; generate a random token with `openssl rand -hex 16`. For example,
+  `PHARGUS_TOKEN=$(openssl rand -hex 16) npx phargus serve --host 0.0.0.0`; without a token or
+  with a shorter one, the command exits with code 2 before binding. `PHARGUS_TOKEN` and
+  `PHARGUS_DEBUG` belong to `phargus serve`; the agent ignores both, so they can sit in an
+  environment shared with the app. See **Dashboard access**
   under [Using the library APIs](#using-the-library-apis) for how browsers and scripts present the
   token.
 - **Reaching it from another machine.** The server answers only the `Host` names listed under
@@ -193,7 +195,8 @@ The recording above is that example.
 **Dashboard access.**
 
 - On a loopback address (`127.x.x.x`, `localhost`, `::1`) the token is optional. Binding any other
-  address without a `token` is refused at startup.
+  address requires a token with at least 16 characters; generate one with `openssl rand -hex 16`.
+  A shorter token is refused at startup.
 - With a token, open `http://<host>:<port>/login#token=<token>` once in a browser. The token is in
   the URL fragment, which the browser never sends to the server. The login page removes the
   fragment from the address bar and history, then posts the token to `POST /session` in a JSON

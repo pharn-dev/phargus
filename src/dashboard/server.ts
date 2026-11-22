@@ -125,6 +125,9 @@ export async function createDashboardServer(
   if (token !== undefined && (typeof token !== 'string' || token.length === 0)) {
     throw new RangeError('token must be a non-empty string');
   }
+  if (!isLoopbackHost(host) && token !== undefined && token.length < 16) {
+    throw new RangeError('token must be at least 16 characters for non-loopback hosts');
+  }
   if (!isLoopbackHost(host) && token === undefined) {
     throw new Error(`a token is required to bind the dashboard to non-loopback host "${host}"`);
   }
