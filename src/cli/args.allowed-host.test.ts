@@ -29,7 +29,7 @@ describe('phargus serve: --allowed-host parsing', () => {
 
   it('works with a non-loopback --host and a token', () => {
     const options = serveOptions(['serve', '--host', '0.0.0.0', '--allowed-host', 'box.lan'], {
-      PHARGUS_TOKEN: 't0ken',
+      PHARGUS_TOKEN: 'a'.repeat(16),
     });
     expect(options.host).toBe('0.0.0.0');
     expect(options.allowedHosts).toEqual(['box.lan']);
