@@ -66,6 +66,9 @@ All notable changes to Phargus are recorded here. The format follows
   windows (dropped agent lines, an agent restart, a clock step back) restarts the count. A rule's
   state is kept by its collector, so a rule firing when one `consume()` run ends no longer fires
   again in the next, and resolves there when it stops breaching.
+- A partial line that reaches the collector's NDJSON decoder in tiny pieces (progress dots, a
+  spinner) is now held in one buffer that doubles as it fills, capped at `maxLineBytes`, instead
+  of one Buffer per piece: 1,000,000 one-byte chunks held 109 MiB of heap before, about 1 MiB now.
 
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be
