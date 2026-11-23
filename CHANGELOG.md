@@ -39,6 +39,9 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- `diffHeapSnapshots` now shows what shrank as well as what grew: it leaves out types whose count
+  and self size did not change and ranks the rest by absolute self-size change, so a type that
+  lost objects is no longer cut off below the unchanged rows.
 - One sample line dated in the future, or a host clock stepping back, no longer stops all windows
   and alerts until the collector restarts. A sample whose `timestamp` is not a safe integer or is
   more than 24 hours ahead of the collector's clock is now `malformed` and counted in
