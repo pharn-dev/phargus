@@ -9,6 +9,12 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Added
 
+- The agent's drop counters now reach the user: each collector window carries
+  `dropped: { samples, spans }` from its last sample (missing or malformed counts as 0; persisted
+  windows without the field restore with zeros), the dashboard header shows "agent dropped N
+  samples, M spans" when either is above 0 and the waterfall notes that older requests may be
+  missing, and the `counts:` line of `phargus serve` adds `agent.droppedSamples` and
+  `agent.droppedSpans`. OTLP metrics are unchanged.
 - Collector windows now keep where writes stalled: `backpressure.hotspots` holds the top 5 call
   sites by total stall, merged by site across the window's samples (at most 64 distinct sites
   tracked per window, sites cut to 256 characters). A sample with missing or malformed hotspots

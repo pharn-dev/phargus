@@ -175,8 +175,9 @@ phargus serve [options] [file|-]
   `counts:` line when the input ends and again at exit: `decoder.invalid` (text lines),
   `decoder.oversized`, `decoder.foreign` (JSON objects that are not agent records, such as JSON
   log lines), `collector.ignored` (agent-shaped records it could not use),
-  `dashboard.droppedEvents` and `passthrough.dropped` (lines not echoed because 1 MiB was already
-  waiting). Errors print without a stack; set `PHARGUS_DEBUG=1` to get one.
+  `dashboard.droppedEvents`, `passthrough.dropped` (lines not echoed because 1 MiB was already
+  waiting), and `agent.droppedSamples` and `agent.droppedSpans` (the agent's own drop counters,
+  from the latest window). Errors print without a stack; set `PHARGUS_DEBUG=1` to get one.
 - **Exit codes.** `0` for help, version and a graceful stop on `SIGINT` or `SIGTERM`; `1` for a
   runtime error (unreadable file, port in use) or a shutdown that did not finish in 5 seconds;
   `2` for a usage error (unknown flag, bad value, non-loopback host without a token).

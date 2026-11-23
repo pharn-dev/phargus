@@ -38,6 +38,7 @@ describe('window codec — backpressure hotspots', () => {
           { site: 'b.js:2', events: 1, totalStall: 100, maxStall: 100 },
         ],
       },
+      dropped: { samples: 0, spans: 0 },
     };
     expect(parseWindowLine(serializeWindow(window))).toEqual(window);
   });

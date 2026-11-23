@@ -27,6 +27,7 @@ function makeWindow(index: number): AggregatedWindow {
     },
     gc: { count: 12, totalPause: 345_678, maxPause: 123_456 },
     backpressure: { events: 3, totalStall: 456_789, maxStall: 123_456, hotspots: [] },
+    dropped: { samples: 0, spans: 0 },
   };
 }
 

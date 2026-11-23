@@ -64,8 +64,10 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 - **Data is dropped, not queued without limit.** The agent's sample and span output lanes each
   hold `queueBound` lines (default 1024) and drop the oldest; the span buffer holds 1024 spans
   between ticks. Above roughly 1000 requests per sampling interval, spans are dropped. Every sample
-  line carries cumulative `dropped: { samples, spans }` counters; the collector and dashboard do not
-  display them yet. The collector's persistence queue holds `persist.maxQueueSize` windows
+  line carries cumulative `dropped: { samples, spans }` counters; each collector window keeps those
+  of its last sample as `dropped`, the dashboard header shows them when either is above 0, and
+  `phargus serve` prints them on its `counts:` line (`agent.droppedSamples`, `agent.droppedSpans`).
+  The collector's persistence queue holds `persist.maxQueueSize` windows
   (default 1024) and drops the oldest when the disk falls behind, counted in
   `collector.persistence.dropped`; neither the dashboard nor `phargus serve` shows it yet.
   `close()` stops accepting windows, then waits for the queued appends with no time limit, so a

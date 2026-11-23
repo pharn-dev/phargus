@@ -18,6 +18,7 @@ export function renderPage(): string {
 <header>
 <h1>Phargus</h1>
 <p id="status">connecting</p>
+<p id="dropped" hidden></p>
 </header>
 <main>
 <section>
@@ -50,6 +51,7 @@ export function renderPage(): string {
 <h2 id="waterfall-heading">Recent requests</h2>
 <ol id="waterfall" aria-label="Trace waterfall"></ol>
 <p id="waterfall-empty">No requests yet</p>
+<p id="waterfall-dropped" hidden>The agent dropped spans, so older requests may be missing.</p>
 </section>
 </main>
 </body>

@@ -8,6 +8,8 @@ export type Counts = {
   ignored: number;
   droppedEvents: number;
   passthroughDropped: number;
+  droppedSamples: number;
+  droppedSpans: number;
 };
 
 /** True when `PHARGUS_DEBUG` is set to anything non-empty. */
@@ -27,7 +29,8 @@ export function formatCounts(counts: Counts): string {
     `counts: decoder.invalid=${String(counts.invalid)} decoder.oversized=${String(counts.oversized)}` +
     ` decoder.foreign=${String(counts.foreign)} collector.ignored=${String(counts.ignored)}` +
     ` dashboard.droppedEvents=${String(counts.droppedEvents)}` +
-    ` passthrough.dropped=${String(counts.passthroughDropped)}`
+    ` passthrough.dropped=${String(counts.passthroughDropped)}` +
+    ` agent.droppedSamples=${String(counts.droppedSamples)} agent.droppedSpans=${String(counts.droppedSpans)}`
   );
 }
 

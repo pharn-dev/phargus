@@ -79,6 +79,12 @@ h2 {
   color: var(--error);
 }
 
+#dropped {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--reconnecting);
+}
+
 main {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));

@@ -11,6 +11,7 @@ const withoutHotspots: AggregatedWindow = {
   memory: { heapUsedLast: 1000, heapUsedMax: 2000, rssLast: 3000, rssMax: 4000 },
   gc: { count: 7, totalPause: 0, maxPause: 0 },
   backpressure: { events: 3, totalStall: 900, maxStall: 500, hotspots: [] },
+  dropped: { samples: 0, spans: 0 },
 };
 
 describe('otel metrics — backpressure hotspots', () => {

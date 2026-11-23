@@ -81,6 +81,7 @@ export const APP_SCRIPT: string =
   function init() {
     var meta = document.querySelector('meta[name="phargus-events"]');
     var statusEl = document.getElementById('status');
+    var droppedEl = document.getElementById('dropped');
     var lagEl = document.getElementById('lag');
     var memoryEl = document.getElementById('memory');
     var gcEl = document.getElementById('gc');
@@ -90,11 +91,13 @@ export const APP_SCRIPT: string =
     var emptyEl = document.getElementById('alerts-empty');
     var waterfallEl = document.getElementById('waterfall');
     var waterfallEmptyEl = document.getElementById('waterfall-empty');
+    var waterfallDroppedEl = document.getElementById('waterfall-dropped');
     var windowEndEls = document.querySelectorAll('.window-end');
 
     if (
       !meta ||
       !statusEl ||
+      !droppedEl ||
       !lagEl ||
       !memoryEl ||
       !gcEl ||
@@ -103,7 +106,8 @@ export const APP_SCRIPT: string =
       !alertsEl ||
       !emptyEl ||
       !waterfallEl ||
-      !waterfallEmptyEl
+      !waterfallEmptyEl ||
+      !waterfallDroppedEl
     ) {
       console.error('phargus dashboard: the page is missing an expected element');
       if (statusEl) {
@@ -148,6 +152,14 @@ export const APP_SCRIPT: string =
         setStatus('live', 'live');
       }
       renderBackpressure(w.backpressure);
+      renderDropped(w.dropped || { samples: 0, spans: 0 });
+    }
+
+    function renderDropped(dropped) {
+      droppedEl.textContent =
+        'agent dropped ' + dropped.samples + ' samples, ' + dropped.spans + ' spans';
+      droppedEl.hidden = dropped.samples === 0 && dropped.spans === 0;
+      waterfallDroppedEl.hidden = dropped.spans === 0;
     }
 
     /** Runs every second: after max(3 windows, 5 s) without a window, a live stream reads stale. */
