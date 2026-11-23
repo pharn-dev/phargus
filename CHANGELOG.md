@@ -15,6 +15,11 @@ All notable changes to Phargus are recorded here. The format follows
   still counts. Persisted windows carry the field (older lines restore with an empty list), and
   the dashboard has a Backpressure section with the latest window's stalls and call sites. OTLP
   metrics are unchanged.
+- The dashboard says when its data is stale: each card shows the end time of the window on
+  display, and after `max(3 × window length, 5 s)` without a new window the status reads
+  `stale: no data for N s` (counting up, in the error style) until the next window arrives. A
+  disconnected stream still shows `reconnecting`. `docs/LIMITS.md` §2 explains why the figures are
+  one window behind.
 - A request that closes before its response finishes (client disconnect, `res.destroy()`, a
   timeout) now leaves a span with `aborted: true`; the dashboard waterfall shows it as an error
   marked "aborted", and OTLP export sets its status to error.

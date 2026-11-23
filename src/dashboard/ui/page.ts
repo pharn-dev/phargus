@@ -23,18 +23,22 @@ export function renderPage(): string {
 <section>
 <h2>Event loop lag</h2>
 <p id="lag" class="figure">–</p>
+<p class="window-end"></p>
 </section>
 <section>
 <h2>Memory</h2>
 <p id="memory" class="figure">–</p>
+<p class="window-end"></p>
 </section>
 <section>
 <h2>GC</h2>
 <p id="gc" class="figure">–</p>
+<p class="window-end"></p>
 </section>
 <section>
 <h2>Backpressure</h2>
 <p id="backpressure" class="figure">–</p>
+<p class="window-end"></p>
 <ol id="hotspots" aria-label="Backpressure call sites"></ol>
 </section>
 <section>
