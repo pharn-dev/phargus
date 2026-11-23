@@ -1,5 +1,6 @@
 import { Transform } from 'node:stream';
 import type { TransformCallback } from 'node:stream';
+import { classifyRecord } from './record-guard.js';
 
 /** Longest accepted line, in bytes, newline excluded (1 MiB). */
 export const DEFAULT_MAX_LINE_BYTES = 1_048_576;
@@ -8,21 +9,33 @@ const NEWLINE = 0x0a;
 
 const EMPTY = Buffer.alloc(0);
 
-/** One skipped line: text that is not a JSON object, or a line past `maxLineBytes`. */
+/**
+ * One skipped line: text that is not a JSON object, a JSON object that is not agent data (only with
+ * `agentOnly`), or a line past `maxLineBytes`.
+ */
 export type NdjsonSkip =
-  { reason: 'invalid'; line: string } | { reason: 'oversized'; bytes: number };
+  | { reason: 'invalid'; line: string }
+  | { reason: 'foreign'; line: string }
+  | { reason: 'oversized'; bytes: number };
 
 export type NdjsonDecoderOptions = {
   /** Longest accepted line in bytes, newline excluded. Longer lines are dropped and counted. */
   maxLineBytes?: number;
   /** Called once per skipped line, after the counter is incremented. A throw errors the decoder. */
   onSkipped?: (skip: NdjsonSkip) => void;
+  /**
+   * Skip JSON objects that are not agent records (the collector's `foreign`, such as JSON logger
+   * lines) here, in input order with the text lines, instead of emitting them for the collector.
+   */
+  agentOnly?: boolean;
 };
 
 /** Byte stream in, parsed objects out; counters are integers and read-only. */
 export type NdjsonDecoder = Transform & {
   readonly invalid: number;
   readonly oversized: number;
+  /** JSON objects skipped as not agent data; stays 0 without `agentOnly`. */
+  readonly foreign: number;
 };
 
 function saturatingAdd(a: number, b: number): number {
@@ -44,12 +57,14 @@ export function createNdjsonDecoder(options: NdjsonDecoderOptions = {}): NdjsonD
     throw new RangeError('maxLineBytes must be a positive safe integer');
   }
   const { onSkipped } = options;
+  const agentOnly = options.agentOnly === true;
   if (onSkipped !== undefined && typeof onSkipped !== 'function') {
     throw new TypeError('onSkipped must be a function');
   }
 
   let invalid = 0;
   let oversized = 0;
+  let foreign = 0;
   // The partial line: the first `held` bytes of `partial`. `partial` doubles when a segment does not
   // fit and is never longer than maxLineBytes, so a line that trickles in byte by byte costs one
   // buffer (not one per byte) and under 2x its length in copying.
@@ -65,6 +80,8 @@ export function createNdjsonDecoder(options: NdjsonDecoderOptions = {}): NdjsonD
   const skip = (entry: NdjsonSkip): void => {
     if (entry.reason === 'invalid') {
       invalid = saturatingAdd(invalid, 1);
+    } else if (entry.reason === 'foreign') {
+      foreign = saturatingAdd(foreign, 1);
     } else {
       oversized = saturatingAdd(oversized, 1);
     }
@@ -85,6 +102,10 @@ export function createNdjsonDecoder(options: NdjsonDecoderOptions = {}): NdjsonD
     }
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       skip({ reason: 'invalid', line: text });
+      return;
+    }
+    if (agentOnly && classifyRecord(parsed) === 'foreign') {
+      skip({ reason: 'foreign', line: text });
       return;
     }
     emit(parsed as Record<string, unknown>);
@@ -181,6 +202,7 @@ export function createNdjsonDecoder(options: NdjsonDecoderOptions = {}): NdjsonD
   Object.defineProperties(decoder, {
     invalid: { get: (): number => invalid, enumerable: true },
     oversized: { get: (): number => oversized, enumerable: true },
+    foreign: { get: (): number => foreign, enumerable: true },
   });
   return decoder as NdjsonDecoder;
 }

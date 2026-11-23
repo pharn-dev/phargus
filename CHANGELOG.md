@@ -20,6 +20,14 @@ All notable changes to Phargus are recorded here. The format follows
   `stale: no data for N s` (counting up, in the error style) until the next window arrives. A
   disconnected stream still shows `reconnecting`. `docs/LIMITS.md` §2 explains why the figures are
   one window behind.
+- `phargus serve` now passes the app's own output through: when reading stdin, every line that
+  is not agent data (plain text and JSON log lines) is written to its stdout in input order,
+  instead of disappearing. `--no-passthrough` turns it off; a file input never echoes. Output is
+  bounded at 1 MiB waiting (further lines are dropped and counted as `passthrough.dropped`), and
+  a closed stdout stops the passthrough with one stderr line. `createNdjsonDecoder` gets
+  `agentOnly: true`, which skips non-agent JSON objects as `foreign` (a new counter and
+  `onSkipped` reason with the raw line); the `counts:` line gains `decoder.foreign` and
+  `passthrough.dropped`.
 - A request that closes before its response finishes (client disconnect, `res.destroy()`, a
   timeout) now leaves a span with `aborted: true`; the dashboard waterfall shows it as an error
   marked "aborted", and OTLP export sets its status to error.

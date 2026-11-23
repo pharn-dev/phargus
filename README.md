@@ -130,6 +130,7 @@ phargus serve [options] [file|-]
 | `--allowed-host <host>` | none        | Also answer this `Host` name. Repeatable; `host:port` matches exactly.                                                     |
 | `--window-ms <n>`       | `1000`      | Aggregation window in milliseconds.                                                                                        |
 | `--max-line-bytes <n>`  | `1048576`   | Longest accepted input line in bytes.                                                                                      |
+| `--no-passthrough`      |             | Do not copy the app's own lines to stdout.                                                                                 |
 | `-h`, `--help`          |             | Print the usage text.                                                                                                      |
 | `-v`, `--version`       |             | Print the version.                                                                                                         |
 
@@ -162,10 +163,20 @@ phargus serve [options] [file|-]
   The dashboard is plain HTTP, so across an untrusted network still use an SSH tunnel or a
   TLS-terminating proxy.
 
+- **The app's own output passes through to stdout.** When the input is stdin, every line that is
+  not agent data (plain text and JSON log lines) is written to `phargus serve`'s stdout, in input
+  order, with a newline. Agent lines, lines longer than `--max-line-bytes` and malformed agent
+  records are not echoed. Passthrough is off for a file input; `--no-passthrough` turns it off for
+  stdin. When more than 1 MiB is waiting to be written (a slow or stuck reader), further lines are
+  dropped and counted (not on Windows, where a stuck reader blocks the process; see
+  [`docs/LIMITS.md`](./docs/LIMITS.md)); if stdout closes (`EPIPE`), passthrough stops with one
+  stderr line and the server keeps running.
 - **Diagnostics go to stderr only.** The dashboard URL, a line when the input ends, and a
-  `counts:` line (`decoder.invalid`, `decoder.oversized`, `collector.ignored`,
-  `dashboard.droppedEvents`) when the input ends and again at exit. Errors print without a stack;
-  set `PHARGUS_DEBUG=1` to get one.
+  `counts:` line when the input ends and again at exit: `decoder.invalid` (text lines),
+  `decoder.oversized`, `decoder.foreign` (JSON objects that are not agent records, such as JSON
+  log lines), `collector.ignored` (agent-shaped records it could not use),
+  `dashboard.droppedEvents` and `passthrough.dropped` (lines not echoed because 1 MiB was already
+  waiting). Errors print without a stack; set `PHARGUS_DEBUG=1` to get one.
 - **Exit codes.** `0` for help, version and a graceful stop on `SIGINT` or `SIGTERM`; `1` for a
   runtime error (unreadable file, port in use) or a shutdown that did not finish in 5 seconds;
   `2` for a usage error (unknown flag, bad value, non-loopback host without a token).
@@ -193,7 +204,10 @@ lines) and lines longer than `maxLineBytes` (1 MiB by default) are skipped and c
 `decoder.invalid` and `decoder.oversized`; JSON objects that are not agent records, such as the
 lines of a JSON logger, and agent-shaped records that cannot be aggregated are skipped and counted
 as `collector.ignored`. Neither is thrown. Pass `onSkipped` to `createNdjsonDecoder` or `onIgnored`
-to `createCollector` to see each skipped line or record.
+to `createCollector` to see each skipped line or record. With `createNdjsonDecoder({ agentOnly:
+true })` the decoder skips JSON objects that are not agent records itself, counts them as
+`foreign` and reports them through `onSkipped` with their raw line, in input order with the text
+lines; this is how `phargus serve` passes the app's output through.
 
 [`examples/express-app`](./examples/express-app) is the complete version: it forks the app, reads
 its stdout into a collector with an alert rule, serves the dashboard, and shuts both down cleanly.

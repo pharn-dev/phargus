@@ -201,6 +201,12 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   `examples/express-app` stop without closing the dashboard, flushing the collector or printing the
   `counts:` line. Ctrl+C in a console window still delivers `SIGINT` and shuts down gracefully. The
   tests for signal-driven shutdown are skipped on Windows.
+- **A stuck stdout reader blocks `phargus serve` on Windows.** Node writes to a stdout pipe
+  synchronously on Windows, so when the reader of `phargus serve`'s stdout stops reading, the
+  passthrough of the app's lines blocks the whole process, dashboard included, instead of dropping
+  lines past 1 MiB waiting as it does on Linux and macOS. A terminal is not affected. Pass
+  `--no-passthrough` when stdout goes to a reader that may stall. The test for the 1 MiB bound is
+  skipped on Windows.
 - **Windows does not apply POSIX directory modes.** A directory made read-only with `chmod` stays
   writable on Windows, so the test that a heap snapshot into a non-writable directory is refused is
   skipped there.

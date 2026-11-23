@@ -1,5 +1,5 @@
 import { Readable } from 'node:stream';
-import { pipeline } from 'node:stream/promises';
+import { finished, pipeline } from 'node:stream/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createNdjsonDecoder } from './ndjson-decoder.js';
 import type { NdjsonDecoderOptions, NdjsonSkip } from './ndjson-decoder.js';
@@ -110,5 +110,78 @@ describe('NDJSON decoder: a line that trickles in', () => {
     expect(result.skipped).toEqual([{ reason: 'oversized', bytes: Buffer.byteLength(long) }]);
     // Nothing of the long line leaks into the next record.
     expect(result.records).toEqual([after]);
+  });
+});
+
+describe('NDJSON decoder: agentOnly', () => {
+  const sample = {
+    timestamp: 1_700_000_000_000,
+    eventLoop: { min: 1, max: 20, mean: 10, p50: 9, p99: 18 },
+    memory: { heapUsed: 1000, heapTotal: 4000, rss: 9000, external: 0, arrayBuffers: 0 },
+    gc: { count: 1, totalPause: 3, maxPause: 3 },
+    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
+  };
+  const pino = JSON.stringify({ level: 30, time: 1, pid: 42, msg: 'request completed' });
+
+  it('reports a JSON object the collector calls foreign with its raw line and counts it, without emitting it', async () => {
+    const raw = `  ${pino}  `;
+    const result = await decode([Buffer.from(`${raw}\n${JSON.stringify(sample)}\n`)], {
+      agentOnly: true,
+    });
+
+    expect(result.records).toEqual([sample]);
+    expect(result.skipped).toEqual([{ reason: 'foreign', line: raw }]);
+    expect(result.invalid).toBe(0);
+  });
+
+  it('counts foreign objects with agentOnly; without it the counter stays 0 and the object is emitted', async () => {
+    const withOption = createNdjsonDecoder({ agentOnly: true });
+    const without = createNdjsonDecoder();
+    const emitted: unknown[] = [];
+    without.on('data', (value: unknown) => emitted.push(value));
+    withOption.resume();
+    withOption.end(`${pino}\n${pino}\n`);
+    without.end(`${pino}\n`);
+    await Promise.all([finished(withOption), finished(without)]);
+
+    expect(withOption.foreign).toBe(2);
+    expect(without.foreign).toBe(0);
+    expect(emitted).toEqual([JSON.parse(pino)]);
+  });
+
+  it('still emits a malformed agent record, which the collector counts, and never reports it as foreign', async () => {
+    const malformed = { ...sample, timestamp: 'soon' };
+    const result = await decode([Buffer.from(`${JSON.stringify(malformed)}\n`)], {
+      agentOnly: true,
+    });
+
+    expect(result.records).toEqual([malformed]);
+    expect(result.skipped).toEqual([]);
+  });
+
+  it('reports 1,000 alternating text and JSON log lines in input order, interleaved with agent samples', async () => {
+    const lines: string[] = [];
+    let input = '';
+    for (let index = 0; index < 1000; index += 1) {
+      const line =
+        index % 2 === 0
+          ? `plain log line ${String(index)}`
+          : JSON.stringify({ level: 30, msg: `json log line ${String(index)}` });
+      lines.push(line);
+      input += `${line}\n`;
+      if (index % 100 === 0) {
+        input += `${JSON.stringify(sample)}\n`;
+      }
+    }
+
+    const result = await decode([Buffer.from(input)], { agentOnly: true });
+
+    expect(result.skipped.map((skip) => (skip.reason === 'oversized' ? '' : skip.line))).toEqual(
+      lines,
+    );
+    expect(result.skipped.map((skip) => skip.reason)).toEqual(
+      lines.map((_, index) => (index % 2 === 0 ? 'invalid' : 'foreign')),
+    );
+    expect(result.records).toHaveLength(10);
   });
 });

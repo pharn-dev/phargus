@@ -11,8 +11,14 @@ Quick start (two commands, nothing else to install):
   open the dashboard URL that phargus prints on stderr
 
 Reads agent NDJSON from stdin (or "-"), or replays a file, aggregates it into windows and
-serves the dashboard and its /events stream. Lines that are not agent records are skipped
-and counted. The server keeps running after the input ends; stop it with Ctrl-C.
+serves the dashboard and its /events stream. The server keeps running after the input
+ends; stop it with Ctrl-C.
+
+Passthrough: when the input is stdin, every line that is not agent data (plain text and
+JSON log lines) is written to stdout in input order, so the app's own output is not lost.
+Agent lines, lines over --max-line-bytes and malformed agent records are not echoed. A file
+input is never echoed. Past 1 MiB waiting to be written, lines are dropped and counted; a
+closed stdout stops the passthrough with one stderr line.
 
 Options:
   --port <n>             Port to listen on, 0 to 65535 (default: 7070; 0 picks a free port)
@@ -27,6 +33,7 @@ Options:
                          example --host 0.0.0.0 in a container. It does not replace the token.
   --window-ms <n>        Aggregation window in milliseconds (default: 1000)
   --max-line-bytes <n>   Longest accepted input line in bytes (default: 1048576)
+  --no-passthrough       Do not write the app's own lines to stdout
   -h, --help             Print this help and exit
   -v, --version          Print the version and exit
 
@@ -41,5 +48,9 @@ Exit codes:
   1  runtime error (unreadable input file, port in use, failed shutdown)
   2  usage error (unknown flag, bad value, non-loopback host without a token)
 
-All diagnostics go to stderr; stdout carries only --help and --version.
+Diagnostics go to stderr. The counts: line names decoder.invalid (text lines),
+decoder.oversized, decoder.foreign (JSON objects that are not agent records),
+collector.ignored (agent-shaped records that could not be used), dashboard.droppedEvents
+and passthrough.dropped (lines not echoed because 1 MiB was already waiting).
+Stdout carries --help, --version and the passed-through lines.
 `;
