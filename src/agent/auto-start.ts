@@ -2,6 +2,7 @@
 import type { Writable } from 'node:stream';
 import { isMainThread } from 'node:worker_threads';
 import { openAgentOutput } from './agent-output.js';
+import { readConfigEnv } from './config-env.js';
 import { loadAgentConfig } from './config.js';
 import { enable as enableTracing, disable as disableTracing, drainSpans } from './http-tracing.js';
 import { createNdjsonExporter } from './ndjson-exporter.js';
@@ -156,6 +157,12 @@ export function startAgentOnce(): void {
       return;
     }
     g[AGENT_KEY] = true;
+    // Off in the environment means off: no patch and no config file lookup. Unknown variables are
+    // warned about later by loadAgentConfig; an invalid value throws and is reported below.
+    const fromEnv = readConfigEnv(process.env, process.cwd(), () => {});
+    if (fromEnv.enabled === false || fromEnv.output === 'none') {
+      return;
+    }
     // Trace from the first tick: requests that arrive while the config loads still get spans.
     // The buffer is bounded, and tracing is switched off again if the agent ends up disabled.
     enableTracing();

@@ -32,6 +32,11 @@ All notable changes to Phargus are recorded here. The format follows
 - A preloaded agent (`--import` or `--require`) now starts in the main thread only, so worker
   threads no longer each start their own agent and write extra sample lines. Every sample line now
   carries the writer's integer `pid`; forked and cluster children each still run their own agent.
+- Off means off: with `PHARGUS_ENABLED=false` (or `0`) or `PHARGUS_OUTPUT=none` the agent no longer
+  patches `http.Server.prototype.emit` for a moment or executes `phargus.config.js`, and an agent
+  that disables itself (for example after an output error) also disables its `AsyncLocalStorage`,
+  so `currentTraceId()` is `undefined` everywhere and Node 22 stops paying for its async hooks.
+
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be
   percent-encoded.

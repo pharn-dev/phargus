@@ -2,7 +2,7 @@ import { subscribe, unsubscribe } from 'node:diagnostics_channel';
 import { EventEmitter } from 'node:events';
 import { Server as HttpServer } from 'node:http';
 import { Server as HttpsServer } from 'node:https';
-import { runInTrace } from './context.js';
+import { disableTraceContext, runInTrace } from './context.js';
 import { createSpanBuffer } from './span-buffer.js';
 import type { SpanBuffer, SpanDrain } from './span-buffer.js';
 import { newTraceId, parseTraceparent } from './trace-id.js';
@@ -331,7 +331,7 @@ export function enable(options: HttpTracingOptions = {}): void {
   enabled = true;
 }
 
-/** Stop tracing. Buffered spans are kept for `drainSpans()`. */
+/** Stop tracing and switch the trace context off. Buffered spans are kept for `drainSpans()`. */
 export function disable(): void {
   if (!enabled) {
     return;
@@ -342,6 +342,7 @@ export function disable(): void {
   if (emitRegistry.contributors.size === 0) {
     restoreEmits();
   }
+  disableTraceContext();
   enabled = false;
 }
 
