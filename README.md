@@ -168,8 +168,9 @@ phargus serve [options] [file|-]
   order, with a newline. Agent lines, lines longer than `--max-line-bytes` and malformed agent
   records are not echoed. Passthrough is off for a file input; `--no-passthrough` turns it off for
   stdin. When more than 1 MiB is waiting to be written (a slow or stuck reader), further lines are
-  dropped and counted; if stdout closes (`EPIPE`), passthrough stops with one stderr line and the
-  server keeps running.
+  dropped and counted (not on Windows, where a stuck reader blocks the process; see
+  [`docs/LIMITS.md`](./docs/LIMITS.md)); if stdout closes (`EPIPE`), passthrough stops with one
+  stderr line and the server keeps running.
 - **Diagnostics go to stderr only.** The dashboard URL, a line when the input ends, and a
   `counts:` line when the input ends and again at exit: `decoder.invalid` (text lines),
   `decoder.oversized`, `decoder.foreign` (JSON objects that are not agent records, such as JSON

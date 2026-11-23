@@ -433,7 +433,9 @@ describe('phargus serve: passthrough of the app output', () => {
     TEST_TIMEOUT_MS,
   );
 
-  it(
+  // On Windows Node writes stdout pipes synchronously, so a reader that never reads blocks the
+  // process (docs/LIMITS.md, "A stuck stdout reader blocks phargus serve on Windows").
+  it.skipIf(process.platform === 'win32')(
     'AC: with stdout piped to a reader that never reads, lines past 1 MiB pending are dropped and counted, and the dashboard keeps receiving windows',
     async () => {
       await ensureFreshDist();
