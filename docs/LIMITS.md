@@ -29,9 +29,11 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   only sooner under tracing (see "Reading the tables" in [`bench/README.md`](../bench/README.md)).
 - **Node 22 makes tracing more expensive.** On Node 22, `AsyncLocalStorage` is built on
   `async_hooks` promise hooks, so once tracing is on every promise in the process pays for it, and
-  promise-heavy handlers can lose a large share of their throughput. Node 22's
-  `--experimental-async-context-frame` flag switches to the implementation Node 24 uses by default.
-  Compare on your workload with
+  promise-heavy handlers can lose a large share of their throughput. When tracing stops (a config
+  file turned the agent off, or it disabled itself after an output error) Phargus disables its
+  storage and no longer keeps those hooks on; with `PHARGUS_ENABLED=false` or `PHARGUS_OUTPUT=none`
+  it never turns them on. Node 22's `--experimental-async-context-frame` flag switches to the
+  implementation Node 24 uses by default. Compare on your workload with
   `node bench/overhead.mjs --workloads promise --node-arg=--experimental-async-context-frame`.
 - **The default output shares your stdout.** With no configuration the agent writes about 2 KB per
   sample (one per second) plus one line per traced request to the process's stdout, interleaved

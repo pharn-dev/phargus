@@ -259,7 +259,7 @@ Choose where the agent writes with `PHARGUS_OUTPUT`:
 | `PHARGUS_OUTPUT`      | `stdout` | `stdout`, `none` (agent off), or a file path                                              |
 | `PHARGUS_INTERVAL_MS` | `1000`   | sampling interval                                                                         |
 | `PHARGUS_QUEUE_BOUND` | `1024`   | lines held per output queue before the oldest are dropped                                 |
-| `PHARGUS_ENABLED`     | `true`   | `false` or `0` turns the agent off                                                        |
+| `PHARGUS_ENABLED`     | `true`   | `false` or `0` turns the agent off: nothing is patched and no config file is read         |
 | `PHARGUS_CONFIG`      | none     | path to the one config file to load, `.json` or `.js`; skips the working-directory lookup |
 
 The same keys (`output`, `intervalMs`, `queueBound`, `enabled`) can go in `phargus.config.json` or
@@ -268,7 +268,10 @@ stderr and is ignored; `PHARGUS_TOKEN` and `PHARGUS_DEBUG`, which belong to `pha
 ignored without a warning. When `PHARGUS_CONFIG` is set, `phargus.config.json` and
 `phargus.config.js` in the working directory are not read, and a problem with the pinned file
 disables the agent like any invalid value. An invalid value disables the agent with one
-`[phargus] agent disabled: ...` line on stderr; your app keeps running.
+`[phargus] agent disabled: ...` line on stderr; your app keeps running. `PHARGUS_ENABLED=false`
+or `PHARGUS_OUTPUT=none` turns the agent off before it patches anything or reads a config file.
+`enabled: false` or `output: "none"` in a config file is only known once the file is read, so
+request tracing is switched on until then.
 
 ---
 
