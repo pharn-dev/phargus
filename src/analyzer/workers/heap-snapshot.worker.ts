@@ -657,16 +657,22 @@ async function handle(payload: unknown): Promise<unknown> {
     const beforeGroups = before.groups;
     const after = await load(request.afterPath, 'afterPath', maxBytes);
     const names = new Set([...beforeGroups.keys(), ...after.groups.keys()]);
-    const entries = [...names].map((name) => {
-      const was = beforeGroups.get(name);
-      const now = after.groups.get(name);
-      return {
-        name,
-        countDelta: (now?.count ?? 0) - (was?.count ?? 0),
-        selfSizeDelta: (now?.selfSize ?? 0) - (was?.selfSize ?? 0),
-      };
-    });
-    entries.sort((a, b) => b.selfSizeDelta - a.selfSizeDelta || byNameAscending(a.name, b.name));
+    const entries = [...names]
+      .map((name) => {
+        const was = beforeGroups.get(name);
+        const now = after.groups.get(name);
+        return {
+          name,
+          countDelta: (now?.count ?? 0) - (was?.count ?? 0),
+          selfSizeDelta: (now?.selfSize ?? 0) - (was?.selfSize ?? 0),
+        };
+      })
+      .filter((entry) => entry.countDelta !== 0 || entry.selfSizeDelta !== 0);
+    // Growth and shrink rank together by size change, so a shrink is not cut off below the top.
+    entries.sort(
+      (a, b) =>
+        Math.abs(b.selfSizeDelta) - Math.abs(a.selfSizeDelta) || byNameAscending(a.name, b.name),
+    );
     return {
       entries: entries.slice(0, top),
       before: beforeTotals,

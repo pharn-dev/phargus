@@ -141,14 +141,15 @@ without relying on the auto-start.
 - `createHeapSnapshotPool` — creates a worker pool for heap snapshot work
 - `createSymbolizationPool` — creates a worker pool for stack-trace symbolization
 - `createWorkerPool` — creates a general worker thread pool
-- `diffHeapSnapshots` — compares two heap snapshot summaries
+- `diffHeapSnapshots` — compares two heap snapshot files by path: per-type count and self-size
+  changes, unchanged types left out, growth and shrink ranked together by absolute size change
 - `heapSnapshotTimeoutMs` — the default heap snapshot analysis timeout for a file of a given size
 - `summarizeHeapSnapshot` — summarizes a heap snapshot file by constructor type
 - `symbolizeStackFrames` — maps stack frames back to original source positions
 
 **Types**
 
-- `HeapSnapshotDiff` — the difference between two snapshot summaries
+- `HeapSnapshotDiff` — the difference between two heap snapshots
 - `HeapSnapshotDiffEntry` — one row of a snapshot diff
 - `HeapSnapshotSummary` — a snapshot summary
 - `HeapSnapshotTypeStats` — counts and sizes for one type in a summary
