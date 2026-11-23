@@ -1,4 +1,3 @@
-import { once } from 'node:events';
 import type { Writable } from 'node:stream';
 import type { Alert } from './alert-evaluator.js';
 import {
@@ -53,14 +52,10 @@ export function createStdoutSink(options: StdoutSinkOptions = {}): AlertSink {
         throw new Error('stream is destroyed');
       }
       const line = `${JSON.stringify(alert)}\n`;
-      let flushed: boolean;
+      // Node emits `drain` before it runs the write callback, so the callback is the backpressure
+      // signal; it also receives the write error.
       await new Promise<void>((resolve, reject) => {
-        const onStreamError = (error: Error): void => {
-          reject(error);
-        };
-        stream.once('error', onStreamError);
-        flushed = stream.write(line, (error) => {
-          stream.off('error', onStreamError);
+        stream.write(line, (error) => {
           if (error) {
             reject(error);
           } else {
@@ -68,9 +63,6 @@ export function createStdoutSink(options: StdoutSinkOptions = {}): AlertSink {
           }
         });
       });
-      if (!flushed!) {
-        await once(stream, 'drain');
-      }
     } catch (error) {
       failed += 1;
       const cause = toError(error);
