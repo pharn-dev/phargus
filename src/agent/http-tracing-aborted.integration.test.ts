@@ -59,7 +59,7 @@ beforeAll(async () => {
   enable();
   const s = createServer((req, res) => {
     const handler = handlers.get(req.url ?? '');
-    if (handler === undefined) {
+    if (typeof handler !== 'function') {
       res.statusCode = 404;
       res.end();
       return;
