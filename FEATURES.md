@@ -113,7 +113,10 @@ Status legend:
 - ✅ Alert sinks: stdout / file / webhook. Webhook uses Node core `fetch` only, never follows
   redirects, and has a bounded `close()`. Its optional `headers` (for example
   `{ authorization: 'Bearer …' }`) go on every request; they are checked when the sink is created,
-  `content-type` is reserved, and header values never appear in an error.
+  `content-type` is reserved, and header values never appear in an error. A URL with a username
+  or password is refused when the sink is created (put credentials in `headers`); a failed
+  delivery names the origin and a fixed reason or network error code, never the path, query or a
+  header value. The OTLP exporters apply the same rules to their `url` and `headers`.
 
 ## 9. Persistence
 

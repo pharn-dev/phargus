@@ -4,6 +4,7 @@ import {
   discardResponseBody,
   isRedirect,
 } from '../collector/http-response.js';
+import { requestFailureReason } from '../collector/http-request.js';
 
 export type OtlpTarget = {
   url: string;
@@ -53,8 +54,8 @@ export async function postOtlpJson(
         { cause },
       );
     }
-    const reason = cause instanceof Error ? cause.message : String(cause);
-    return new Error(`OTLP export to ${target.origin} failed: ${reason}`, { cause });
+    // No cause: the platform's error can quote the URL or a header value.
+    return new Error(`OTLP export to ${target.origin} failed: ${requestFailureReason(cause)}`);
   } finally {
     request.dispose();
   }
