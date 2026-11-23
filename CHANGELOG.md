@@ -12,6 +12,9 @@ All notable changes to Phargus are recorded here. The format follows
 - A request that closes before its response finishes (client disconnect, `res.destroy()`, a
   timeout) now leaves a span with `aborted: true`; the dashboard waterfall shows it as an error
   marked "aborted", and OTLP export sets its status to error.
+- A request that continues a W3C `traceparent` now keeps its parent-id: the span line carries it
+  as `parentSpanId` (lowercased), and OTLP export sets the span's `parentSpanId`, so the span is
+  no longer exported as a root. Spans of requests without a valid header have no `parentSpanId`.
 
 ### Removed
 

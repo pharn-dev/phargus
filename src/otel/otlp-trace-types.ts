@@ -20,6 +20,8 @@ export type OtlpStatus = {
 export type OtlpSpan = {
   traceId: string;
   spanId: string;
+  /** Present only for a span that continued an inbound W3C `traceparent`. */
+  parentSpanId?: string;
   name: string;
   kind: typeof SPAN_KIND_SERVER;
   startTimeUnixNano: string;

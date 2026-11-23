@@ -69,9 +69,12 @@ export function writeSpanId(target: Uint8Array, offset: number): void {
   }
 }
 
+/** The ids a valid inbound `traceparent` carries, both lowercased. */
+export type Traceparent = { traceId: string; parentSpanId: string };
+
 /**
- * Extract the trace id from a W3C `traceparent` header value. Returns the lowercased
- * trace id, or undefined when the value is absent, duplicated, malformed, or carries an
+ * Extract the trace id and parent span id from a W3C `traceparent` header value. Returns both
+ * lowercased, or undefined when the value is absent, duplicated, malformed, or carries an
  * all-zero trace-id or parent-id.
  *
  * Version `00` must be exactly the 55-character layout. Version `ff` is invalid. Any other
@@ -79,7 +82,7 @@ export function writeSpanId(target: Uint8Array, offset: number): void {
  * must fit that layout, and anything after them must start with `-` (fields a future version
  * appends).
  */
-export function parseTraceparent(value: string | string[] | undefined): string | undefined {
+export function parseTraceparent(value: string | string[] | undefined): Traceparent | undefined {
   if (typeof value !== 'string' || value.length < TRACEPARENT_00_LENGTH) {
     return undefined;
   }
@@ -94,14 +97,14 @@ export function parseTraceparent(value: string | string[] | undefined): string |
   }
   const match = TRACEPARENT_00.exec(value.slice(0, TRACEPARENT_00_LENGTH));
   const traceId = match?.[2]?.toLowerCase();
-  const parentId = match?.[3];
+  const parentSpanId = match?.[3]?.toLowerCase();
   if (
     traceId === undefined ||
-    parentId === undefined ||
+    parentSpanId === undefined ||
     traceId === ALL_ZERO_TRACE_ID ||
-    parentId === ALL_ZERO_PARENT_ID
+    parentSpanId === ALL_ZERO_PARENT_ID
   ) {
     return undefined;
   }
-  return traceId;
+  return { traceId, parentSpanId };
 }

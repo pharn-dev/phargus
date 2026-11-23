@@ -82,6 +82,29 @@ describe('span buffer — keeps span fields, not span objects', () => {
     expect(spans[1]).toEqual(makeSpan(5));
   });
 
+  it('keeps parentSpanId through record() and push(), and writes no parentSpanId key otherwise', () => {
+    const buffer = createSpanBuffer(3);
+    buffer.record(TRACE_ID, 'GET', '/child', 200, 1, 2, false, '00f067aa0ba902b7');
+    buffer.record(TRACE_ID, 'GET', '/gone', 0, 1, 2, true, 'b7ad6b7169203331');
+    // Not lowercase hex: kept as its string.
+    buffer.push(makeSpan(4, { parentSpanId: 'NOT-HEX' }));
+    let { spans } = buffer.drain();
+    expect(spans.map((span) => span.parentSpanId)).toEqual([
+      '00f067aa0ba902b7',
+      'b7ad6b7169203331',
+      'NOT-HEX',
+    ]);
+    expect(spans[1]?.aborted).toBe(true);
+
+    // The same slots, reused for root spans, carry no parentSpanId key.
+    buffer.record(TRACE_ID, 'GET', '/root', 200, 1, 2);
+    buffer.record(TRACE_ID, 'GET', '/root', 200, 1, 2, false, undefined);
+    buffer.push(makeSpan(5));
+    ({ spans } = buffer.drain());
+    expect(spans.map((span) => Object.hasOwn(span, 'parentSpanId'))).toEqual([false, false, false]);
+    expect(spans[2]).toEqual(makeSpan(5));
+  });
+
   it('round-trips paths of every shape: empty, Latin-1, longer than a slot, and beyond Latin-1', () => {
     const buffer = createSpanBuffer(8);
     const paths = [

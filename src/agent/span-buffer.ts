@@ -10,6 +10,8 @@ export type TraceSpan = {
   statusCode: number;
   startTimeMs: number;
   durationNs: number;
+  /** Set only when the request continued a W3C `traceparent`: that header's parent-id. */
+  parentSpanId?: string;
   /** Set only when the request closed before its response finished (client gone, destroyed). */
   aborted?: true;
 };
@@ -22,7 +24,8 @@ export type SpanBuffer = {
   push(span: TraceSpan): void;
   /**
    * The HTTP tracer's path: buffer one span from its fields, with a fresh span id. `traceId` must
-   * be 32 lowercase hex characters; the drained span's name is `${method} ${path}`.
+   * be 32 lowercase hex characters (and `parentSpanId`, when given, 16); the drained span's name
+   * is `${method} ${path}`.
    */
   record(
     traceId: string,
@@ -32,6 +35,7 @@ export type SpanBuffer = {
     startTimeMs: number,
     durationNs: number,
     aborted?: boolean,
+    parentSpanId?: string,
   ): void;
   /** Return buffered spans (oldest first) and the drop count since the last drain, then reset. */
   drain(): SpanDrain;
@@ -103,6 +107,8 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
   const startTimes = new Float64Array(capacity);
   const durations = new Float64Array(capacity);
   const abortedFlags = new Uint8Array(capacity);
+  const parentSpanIds = Buffer.alloc(capacity * SPAN_ID_BYTES);
+  const parentFlags = new Uint8Array(capacity);
   const methods: (string | undefined)[] = new Array<string | undefined>(capacity).fill(undefined);
   const pathBytes = Buffer.alloc(capacity * PATH_SLOT_BYTES);
   const pathLengths = new Uint16Array(capacity);
@@ -112,6 +118,9 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
     undefined,
   );
   const spanIdText: (string | undefined)[] = new Array<string | undefined>(capacity).fill(
+    undefined,
+  );
+  const parentSpanIdText: (string | undefined)[] = new Array<string | undefined>(capacity).fill(
     undefined,
   );
   const pathText: (string | undefined)[] = new Array<string | undefined>(capacity).fill(undefined);
@@ -141,6 +150,7 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
     startTimeMs: number,
     durationNs: number,
     aborted: boolean,
+    parentSpanId: string | undefined,
   ): void => {
     methods[slot] = method;
     if (writeLatin1(pathBytes, slot * PATH_SLOT_BYTES, path, PATH_SLOT_BYTES)) {
@@ -152,6 +162,13 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
     startTimes[slot] = startTimeMs;
     durations[slot] = durationNs;
     abortedFlags[slot] = aborted ? 1 : 0;
+    parentFlags[slot] = parentSpanId === undefined ? 0 : 1;
+    if (
+      parentSpanId !== undefined &&
+      !writeLowerHex(parentSpanIds, slot * SPAN_ID_BYTES, parentSpanId, SPAN_ID_BYTES)
+    ) {
+      parentSpanIdText[slot] = parentSpanId;
+    }
   };
 
   const release = (slot: number): void => {
@@ -159,6 +176,7 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
     pathText[slot] = undefined;
     traceIdText[slot] = undefined;
     spanIdText[slot] = undefined;
+    parentSpanIdText[slot] = undefined;
     names[slot] = undefined;
   };
 
@@ -175,6 +193,7 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
         span.startTimeMs,
         span.durationNs,
         span.aborted === true,
+        span.parentSpanId,
       );
       if (!writeLowerHex(traceIds, slot * TRACE_ID_BYTES, span.traceId, TRACE_ID_BYTES)) {
         traceIdText[slot] = span.traceId;
@@ -186,10 +205,28 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
         names[slot] = span.name;
       }
     },
-    record(traceId, method, path, statusCode, startTimeMs, durationNs, aborted): void {
+    record(
+      traceId,
+      method,
+      path,
+      statusCode,
+      startTimeMs,
+      durationNs,
+      aborted,
+      parentSpanId,
+    ): void {
       const slot = nextSlot();
       release(slot);
-      store(slot, method, path, statusCode, startTimeMs, durationNs, aborted === true);
+      store(
+        slot,
+        method,
+        path,
+        statusCode,
+        startTimeMs,
+        durationNs,
+        aborted === true,
+        parentSpanId,
+      );
       if (!writeLowerHex(traceIds, slot * TRACE_ID_BYTES, traceId, TRACE_ID_BYTES)) {
         traceIdText[slot] = traceId;
       }
@@ -220,6 +257,11 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
           startTimeMs: startTimes[slot] ?? 0,
           durationNs: durations[slot] ?? 0,
         };
+        if (parentFlags[slot] === 1) {
+          span.parentSpanId =
+            parentSpanIdText[slot] ??
+            parentSpanIds.toString('hex', spanOffset, spanOffset + SPAN_ID_BYTES);
+        }
         if (abortedFlags[slot] === 1) {
           span.aborted = true;
         }
