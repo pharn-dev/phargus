@@ -11,6 +11,7 @@ import { createBackpressureProbe, type BackpressureProbe } from './backpressure-
 
 const HOLD_MS = 100;
 const MIN_STALL_NS = 50_000_000;
+const FULL_AFTER_MS = 100;
 const EIGHT_MIB = 8 * 1024 * 1024;
 const ENDING_EVENTS = ['drain', 'finish', 'close'] as const;
 
@@ -58,20 +59,55 @@ function createStallableWritable(): { stream: Writable; resume: () => void } {
 }
 
 /**
- * An http server whose handler gets the response after the probe is enabled, and a client that
- * receives the response headers but holds its socket paused for `HOLD_MS`.
+ * Write 1 MiB chunks until the client's socket is full: a write whose 'drain' does not come within
+ * `FULL_AFTER_MS`. Runs before the probe is enabled, so none of it is counted. Loopback buffers
+ * differ a lot between platforms (Windows took a whole 8 MiB write in a few ms), so the measured
+ * stall below starts from a full socket on every platform.
  */
-async function serveOnce(
-  handler: (res: ServerResponse) => Promise<void>,
-): Promise<{ response: IncomingMessage; handled: Promise<void> }> {
-  let resolveHandled: () => void = () => {};
-  let rejectHandled: (error: unknown) => void = () => {};
-  const handled = new Promise<void>((resolve, reject) => {
-    resolveHandled = resolve;
-    rejectHandled = reject;
+async function fillSocket(res: ServerResponse): Promise<void> {
+  const chunk = Buffer.alloc(1024 * 1024, 97);
+  for (let i = 0; i < 1024; i += 1) {
+    if (res.write(chunk)) {
+      continue;
+    }
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), FULL_AFTER_MS);
+    const drained = await once(res, 'drain', { signal: abort.signal }).then(
+      () => true,
+      () => false,
+    );
+    clearTimeout(timer);
+    if (!drained) {
+      return;
+    }
+  }
+  throw new Error('the client socket never filled');
+}
+
+/**
+ * An http server and a client that receives the response headers but does not read the body.
+ * The handler fills the socket, then enables the probe and runs `stall`, which returns once its
+ * stalled write is made; the client then holds for `HOLD_MS` before `release` runs.
+ */
+async function stallResponse(
+  stall: (res: ServerResponse) => () => Promise<void>,
+  release: (response: IncomingMessage) => Promise<void>,
+): Promise<BackpressureProbe> {
+  let probe: BackpressureProbe | undefined;
+  let finish: (() => Promise<void>) | undefined;
+  let resolveStalled: () => void = () => {};
+  let rejectStalled: (error: unknown) => void = () => {};
+  const stalled = new Promise<void>((resolve, reject) => {
+    resolveStalled = resolve;
+    rejectStalled = reject;
   });
   const server = createServer((_req, res) => {
-    handler(res).then(resolveHandled, rejectHandled);
+    fillSocket(res)
+      .then(() => {
+        probe = enabledProbe();
+        finish = stall(res);
+      })
+      .then(resolveStalled, rejectStalled);
   });
   cleanups.push(() => server.close());
   server.listen(0, '127.0.0.1');
@@ -81,25 +117,33 @@ async function serveOnce(
     get({ host: '127.0.0.1', port, path: '/', agent: false }, resolve).on('error', reject);
   });
   cleanups.push(() => response.destroy());
-  return { response, handled };
+  await stalled;
+  await delay(HOLD_MS);
+  await release(response);
+  await finish!();
+  return probe!;
 }
 
 describe('backpressure probe — what ends a stall (CORE-227)', () => {
   it('res.write(8 MiB); res.end() against a held reader reports the stall duration on the window and the hotspot', async () => {
-    const probe = enabledProbe();
     let before: number[] = [];
     let after: number[] = [];
-    const { response, handled } = await serveOnce(async (res) => {
-      before = listenerCounts(res);
-      expect(res.write(Buffer.alloc(EIGHT_MIB, 97))).toBe(false);
-      res.end();
-      await once(res, 'finish');
-      after = listenerCounts(res);
-    });
-    await delay(HOLD_MS);
-    response.resume();
-    await once(response, 'end');
-    await handled;
+    const probe = await stallResponse(
+      (res) => {
+        before = listenerCounts(res);
+        expect(res.write(Buffer.alloc(EIGHT_MIB, 97))).toBe(false);
+        res.end();
+        const finished = once(res, 'finish');
+        return async () => {
+          await finished;
+          after = listenerCounts(res);
+        };
+      },
+      async (response) => {
+        response.resume();
+        await once(response, 'end');
+      },
+    );
 
     const reading = probe.sample();
     expect(reading.events).toBe(1);
@@ -112,21 +156,26 @@ describe('backpressure probe — what ends a stall (CORE-227)', () => {
     expect(hotspot.events).toBe(1);
     expect(hotspot.totalStall).toBe(reading.totalStall);
     expect(after).toEqual(before);
-  }, 10_000);
+  }, 20_000);
 
   it('a stalled response destroyed by the client reports the time until close', async () => {
-    const probe = enabledProbe();
     let before: number[] = [];
     let after: number[] = [];
-    const { response, handled } = await serveOnce(async (res) => {
-      before = listenerCounts(res);
-      expect(res.write(Buffer.alloc(EIGHT_MIB, 97))).toBe(false);
-      await once(res, 'close');
-      after = listenerCounts(res);
-    });
-    await delay(HOLD_MS);
-    response.destroy();
-    await handled;
+    const probe = await stallResponse(
+      (res) => {
+        before = listenerCounts(res);
+        expect(res.write(Buffer.alloc(EIGHT_MIB, 97))).toBe(false);
+        const closed = once(res, 'close');
+        return async () => {
+          await closed;
+          after = listenerCounts(res);
+        };
+      },
+      (response) => {
+        response.destroy();
+        return Promise.resolve();
+      },
+    );
 
     const reading = probe.sample();
     expect(reading.events).toBe(1);
@@ -134,7 +183,7 @@ describe('backpressure probe — what ends a stall (CORE-227)', () => {
     expect(reading.hotspots).toHaveLength(1);
     expect(reading.hotspots[0]!.totalStall).toBe(reading.totalStall);
     expect(after).toEqual(before);
-  }, 10_000);
+  }, 20_000);
 
   it('a stall that ends with drain is counted once, also when finish and close follow', async () => {
     const probe = enabledProbe();
