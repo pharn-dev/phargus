@@ -164,6 +164,11 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   reads only files inside the working directory unless `roots` names other directories. `roots: null`
   turns confinement off. A broad working directory (`/`, `$HOME`) confines little, and Phargus does
   not detect or refuse one.
+- **A source map the worker heap cannot decode is reported as malformed.** Any file a frame names
+  inside the roots, `node_modules` included, can carry a source map. The symbolizer refuses one
+  before decoding it when its `sources` is not an array or its `mappings` is not a string (in the
+  map or any section), or when its mappings are longer than 1/32 of the free worker heap: decoding
+  costs about 20 bytes of heap per mapping byte. A genuine map that large is not symbolized either.
 
 ## 5. Packaging
 
