@@ -3,7 +3,7 @@ import { pipeline } from 'node:stream/promises';
 import type { SpanRecord } from '../agent/index.js';
 import { createRecordGuard, type IgnoredRecordHandler } from './record-guard.js';
 import { createSpanRouter } from './span-router.js';
-import { createAlertEvaluator, type Alert } from './alert-evaluator.js';
+import { createAlertEvaluator, createAlertEvaluatorState, type Alert } from './alert-evaluator.js';
 import { validateAlertRules, type AlertRule } from './alert-rules.js';
 import type { AlertSink, SinkErrorHandler } from './alert-sink.js';
 import { createSubscriberSet, type CollectorListener } from './collector-subscribers.js';
@@ -73,6 +73,8 @@ export function createCollector(options: CollectorOptions): Collector {
   const alerts = createRingBuffer<Alert>(capacity);
   const spans = createRingBuffer<SpanRecord>(options.spanCapacity ?? DEFAULT_SPAN_CAPACITY);
   validateAlertRules(rules);
+  // One alert state for every consume(): a rule firing at the end of one run stays firing.
+  const alertState = createAlertEvaluatorState(rules.length);
   const sinks = createSinks(options.sinks ?? [], options.onSinkError);
   const dispatcher = createSinkDispatcher(sinks, options.onSinkError);
   const store =
@@ -177,7 +179,7 @@ export function createCollector(options: CollectorOptions): Collector {
           spanRouter,
           aggregator,
           recordWindows,
-          createAlertEvaluator(rules),
+          createAlertEvaluator(rules, alertState),
           async function (emitted: AsyncIterable<unknown>) {
             for await (const alert of emitted) {
               alerts.push(alert as Alert);

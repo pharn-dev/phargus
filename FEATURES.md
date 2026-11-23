@@ -109,7 +109,8 @@ Status legend:
 ## 8. Alerting
 
 - ✅ Window-based alerts emitted from the pipeline.
-- ✅ Alert thresholds configurable per metric (`>` or `>=`, optionally for N consecutive windows).
+- ✅ Alert thresholds configurable per metric (`>` or `>=`, optionally for N consecutive,
+  adjacent windows; no hysteresis, see `docs/LIMITS.md` §3).
 - ✅ Alert sinks: stdout / file / webhook. Webhook uses Node core `fetch` only, never follows
   redirects, and has a bounded `close()`. Its optional `headers` (for example
   `{ authorization: 'Bearer …' }`) go on every request; they are checked when the sink is created,

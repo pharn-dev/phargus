@@ -111,6 +111,11 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   window's `late` and dropped. A sample more than 60 windows older (a host clock stepped back by
   NTP or a VM resume) restarts aggregation: the open window is emitted and a new one starts at the
   sample's time, so window `start` values are then not monotonic.
+- **Alerts have no hysteresis.** A rule fires after `forWindows` adjacent breaching windows (a
+  window whose `start` is not the previous window's `end` restarts the count) and resolves on the
+  first window that does not breach. A metric hovering at its threshold therefore alternates
+  `firing` and `resolved`, and each one is a sink delivery (a webhook `POST`). A rule's state lives
+  in its collector, so it carries over from one `consume()` run to the next.
 - **GC and deoptimization detail depend on Node and V8.** GC data comes from `PerformanceObserver`
   `gc` entries, whose detail varies by Node version. Deoptimization support is a parser for
   `node --trace-deopt` output: Phargus does not start or capture that output, and the text format can

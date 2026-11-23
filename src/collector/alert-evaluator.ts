@@ -21,18 +21,52 @@ export type Alert = {
   state: AlertState;
 };
 
-/** Object-mode Transform: AggregatedWindow in, edge-triggered Alert out, in rule order. */
-export function createAlertEvaluator(rules: readonly AlertRule[]): Transform {
+/** Each rule's state, plus the end of the last window seen (to tell adjacent windows from a gap). */
+export type AlertEvaluatorState = {
+  readonly rules: Array<{ consecutive: number; firing: boolean }>;
+  previousEnd: number | undefined;
+};
+
+/** Fresh state for `ruleCount` rules. Hand one to several evaluators to carry state across them. */
+export function createAlertEvaluatorState(ruleCount: number): AlertEvaluatorState {
+  return {
+    rules: Array.from({ length: ruleCount }, () => ({ consecutive: 0, firing: false })),
+    previousEnd: undefined,
+  };
+}
+
+/**
+ * Object-mode Transform: AggregatedWindow in, edge-triggered Alert out, in rule order.
+ * "N consecutive windows" means adjacent ones: a window whose `start` is not the previous window's
+ * `end` (a gap, or a start before it) resets every rule's count. A firing rule stays firing.
+ * `sharedState` (optional) carries that state across evaluators, such as one per `consume()`.
+ */
+export function createAlertEvaluator(
+  rules: readonly AlertRule[],
+  sharedState?: AlertEvaluatorState,
+): Transform {
   const resolved = validateAlertRules(rules);
-  const states = resolved.map(() => ({ consecutive: 0, firing: false }));
+  const evaluatorState = sharedState ?? createAlertEvaluatorState(resolved.length);
+  const states = evaluatorState.rules;
+  if (states.length !== resolved.length) {
+    throw new RangeError(
+      `alert evaluator state holds ${states.length} rules, but ${resolved.length} were given`,
+    );
+  }
 
   return new Transform({
     objectMode: true,
     transform(window: AggregatedWindow, _encoding, callback): void {
       try {
         const out: Alert[] = [];
+        const { previousEnd } = evaluatorState;
+        const adjacent = previousEnd === undefined || window.start === previousEnd;
+        evaluatorState.previousEnd = window.end;
         resolved.forEach((rule, i) => {
           const state = states[i] as { consecutive: number; firing: boolean };
+          if (!adjacent) {
+            state.consecutive = 0;
+          }
           const observed = readAlertMetric(window, rule.metric);
           if (!Number.isSafeInteger(observed) || observed < 0) {
             throw new TypeError(
