@@ -17,3 +17,6 @@ export type RunRequest = {
 
 /** Child to host: the outcome of the request with the same id. */
 export type RunReply = { type: 'result'; id: number; result: RuleRunResult };
+
+/** Child to host, once, after the child has loaded isolated-vm: a run sent now is timed from here. */
+export type ReadyMessage = { type: 'ready' };

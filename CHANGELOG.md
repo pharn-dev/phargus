@@ -42,6 +42,12 @@ All notable changes to Phargus are recorded here. The format follows
 - `diffHeapSnapshots` now shows what shrank as well as what grew: it leaves out types whose count
   and self size did not change and ranks the rest by absolute self-size change, so a type that
   lost objects is no longer cut off below the unchanged rows.
+- Rule sandbox edges: `loadRulesDirectory` reports a rule file over 1 MiB as a
+  `RULE_FILE_UNREADABLE` failure without reading it, and a run's watchdog now starts only once the
+  sandbox child has loaded `isolated-vm`, so a cold first run with a short `timeoutMs` is no longer
+  timed on process start-up (a child that does not start within 10 s fails as
+  `PHARGUS_SANDBOX_CRASHED`). `docs/THREAT-MODEL.md` D2 now says a rule that exhausts memory ends
+  as `PHARGUS_RULE_MEMORY_LIMIT`, `PHARGUS_RULE_TIMEOUT` or `PHARGUS_SANDBOX_CRASHED`.
 - One sample line dated in the future, or a host clock stepping back, no longer stops all windows
   and alerts until the collector restarts. A sample whose `timestamp` is not a safe integer or is
   more than 24 hours ahead of the collector's clock is now `malformed` and counted in

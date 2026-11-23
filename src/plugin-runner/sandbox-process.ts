@@ -21,10 +21,15 @@ export type SandboxProcessOptions = {
 type Pending = {
   id: number;
   resolve: (result: RuleRunResult) => void;
-  timer: NodeJS.Timeout;
+  /** The start-up cap until the child is ready, then the run's watchdog. */
+  timer: NodeJS.Timeout | undefined;
+  message: RunRequest;
+  watchdogMs: number;
 };
 
 const KILL_FALLBACK_MS = 1000;
+/** Most time a fresh child may take to load isolated-vm and report ready. */
+const STARTUP_LIMIT_MS = 10_000;
 const ERROR_CODES: ReadonlySet<string> = new Set(Object.values(RuleErrorCode));
 
 /**
@@ -55,6 +60,12 @@ export function sandboxExecArgv(hostExecArgv: readonly string[] = process.execAr
 }
 
 type RawReply = { type: 'result'; id: number; result: unknown };
+
+function isReady(value: unknown): boolean {
+  return (
+    typeof value === 'object' && value !== null && (value as { type?: unknown }).type === 'ready'
+  );
+}
 
 function isRawReply(value: unknown): value is RawReply {
   if (typeof value !== 'object' || value === null) {
@@ -122,6 +133,8 @@ export function createSandboxProcess(
 ): SandboxProcess {
   const execArgv = sandboxExecArgv(options.hostExecArgv);
   let child: ChildProcess | undefined;
+  /** Whether `child` has loaded isolated-vm; a run's watchdog is armed only once it has. */
+  let ready = false;
   let pending: Pending | undefined;
   let nextId = 0;
   let closed = false;
@@ -138,8 +151,9 @@ export function createSandboxProcess(
     current.resolve(result);
   }
 
-  function start(): ChildProcess {
-    const proc = fork(scriptPath, [], {
+  function start(isolatedVmModule: string): ChildProcess {
+    ready = false;
+    const proc = fork(scriptPath, [isolatedVmModule], {
       execArgv,
       // A minimal environment: no NODE_OPTIONS (a preloaded agent would start in the child)
       // and none of the host's secrets. Its stdout is ignored, so nothing reaches the host's.
@@ -153,6 +167,15 @@ export function createSandboxProcess(
     });
     proc.on('message', (message: unknown) => {
       if (proc !== child) {
+        return;
+      }
+      if (isReady(message)) {
+        if (!ready) {
+          ready = true;
+          if (pending !== undefined) {
+            dispatch(proc, pending);
+          }
+        }
         return;
       }
       if (!isRawReply(message) || pending === undefined || message.id !== pending.id) {
@@ -187,6 +210,40 @@ export function createSandboxProcess(
     }
   }
 
+  /** Settles `current` with `result` and kills the child if nothing else settles it within `ms`. */
+  function killAfter(
+    proc: ChildProcess,
+    current: Pending,
+    ms: number,
+    result: RuleRunResult,
+  ): void {
+    clearTimeout(current.timer);
+    current.timer = setTimeout(() => {
+      settle(result);
+      child = undefined;
+      proc.kill('SIGKILL');
+    }, ms);
+  }
+
+  /** Sends the pending run to a ready child and arms its watchdog. */
+  function dispatch(proc: ChildProcess, current: Pending): void {
+    killAfter(
+      proc,
+      current,
+      current.watchdogMs,
+      ruleFailure(
+        RuleErrorCode.TIMEOUT,
+        `the sandbox did not answer within ${current.watchdogMs} ms and was killed`,
+      ),
+    );
+    proc.send(current.message, (error: Error | null) => {
+      if (error !== null) {
+        onChildGone(proc, `could not send the request to the sandbox child: ${error.message}`);
+        proc.kill('SIGKILL');
+      }
+    });
+  }
+
   function request(req: SandboxRequest, watchdogMs: number): Promise<RuleRunResult> {
     if (closed) {
       return Promise.resolve(
@@ -198,7 +255,7 @@ export function createSandboxProcess(
       const id = nextId;
       let proc: ChildProcess;
       try {
-        child ??= start();
+        child ??= start(req.isolatedVmModule);
         proc = child;
       } catch (error) {
         resolve(
@@ -209,26 +266,29 @@ export function createSandboxProcess(
         );
         return;
       }
-      const timer = setTimeout(() => {
-        settle(
-          ruleFailure(
-            RuleErrorCode.TIMEOUT,
-            `the sandbox did not answer within ${watchdogMs} ms and was killed`,
-          ),
-        );
-        child = undefined;
-        proc.kill('SIGKILL');
-      }, watchdogMs);
-      pending = { id, resolve, timer };
+      const current: Pending = {
+        id,
+        resolve,
+        timer: undefined,
+        message: { type: 'run', id, ...req },
+        watchdogMs,
+      };
+      pending = current;
       proc.ref();
       proc.channel?.ref();
-      const message: RunRequest = { type: 'run', id, ...req };
-      proc.send(message, (error: Error | null) => {
-        if (error !== null) {
-          onChildGone(proc, `could not send the request to the sandbox child: ${error.message}`);
-          proc.kill('SIGKILL');
-        }
-      });
+      if (ready) {
+        dispatch(proc, current);
+      } else {
+        killAfter(
+          proc,
+          current,
+          STARTUP_LIMIT_MS,
+          ruleFailure(
+            RuleErrorCode.SANDBOX_CRASHED,
+            `the sandbox child did not start within ${STARTUP_LIMIT_MS} ms and was killed`,
+          ),
+        );
+      }
     });
   }
 

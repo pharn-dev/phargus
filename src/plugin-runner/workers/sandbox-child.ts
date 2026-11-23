@@ -1,7 +1,7 @@
 // Sandbox child process entry. Runs one user rule per fresh isolated-vm isolate.
 // Erasable TypeScript syntax only (and `import type` only): this file runs from
 // source under Node's type stripping as well as from the compiled builds.
-import type { RunReply, RunRequest } from '../sandbox-protocol.js';
+import type { ReadyMessage, RunReply, RunRequest } from '../sandbox-protocol.js';
 import type { RuleFinding, RuleRunResult } from '../rule-result.js';
 
 type IvmScript = { run(context: unknown, options: { timeout: number }): Promise<unknown> };
@@ -199,6 +199,17 @@ function isRunRequest(value: unknown): value is RunRequest {
     isPositiveInteger(v['maxResultBytes'])
   );
 }
+
+// Load isolated-vm (its specifier is the first argument) before the host times a run, then say so,
+// so a run's watchdog does not count start-up. A failed load is not memoised: the first request
+// loads again and reports PHARGUS_ISOLATED_VM_MISSING itself, so nothing is lost here.
+const preload = process.argv[2];
+void (preload === undefined ? Promise.resolve() : loadIvm(preload).catch(() => undefined)).then(
+  () => {
+    const ready: ReadyMessage = { type: 'ready' };
+    process.send?.(ready);
+  },
+);
 
 let queue: Promise<void> = Promise.resolve();
 

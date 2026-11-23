@@ -99,6 +99,7 @@ describe('plugin rule result caps (F-07)', { timeout: 30_000 }, () => {
   process.send({ type: 'result', id: m.id, result: results[m.source] });
 });
 process.on('disconnect', () => process.exit(0));
+process.send({ type: 'ready' });
 `,
     );
     const sandbox = createSandboxProcess(script, { maxFindings: 2, maxResultBytes: 100 });
@@ -170,6 +171,7 @@ describe('sandbox child flags (F-19)', { timeout: 30_000 }, () => {
   process.send({ type: 'result', id: m.id, result: { ok: true, findings: [{ windowStart: 0, message }] } });
 });
 process.on('disconnect', () => process.exit(0));
+process.send({ type: 'ready' });
 `,
     );
     const sandbox = createSandboxProcess(script, {

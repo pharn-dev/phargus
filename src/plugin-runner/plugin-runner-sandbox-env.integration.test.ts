@@ -101,6 +101,7 @@ process.stderr.write(JSON.stringify({ pid: process.pid, result }) + '\\n');
   process.send({ type: 'result', id: m.id, result: { ok: true, findings: [{ windowStart: 0, message }] } });
 });
 process.on('disconnect', () => process.exit(0));
+process.send({ type: 'ready' });
 `,
     );
     process.env['PHARGUS_TEST_HOST_MARKER'] = 'host-secret';
