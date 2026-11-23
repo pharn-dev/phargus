@@ -54,7 +54,13 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 
 - **If the host dies, Phargus dies with it,** and so does the in-memory data. The ring buffer is lost
   on a crash or restart unless opt-in disk persistence is on, and persistence keeps only recent
-  windows, not history.
+  windows, not history: at most `maxBytes`, and about half of it after each compaction.
+- **Persistence failures are counted and reported, not fatal.** A file that cannot be read,
+  appended to or compacted (a missing grant, a full disk) costs persisted windows only: each
+  failure is counted in `collector.persistence.failed`, the first of each run of consecutive
+  failures is reported as one `PhargusPersistenceWarning` process warning, and the windows, alerts
+  and `consume()` carry on. When compaction keeps failing, nothing more is appended, so the file
+  stays within `maxBytes`.
 - **Data is dropped, not queued without limit.** The agent's sample and span output lanes each
   hold `queueBound` lines (default 1024) and drop the oldest; the span buffer holds 1024 spans
   between ticks. Above roughly 1000 requests per sampling interval, spans are dropped. Every sample

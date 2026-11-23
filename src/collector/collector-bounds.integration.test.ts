@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { Alert } from './alert-evaluator.js';
 import type { AlertSink } from './alert-sink.js';
 import { createCollector } from './collector.js';
@@ -325,9 +325,15 @@ describe('window store latch and file modes (F-21, F-14)', () => {
       expect(await exists(path)).toBe(true);
       await collector.close();
       await rm(path);
-      await expect(
-        collector.consume(Readable.from([makeSample(2100), makeSample(3100)])),
-      ).rejects.toThrow(/closed/);
+      const warn = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
+      try {
+        // The windows are counted as failed persistence, never thrown (CORE-246).
+        await collector.consume(Readable.from([makeSample(2100), makeSample(3100)]));
+        expect(collector.persistence?.failed).toBe(2);
+        expect(String(warn.mock.calls[0]?.[0])).toMatch(/closed/);
+      } finally {
+        warn.mockRestore();
+      }
       expect(await exists(path)).toBe(false);
     } finally {
       await rm(dir, { recursive: true, force: true });

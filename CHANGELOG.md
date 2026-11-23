@@ -16,6 +16,15 @@ All notable changes to Phargus are recorded here. The format follows
   as `parentSpanId` (lowercased), and OTLP export sets the span's `parentSpanId`, so the span is
   no longer exported as a root. Spans of requests without a valid header have no `parentSpanId`.
 
+### Changed
+
+- A window persistence failure (restore, append or compaction) no longer rejects
+  `collector.consume()` or stops the pipeline: it is counted in `collector.persistence.failed` and
+  reported as one `PhargusPersistenceWarning` per run of consecutive failures, and windows and
+  alerts carry on. `persist.maxBytes` now caps the file: compaction keeps the newest windows that
+  fit in half of it, so the file is rewritten rarely. Compaction writes `<file>.compact.tmp`, so
+  grant `--allow-fs-write` for that path too (`docs/PERMISSIONS.md`).
+
 ### Removed
 
 - **Breaking:** the deprecated dashboard login link `/?token=<token>` is gone, along with its

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 /** A full AgentSample-shaped object at the given timestamp. */
 function makeSample(timestamp: number): Record<string, unknown> {
@@ -22,6 +22,7 @@ function makeSample(timestamp: number): Record<string, unknown> {
 
 type CollectorUnderTest = {
   readonly windows: { snapshot(): Array<Record<string, unknown>> };
+  readonly persistence: { readonly failed: number } | undefined;
   consume(source: Readable | AsyncIterable<unknown>): Promise<void>;
 };
 
@@ -36,7 +37,7 @@ type CollectorModule = {
 const WINDOW_COUNT = 8;
 
 describe('collector persistence — AC-3', () => {
-  it('AC-3: compacts the file to a contiguous tail of windows past maxBytes, surfaces append errors, and validates path and maxBytes', async () => {
+  it('AC-3: compacts the file to a contiguous tail of windows past maxBytes, counts and warns about append errors without rejecting, and validates path and maxBytes', async () => {
     const collectorModule = (await import('./index.js')) as unknown as CollectorModule;
 
     const dir = await mkdtemp(join(tmpdir(), 'phargus-persist-ac3-'));
@@ -71,15 +72,26 @@ describe('collector persistence — AC-3', () => {
       expect(parsed.at(-1)).toEqual(last);
       expect(await readdir(dir)).toEqual(['windows.ndjson']);
 
-      // Append errors surface: the persistence path is a directory.
-      const failing = collectorModule.createCollector({
-        windowMs: 1000,
-        capacity: 3,
-        persist: { path: dir, maxBytes: 600 },
-      });
-      await expect(
-        failing.consume(Readable.from([100, 1100].map((timestamp) => makeSample(timestamp)))),
-      ).rejects.toBeInstanceOf(Error);
+      // Append errors are counted and warned about, never thrown: the persistence path is a
+      // directory.
+      const warn = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
+      try {
+        const failing = collectorModule.createCollector({
+          windowMs: 1000,
+          capacity: 3,
+          persist: { path: dir, maxBytes: 600 },
+        });
+        await expect(
+          failing.consume(Readable.from([100, 1100].map((timestamp) => makeSample(timestamp)))),
+        ).resolves.toBeUndefined();
+        expect(failing.windows.snapshot()).toHaveLength(2);
+        expect(failing.persistence?.failed).toBeGreaterThan(0);
+        expect(
+          warn.mock.calls.filter((call) => String(call[1]) === 'PhargusPersistenceWarning'),
+        ).toHaveLength(1);
+      } finally {
+        warn.mockRestore();
+      }
 
       // Synchronous validation at creation.
       expect(() =>

@@ -67,15 +67,23 @@ runs under the same permission model as the host. Without `--allow-addons`, ever
 
 ## Collector, dashboard and OpenTelemetry export
 
-| Grant                                               | Needed for                          |
-| --------------------------------------------------- | ----------------------------------- |
-| `--allow-fs-read=<node_modules/phargus>`            | Loading the modules                 |
-| `--allow-fs-read` and `--allow-fs-write=<the file>` | Window persistence (`persist.path`) |
-| `--allow-fs-write=<the file>`                       | The file alert sink                 |
+| Grant                                                                                          | Needed for                          |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `--allow-fs-read=<node_modules/phargus>`                                                       | Loading the modules                 |
+| `--allow-fs-read`, `--allow-fs-write=<the file>` and `--allow-fs-write=<the file>.compact.tmp` | Window persistence (`persist.path`) |
+| `--allow-fs-write=<the file>`                                                                  | The file alert sink                 |
 
-Only the agent and plugin-runner grants are exercised by tests that run under `--permission`
-(`permission-model.ac2/ac3` and `plugin-runner-caps.integration.test.ts`). The analyzer, collector
-and dashboard rows follow from the files and threads each module uses.
+Window persistence compacts the file by writing `<the file>.compact.tmp` next to it and renaming
+it over the file, so it needs write access to both paths (one `--allow-fs-write` flag each, or
+one for their directory), and the directory must be writable by the process's user. With write access to the file alone, persistence works
+until the file reaches `maxBytes`; from then on every compaction fails, nothing more is appended,
+and each failure is counted in `collector.persistence.failed` with one process warning per run of
+failures. Windows, alerts and `consume()` are not affected.
+
+Only the agent, plugin-runner and window persistence grants are exercised by tests that run under
+`--permission` (`permission-model.ac2/ac3`, `plugin-runner-caps.integration.test.ts` and
+`collector-persistence-permission.integration.test.ts`). The analyzer, dashboard and other
+collector rows follow from the files and threads each module uses.
 
 ## When a grant is missing
 

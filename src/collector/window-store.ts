@@ -64,20 +64,44 @@ export function createWindowStore(options: PersistOptions & { capacity: number }
     }
   }
 
+  /** The newest windows whose lines fit in half of `maxBytes`, and always the newest one. */
+  function newestContent(): string {
+    const lines = ring.snapshot().map(serializeWindow);
+    const budget = Math.floor(maxBytes / 2);
+    let start = lines.length - 1;
+    let size = Buffer.byteLength(lines[start] as string);
+    while (start > 0) {
+      const next = Buffer.byteLength(lines[start - 1] as string);
+      if (size + next > budget) {
+        break;
+      }
+      size += next;
+      start -= 1;
+    }
+    return lines.slice(start).join('');
+  }
+
+  /**
+   * Rewrites the file with the newest windows that fit in half of `maxBytes`, through a temp file
+   * next to it and a rename, so one compaction leaves room for many appends.
+   */
   async function compact(): Promise<void> {
     await closeHandle();
-    const content = ring.snapshot().map(serializeWindow).join('');
+    const content = newestContent();
+    // The rewrite replaces the file, so carry its current mode over (0600 when the store made it).
+    let mode = FILE_MODE;
     try {
-      // The rewrite replaces the file, so carry its current mode over (0600 when the store made it).
-      let mode = FILE_MODE;
-      try {
-        mode = (await stat(path)).mode & 0o777;
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-          throw error;
-        }
+      mode = (await stat(path)).mode & 0o777;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+        throw error;
       }
-      const tmp = await open(tmpPath, 'w', FILE_MODE);
+    }
+    // A stale temp file (a crash mid-compaction) is removed; 'wx' then refuses anything that
+    // appears in its place, such as a planted symlink, instead of writing through it.
+    await rm(tmpPath, { force: true });
+    try {
+      const tmp = await open(tmpPath, 'wx', FILE_MODE);
       try {
         await tmp.chmod(mode);
         await tmp.writeFile(content);
@@ -151,15 +175,18 @@ export function createWindowStore(options: PersistOptions & { capacity: number }
         );
       }
       return enqueue(async () => {
-        handle ??= await open(path, 'a', FILE_MODE);
         const line = `${needsNewline ? '\n' : ''}${serializeWindow(window)}`;
+        ring.push(window);
+        if (bytes + Buffer.byteLength(line) > maxBytes) {
+          // Compacting first keeps the file within maxBytes; the rewrite includes this window. If
+          // it fails, nothing is appended, so the file stays within the cap.
+          await compact();
+          return;
+        }
+        handle ??= await open(path, 'a', FILE_MODE);
         await handle.appendFile(line);
         needsNewline = false;
         bytes += Buffer.byteLength(line);
-        ring.push(window);
-        if (bytes > maxBytes) {
-          await compact();
-        }
       });
     },
     release(): Promise<void> {

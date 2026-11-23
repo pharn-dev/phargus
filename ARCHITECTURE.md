@@ -89,9 +89,11 @@ with an alert rule.
    records go to a ring buffer, samples become fixed time windows with integer math, windows go to
    the alert evaluator and, when persistence is on, into a bounded queue (`persist.maxQueueSize`, default 1024) that is appended to a file one window at a time in
    emission order, and alerts go to the sinks. A slow disk drops the oldest queued windows, counted
-   in `collector.persistence.dropped`, instead of slowing the pipeline; a failed append is counted
-   in `failed` and rejects `consume()`; `close()` and the end of `consume()` wait for the queue to
-   drain, and `close()` stops accepting windows first. Ring buffers bound windows, alerts and spans. The wiring is
+   in `collector.persistence.dropped`, instead of slowing the pipeline; a persistence failure
+   (restore, append or compaction) is counted in `failed` and reported as one process warning per
+   run of consecutive failures, never fatal: it neither stops the pipeline nor rejects `consume()`.
+   Compaction keeps the newest windows that fit in half of `maxBytes`; `close()` and the end of
+   `consume()` wait for the queue to drain, and `close()` stops accepting windows first. Ring buffers bound windows, alerts and spans. The wiring is
    `pipeline(input, createNdjsonDecoder(), (records) => collector.consume(records))`.
 4. **Delivery (dashboard).** `createDashboardServer({ collector, host, port })` subscribes to the
    collector and serves the UI and an SSE endpoint. Each SSE client has its own bounded queue; a
