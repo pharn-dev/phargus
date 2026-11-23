@@ -33,6 +33,11 @@ export function renderPage(): string {
 <p id="gc" class="figure">–</p>
 </section>
 <section>
+<h2>Backpressure</h2>
+<p id="backpressure" class="figure">–</p>
+<ol id="hotspots" aria-label="Backpressure call sites"></ol>
+</section>
+<section>
 <h2>Alerts</h2>
 <ul id="alerts"></ul>
 <p id="alerts-empty">No alerts yet</p>

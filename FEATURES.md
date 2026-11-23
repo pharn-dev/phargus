@@ -39,7 +39,9 @@ Status legend:
   is no `--trace-gc` text hook; the observer gives the same counts without parsing.
 - ✅ Stream backpressure hotspots (where writes stall, by call site) for `Writable` subclasses,
   `fs.WriteStream`, `Duplex`, `Transform`, `PassThrough`, `net.Socket`, `tls.TLSSocket`,
-  `http.ServerResponse` and `http.ClientRequest`.
+  `http.ServerResponse` and `http.ClientRequest`. Collector windows keep the top 5 call sites by
+  total stall (merged by site across the window's samples, sites cut to 256 characters, at most 64
+  distinct sites tracked per window).
 - 🟡 Request tracing with an automatic `traceId` — **no user-code instrumentation**, powered by
   AsyncLocalStorage. Covers incoming requests to `node:http` and `node:https` servers, honouring
   an incoming W3C `traceparent`. A request aborted by the client or destroyed (a timeout) leaves a
@@ -80,8 +82,8 @@ Status legend:
 - ✅ Lightweight UI: vanilla JS, no framework, no bundler. Started from the command line with
   `phargus serve`, or from code with `createDashboardServer`.
 - ✅ Live updates over SSE (Server-Sent Events), bounded per client.
-- 🟡 Views for event loop lag, memory, GC, alerts and traces. There is no backpressure view yet;
-  backpressure is in the windows on `/events`.
+- ✅ Views for event loop lag, memory, GC, backpressure, alerts and traces. The Backpressure view
+  shows the latest window's stall count, total and maximum stall, and its top 5 call sites.
 - ✅ Trace detail / waterfall view of recent requests.
 - ⬜ Time-range scrubbing of recent windows. The page shows the latest window only.
 - ✅ Exposure/auth model: loopback without a token, any other bind requires one; `Host`/`Origin`

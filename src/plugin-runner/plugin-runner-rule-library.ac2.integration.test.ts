@@ -37,7 +37,7 @@ const WINDOW: AggregatedWindow = {
   eventLoop: { max: 200_000_000, p99: 200_000_000, mean: 1_000_000 },
   memory: { heapUsedLast: 1000, heapUsedMax: 2000, rssLast: 3000, rssMax: 4000 },
   gc: { count: 1, totalPause: 300_000_000, maxPause: 300_000_000 },
-  backpressure: { events: 0, totalStall: 0, maxStall: 0 },
+  backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
 };
 
 /** Calls `configure` and returns what it threw synchronously; fails the test if it returned instead. */

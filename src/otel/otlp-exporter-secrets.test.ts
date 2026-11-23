@@ -17,7 +17,7 @@ const window: AggregatedWindow = {
   eventLoop: { max: 1, p99: 1, mean: 1 },
   memory: { heapUsedLast: 1, heapUsedMax: 1, rssLast: 1, rssMax: 1 },
   gc: { count: 0, totalPause: 0, maxPause: 0 },
-  backpressure: { events: 0, totalStall: 0, maxStall: 0 },
+  backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
 };
 
 const span: SpanRecord = {

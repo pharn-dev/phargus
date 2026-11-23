@@ -26,7 +26,7 @@ const window: AggregatedWindow = {
   eventLoop: { max: 5000000, p99: 4000000, mean: 2000000 },
   memory: { heapUsedLast: 1000, heapUsedMax: 2000, rssLast: 3000, rssMax: 4000 },
   gc: { count: 3, totalPause: 4500000, maxPause: 2000000 },
-  backpressure: { events: 5, totalStall: 7000000, maxStall: 3000000 },
+  backpressure: { events: 5, totalStall: 7000000, maxStall: 3000000, hotspots: [] },
 };
 
 // [name, unit, asInt]

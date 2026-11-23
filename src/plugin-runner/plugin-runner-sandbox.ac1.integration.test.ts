@@ -30,7 +30,7 @@ function windowAt(start: number, eventLoopMax: number): AggregatedWindow {
     eventLoop: { max: eventLoopMax, p99: eventLoopMax, mean: 10 },
     memory: { heapUsedLast: 1000, heapUsedMax: 2000, rssLast: 3000, rssMax: 4000 },
     gc: { count: 1, totalPause: 5, maxPause: 5 },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0 },
+    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
   };
 }
 

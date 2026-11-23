@@ -9,6 +9,12 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Added
 
+- Collector windows now keep where writes stalled: `backpressure.hotspots` holds the top 5 call
+  sites by total stall, merged by site across the window's samples (at most 64 distinct sites
+  tracked per window, sites cut to 256 characters). A sample with missing or malformed hotspots
+  still counts. Persisted windows carry the field (older lines restore with an empty list), and
+  the dashboard has a Backpressure section with the latest window's stalls and call sites. OTLP
+  metrics are unchanged.
 - A request that closes before its response finishes (client disconnect, `res.destroy()`, a
   timeout) now leaves a span with `aborted: true`; the dashboard waterfall shows it as an error
   marked "aborted", and OTLP export sets its status to error.
