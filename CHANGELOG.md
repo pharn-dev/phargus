@@ -81,6 +81,11 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Security
 
+- A heap snapshot file under the 256 MiB cap can no longer abort the host process:
+  `summarizeHeapSnapshot` and `diffHeapSnapshots` reject JSON nested more than 64 levels deep
+  ("nesting too deep"), and the worker no longer keeps every distinct top-level key, only
+  `snapshot`, `nodes` and `strings`. Both now fail with a `WorkerTaskError` instead.
+
 - The dashboard returns `400` for malformed request targets and catches request-handler errors, so one request cannot crash the process hosting it.
 
 - Dashboard binds outside loopback now require a token of at least 16 characters; short tokens are refused before the server binds.
