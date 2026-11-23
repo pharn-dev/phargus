@@ -1,11 +1,12 @@
+import { buildSparkline } from './sparkline-model.js';
 import { buildWaterfall } from './waterfall-model.js';
 
 /**
  * The dashboard client, served verbatim as one classic script (no import/export). Vanilla JS with
  * string concatenation only: the String.raw templates must hold no backtick and no dollar-brace
- * sequence. The waterfall layout function is embedded as its own compiled text, so the unit-tested
- * function is the one the browser runs; it is assigned to a var because a minifier may rename the
- * function itself.
+ * sequence. The waterfall and sparkline layout functions are embedded as their own compiled text, so
+ * the unit-tested functions are the ones the browser runs; each is assigned to a var because a
+ * minifier may rename the function itself.
  */
 export const APP_SCRIPT: string =
   String.raw`(function () {
@@ -14,12 +15,19 @@ export const APP_SCRIPT: string =
   var MAX_ALERTS = 20;
   var MAX_TRACES = 20;
   var MAX_SPANS = 500;
+  var MAX_WINDOWS = 300;
+  var TREND_HEIGHT = 40;
+  var SVG_NS = 'http://www.w3.org/2000/svg';
   var BACKOFF_START_MS = 1000;
   var BACKOFF_CAP_MS = 30000;
   var STALE_MIN_MS = 5000;
 
   var buildWaterfall = ` +
   buildWaterfall.toString() +
+  String.raw`;
+
+  var buildSparkline = ` +
+  buildSparkline.toString() +
   String.raw`;
 
   function formatMs(ns) {
@@ -174,6 +182,52 @@ export const APP_SCRIPT: string =
       }
     }
 
+    /** An empty sparkline (one polyline per series) and its max label, inserted after the figure. */
+    function createTrend(figureEl, lineCount) {
+      var svg = document.createElementNS(SVG_NS, 'svg');
+      svg.setAttribute('class', 'trend');
+      svg.setAttribute('viewBox', '0 0 ' + (MAX_WINDOWS - 1) + ' ' + TREND_HEIGHT);
+      svg.setAttribute('preserveAspectRatio', 'none');
+      svg.setAttribute('aria-hidden', 'true');
+      var lines = [];
+      for (var i = 0; i < lineCount; i += 1) {
+        var line = document.createElementNS(SVG_NS, 'polyline');
+        line.setAttribute('class', 'trend-line trend-line-' + i);
+        svg.appendChild(line);
+        lines.push(line);
+      }
+      var maxEl = document.createElement('p');
+      maxEl.className = 'trend-max';
+      figureEl.parentNode.insertBefore(maxEl, figureEl.nextSibling);
+      figureEl.parentNode.insertBefore(svg, maxEl);
+      return { lines: lines, maxEl: maxEl };
+    }
+
+    // The last MAX_WINDOWS windows' figures, oldest first; each trend draws some of their keys.
+    var recent = [];
+    var trends = [
+      { view: createTrend(lagEl, 1), keys: ['lag'], format: formatMs },
+      { view: createTrend(memoryEl, 2), keys: ['heap', 'rss'], format: formatMiB },
+      { view: createTrend(gcEl, 1), keys: ['gc'], format: formatMs },
+      { view: createTrend(backpressureEl, 1), keys: ['stall'], format: formatMs },
+    ];
+
+    function drawTrends() {
+      for (var t = 0; t < trends.length; t += 1) {
+        var trend = trends[t];
+        var series = trend.keys.map(function (key) {
+          return recent.map(function (figures) {
+            return figures[key];
+          });
+        });
+        var sparkline = buildSparkline(series, MAX_WINDOWS, TREND_HEIGHT);
+        for (var j = 0; j < sparkline.points.length; j += 1) {
+          trend.view.lines[j].setAttribute('points', sparkline.points[j]);
+        }
+        trend.view.maxEl.textContent = recent.length === 0 ? '' : 'max ' + trend.format(sparkline.max);
+      }
+    }
+
     function renderBackpressure(bp) {
       while (hotspotsEl.firstChild) {
         hotspotsEl.removeChild(hotspotsEl.firstChild);
@@ -273,6 +327,7 @@ export const APP_SCRIPT: string =
     // scheduleFrame, and the one pending frame redraws whatever is dirty.
     var frameRequested = false;
     var waterfallDirty = false;
+    var trendsDirty = false;
 
     function scheduleFrame() {
       if (!frameRequested) {
@@ -284,6 +339,10 @@ export const APP_SCRIPT: string =
     function onFrame() {
       frameRequested = false;
       try {
+        if (trendsDirty) {
+          trendsDirty = false;
+          drawTrends();
+        }
         if (waterfallDirty) {
           waterfallDirty = false;
           renderWaterfall(buildWaterfall(spans, MAX_TRACES));
@@ -297,6 +356,28 @@ export const APP_SCRIPT: string =
     function clearWaterfall() {
       spans = [];
       waterfallDirty = true;
+      scheduleFrame();
+    }
+
+    function clearTrends() {
+      recent = [];
+      trendsDirty = true;
+      scheduleFrame();
+    }
+
+    /** Keeps the window's figures for the sparklines; they redraw on the next frame. */
+    function addTrendPoint(w) {
+      recent.push({
+        lag: w.eventLoop.p99,
+        heap: w.memory.heapUsedLast,
+        rss: w.memory.rssLast,
+        gc: w.gc.totalPause,
+        stall: w.backpressure.totalStall,
+      });
+      if (recent.length > MAX_WINDOWS) {
+        recent.shift();
+      }
+      trendsDirty = true;
       scheduleFrame();
     }
 
@@ -321,6 +402,7 @@ export const APP_SCRIPT: string =
         var payload = JSON.parse(parsed.data);
         if (parsed.event === 'window') {
           renderWindow(payload);
+          addTrendPoint(payload);
         } else if (parsed.event === 'span') {
           addSpan(payload);
         } else {
@@ -390,6 +472,7 @@ export const APP_SCRIPT: string =
           }
           backoffMs = BACKOFF_START_MS;
           clearAlerts();
+          clearTrends();
           clearWaterfall();
           connected = true;
           setStatus('live', 'live');

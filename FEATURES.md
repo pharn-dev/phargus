@@ -84,8 +84,12 @@ Status legend:
 - ✅ Live updates over SSE (Server-Sent Events), bounded per client.
 - ✅ Views for event loop lag, memory, GC, backpressure, alerts and traces. The Backpressure view
   shows the latest window's stall count, total and maximum stall, and its top 5 call sites.
+- ✅ Recent trend per card: the page keeps the last 300 windows it received and draws a sparkline
+  of event loop p99, heap used and RSS, GC total pause, and backpressure total stall, labelled with
+  the line's maximum. The figures show the latest window.
 - ✅ Trace detail / waterfall view of recent requests.
-- ⬜ Time-range scrubbing of recent windows. The page shows the latest window only.
+- ⬜ Time-range scrubbing of recent windows: the sparklines cover the last 300 windows, with no
+  way to pick a range.
 - ✅ Exposure/auth model: loopback without a token, any other bind requires one; `Host`/`Origin`
   allowlist (`allowedHosts`); a `/login#token=` fragment link exchanged once through `POST /session` for an `HttpOnly`, `SameSite=Strict` cookie (the `?token=` link still works for one release, deprecated);
   `Authorization: Bearer` for API clients.
