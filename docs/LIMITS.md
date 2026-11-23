@@ -103,6 +103,13 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   the prototype's is not seen. Hotspots point to where to look, not to a proven root cause.
 - **Windows are aggregates.** Percentiles over a time window hide what happened inside it, and
   counters use integer math, so very small or very large values are bounded by the unit chosen.
+- **Windows follow sample timestamps, not the collector's clock.** A sample whose `timestamp` is
+  not a safe integer, or is more than 24 hours ahead of the collector's `Date.now()`, is
+  `malformed` and counted in `collector.ignored`; past timestamps are accepted, so an old capture
+  replays unchanged. A sample up to 60 windows older than the open window is counted in that
+  window's `late` and dropped. A sample more than 60 windows older (a host clock stepped back by
+  NTP or a VM resume) restarts aggregation: the open window is emitted and a new one starts at the
+  sample's time, so window `start` values are then not monotonic.
 - **GC and deoptimization detail depend on Node and V8.** GC data comes from `PerformanceObserver`
   `gc` entries, whose detail varies by Node version. Deoptimization support is a parser for
   `node --trace-deopt` output: Phargus does not start or capture that output, and the text format can
