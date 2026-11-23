@@ -6,6 +6,8 @@ export const DEFAULT_MAX_LINE_BYTES = 1_048_576;
 
 const NEWLINE = 0x0a;
 
+const EMPTY = Buffer.alloc(0);
+
 /** One skipped line: text that is not a JSON object, or a line past `maxLineBytes`. */
 export type NdjsonSkip =
   { reason: 'invalid'; line: string } | { reason: 'oversized'; bytes: number };
@@ -31,8 +33,10 @@ function saturatingAdd(a: number, b: number): number {
 /**
  * Newline-delimited JSON decoder for a stdout the app shares with the agent.
  * Lines that are not a JSON object (plain text, truncated JSON, numbers, arrays) or that exceed
- * `maxLineBytes` are skipped and counted, never thrown. Held memory per partial line never exceeds
- * `maxLineBytes`. Wire it with `pipeline(input, decoder, (records) => collector.consume(records))`.
+ * `maxLineBytes` are skipped and counted, never thrown. A partial line is held in one buffer of at
+ * most `maxLineBytes` bytes; while that buffer grows or the finished line is joined, the old and new
+ * buffers together stay at most twice `maxLineBytes`.
+ * Wire it with `pipeline(input, decoder, (records) => collector.consume(records))`.
  */
 export function createNdjsonDecoder(options: NdjsonDecoderOptions = {}): NdjsonDecoder {
   const maxLineBytes = options.maxLineBytes ?? DEFAULT_MAX_LINE_BYTES;
@@ -46,8 +50,10 @@ export function createNdjsonDecoder(options: NdjsonDecoderOptions = {}): NdjsonD
 
   let invalid = 0;
   let oversized = 0;
-  // The partial line: copied slices plus their total length, never more than maxLineBytes.
-  let slices: Buffer[] = [];
+  // The partial line: the first `held` bytes of `partial`. `partial` doubles when a segment does not
+  // fit and is never longer than maxLineBytes, so a line that trickles in byte by byte costs one
+  // buffer (not one per byte) and under 2x its length in copying.
+  let partial = EMPTY;
   let held = 0;
   // Set once the partial line passed maxLineBytes: bytes are only counted until the next newline.
   let discarding = false;
@@ -85,7 +91,7 @@ export function createNdjsonDecoder(options: NdjsonDecoderOptions = {}): NdjsonD
   };
 
   const resetLine = (): void => {
-    slices = [];
+    partial = EMPTY;
     held = 0;
     discarding = false;
     discardedBytes = 0;
@@ -97,16 +103,24 @@ export function createNdjsonDecoder(options: NdjsonDecoderOptions = {}): NdjsonD
       discardedBytes = saturatingAdd(discardedBytes, segment.length);
       return;
     }
-    if (held + segment.length > maxLineBytes) {
+    const needed = held + segment.length;
+    if (needed > maxLineBytes) {
       discarding = true;
       discardedBytes = saturatingAdd(held, segment.length);
-      slices = [];
+      partial = EMPTY;
       held = 0;
       return;
     }
+    if (needed > partial.length) {
+      const grown = Buffer.allocUnsafe(
+        Math.min(maxLineBytes, Math.max(needed, partial.length * 2)),
+      );
+      partial.copy(grown, 0, 0, held);
+      partial = grown;
+    }
     // Copy: a subarray would keep the whole source chunk alive.
-    slices.push(Buffer.from(segment));
-    held += segment.length;
+    segment.copy(partial, held);
+    held = needed;
   };
 
   /** The final segment of a line, with its newline (or end of input) reached. */
@@ -123,9 +137,9 @@ export function createNdjsonDecoder(options: NdjsonDecoderOptions = {}): NdjsonD
       skip({ reason: 'oversized', bytes: total });
       return;
     }
-    const line = slices.length === 0 ? segment : Buffer.concat([...slices, segment], total);
+    const whole = held === 0 ? segment : Buffer.concat([partial.subarray(0, held), segment], total);
     resetLine();
-    decodeLine(line);
+    decodeLine(whole);
   };
 
   const decoder = new Transform({
