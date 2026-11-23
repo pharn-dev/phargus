@@ -86,8 +86,11 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 - **Trace context can be lost.** `AsyncLocalStorage` propagates through promises and most callbacks,
   but not across every native addon, connection pool or queue, and not across processes. Spans can
   be missing or attached to the wrong request. Worker Threads need explicit propagation.
-- **No distributed tracing.** An incoming W3C `traceparent` is honoured, but Phargus does not add one
-  to outgoing requests, so it does not follow a request across services.
+- **No distributed tracing.** A valid incoming W3C `traceparent` is continued: the request's span
+  takes its trace-id as `traceId` and its parent-id as `parentSpanId` (both lowercased), and OTLP
+  export sends that parent. Its trace-flags and any `tracestate` are not kept. A request with no
+  valid header starts a fresh trace and its span has no `parentSpanId`. Phargus does not add a
+  `traceparent` to outgoing requests, so it does not follow a request across services.
 - **Backpressure hotspots are inferred from `write()` returning `false`.** The probe wraps `write`
   on the `Writable`, `Duplex` and `http.OutgoingMessage` prototypes, which covers `Writable`
   subclasses, `fs.WriteStream`, `Duplex`, `Transform`, `PassThrough`, `net.Socket`,

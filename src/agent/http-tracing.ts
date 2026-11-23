@@ -17,6 +17,8 @@ type Inflight = {
   startNs: bigint;
   method: string;
   path: string;
+  /** The parent-id of a continued `traceparent`; undefined for a fresh trace. */
+  parentSpanId: string | undefined;
 };
 
 /** A span keeps at most this many characters of the requested path. */
@@ -58,17 +60,18 @@ function onStart(message: unknown): void {
       return;
     }
     const request = message.request;
-    const traceId = parseTraceparent(headerValue(request.headers)) ?? newTraceId();
+    const parent = parseTraceparent(headerValue(request.headers));
     // Read now: a framework may rewrite `req.url` before the response finishes.
     const url = typeof request.url === 'string' ? request.url : '';
     const queryAt = url.indexOf('?');
     const pathEnd = Math.min(queryAt === -1 ? url.length : queryAt, MAX_PATH_CHARS);
     inflight.set(request, {
-      traceId,
+      traceId: parent?.traceId ?? newTraceId(),
       startTimeMs: Date.now(),
       startNs: process.hrtime.bigint(),
       method: typeof request.method === 'string' ? request.method : '',
       path: url.slice(0, pathEnd),
+      parentSpanId: parent?.parentSpanId,
     });
     if (message.response instanceof EventEmitter) {
       message.response.once('close', onClose);
@@ -138,6 +141,7 @@ function recordSpan(request: object, entry: Inflight, statusCode: number, aborte
     entry.startTimeMs,
     Math.min(Math.max(elapsed, 0), Number.MAX_SAFE_INTEGER),
     aborted,
+    entry.parentSpanId,
   );
 }
 

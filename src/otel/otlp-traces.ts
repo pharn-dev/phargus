@@ -37,6 +37,9 @@ function toOtlpSpan(record: SpanRecord): OtlpSpan {
   if (!SPAN_ID_PATTERN.test(record.spanId)) {
     throw new RangeError('span spanId must be 16 lowercase hex characters');
   }
+  if (record.parentSpanId !== undefined && !SPAN_ID_PATTERN.test(record.parentSpanId)) {
+    throw new RangeError('span parentSpanId must be 16 lowercase hex characters');
+  }
   requireNonNegativeSafeInteger('startTimeMs', record.startTimeMs);
   requireNonNegativeSafeInteger('durationNs', record.durationNs);
   requireNonNegativeSafeInteger('statusCode', record.statusCode);
@@ -52,6 +55,7 @@ function toOtlpSpan(record: SpanRecord): OtlpSpan {
   return {
     traceId: record.traceId,
     spanId: record.spanId,
+    ...(record.parentSpanId === undefined ? {} : { parentSpanId: record.parentSpanId }),
     name: record.name,
     kind: SPAN_KIND_SERVER,
     startTimeUnixNano: start.toString(),
