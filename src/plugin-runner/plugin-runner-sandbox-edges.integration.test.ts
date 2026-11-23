@@ -36,7 +36,7 @@ describe('rule file size cap', () => {
     const failure = loaded.failures[0];
     expect(failure?.id).toBe('huge');
     expect(failure?.error.code).toBe(RuleErrorCode.RULE_FILE_UNREADABLE);
-    // The size branch, not a failed read: the file was never opened for reading.
+    // The size branch, not a failed read: its text was never read.
     expect(failure?.error.message).toContain('over the limit of 1048576');
   });
 });

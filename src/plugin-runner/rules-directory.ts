@@ -1,4 +1,4 @@
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { RuleDescriptor } from './rule-descriptor.js';
 import { RuleErrorCode } from './rule-result.js';
@@ -49,18 +49,24 @@ export async function loadRulesDirectory(dir: string): Promise<RulesDirectoryRes
     const id = name.slice(0, -RULE_EXTENSION.length);
     const path = join(dir, name);
     try {
-      const { size } = await stat(path);
-      if (size > MAX_RULE_FILE_BYTES) {
-        failures.push({
-          id,
-          error: {
-            code: RuleErrorCode.RULE_FILE_UNREADABLE,
-            message: `rule file "${path}" is ${String(size)} bytes, over the limit of ${String(MAX_RULE_FILE_BYTES)} (1 MiB)`,
-          },
-        });
-        continue;
+      // Size and text come from one open handle, so the file checked is the file read.
+      const file = await open(path, 'r');
+      try {
+        const { size } = await file.stat();
+        if (size > MAX_RULE_FILE_BYTES) {
+          failures.push({
+            id,
+            error: {
+              code: RuleErrorCode.RULE_FILE_UNREADABLE,
+              message: `rule file "${path}" is ${String(size)} bytes, over the limit of ${String(MAX_RULE_FILE_BYTES)} (1 MiB)`,
+            },
+          });
+          continue;
+        }
+        rules.push({ id, source: await file.readFile('utf8') });
+      } finally {
+        await file.close();
       }
-      rules.push({ id, source: await readFile(path, 'utf8') });
     } catch (cause) {
       failures.push({
         id,
