@@ -13,16 +13,19 @@ export type PersistQueueOptions = {
 export type PersistQueue = {
   /** Windows dropped from a full queue (integer, saturating). */
   readonly dropped: number;
-  /** Windows whose append rejected, or that were pushed after `close()` (integer, saturating). */
+  /**
+   * Persistence failures (integer, saturating): windows whose append rejected, windows pushed after
+   * `close()`, and failures passed to `report()`.
+   */
   readonly failed: number;
   /**
    * Queues one window and returns at once. When the queue is full the oldest queued window is
    * dropped and counted. Never throws and never waits for the disk. After `close()` the window is
-   * not queued: it is counted in `failed` and reported to the failure listeners on a later tick.
+   * not queued: it is counted in `failed` on a later tick.
    */
   push(window: AggregatedWindow): void;
-  /** Registers a callback for each failed append; returns its unsubscribe. */
-  onFailure(listener: (error: Error) => void): () => void;
+  /** Counts a persistence failure outside an append (restoring or releasing the file) like one. */
+  report(error: unknown): void;
   /** Resolves when nothing is queued and no append is in flight. Never rejects. */
   drained(): Promise<void>;
   /**
@@ -40,14 +43,12 @@ function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-function reportListenerError(error: unknown): void {
-  const message = error instanceof Error ? error.message : String(error);
-  process.emitWarning(`persist queue failure listener threw: ${message}`);
-}
-
 /**
  * A bounded drop-oldest FIFO of windows with one serial drain loop. It exists so that a slow disk
- * costs dropped windows, not a slower pipeline.
+ * costs dropped windows, not a slower pipeline. A failure is counted in `failed`, and the first
+ * failure of each run of consecutive failures is reported as one process warning; a successful
+ * append ends the run. A failure never reaches the caller: persistence is optional, and it must
+ * not stop the windows and alerts.
  */
 export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
   const { append, maxQueueSize } = options;
@@ -67,8 +68,9 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
   let failed = 0;
   let running = false;
   let closed = false;
+  // True from a failure until the next successful append: one warning per run of failures.
+  let failing = false;
   let waiters: Array<() => void> = [];
-  const listeners = new Set<(error: Error) => void>();
 
   function size(): number {
     return items.length - head;
@@ -86,12 +88,12 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
 
   function fail(error: Error): void {
     failed = increment(failed);
-    for (const listener of [...listeners]) {
-      try {
-        listener(error);
-      } catch (listenerError) {
-        reportListenerError(listenerError);
-      }
+    if (!failing) {
+      failing = true;
+      process.emitWarning(
+        `window persistence failed: ${error.message}; later failures are counted in persistence.failed until an append succeeds`,
+        'PhargusPersistenceWarning',
+      );
     }
   }
 
@@ -109,6 +111,7 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
       const window = take();
       try {
         await append(window);
+        failing = false;
       } catch (error) {
         fail(toError(error));
       }
@@ -150,11 +153,8 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
         });
       }
     },
-    onFailure(listener: (error: Error) => void): () => void {
-      listeners.add(listener);
-      return (): void => {
-        listeners.delete(listener);
-      };
+    report(error: unknown): void {
+      fail(toError(error));
     },
     drained,
     close(): Promise<void> {

@@ -122,10 +122,12 @@ Status legend:
 ## 9. Persistence
 
 - ✅ In-memory ring buffers of recent windows, alerts and spans.
-- ✅ Opt-in disk persistence of recent windows: an append-only NDJSON file with a byte cap
-  (compacted to the newest windows), restored on start, created with mode `0600`. Written off the
-  critical path through a bounded drop-oldest queue (`maxQueueSize`, default 1024) with `dropped`
-  and `failed` counters on `collector.persistence`, drained on `close()`.
+- ✅ Opt-in disk persistence of recent windows: an append-only NDJSON file capped at `maxBytes`
+  (compacted to the newest windows that fit in half of it), restored on start, created with mode
+  `0600`. Written off the critical path through a bounded drop-oldest queue (`maxQueueSize`,
+  default 1024) with `dropped` and `failed` counters on `collector.persistence`, drained on
+  `close()`. A persistence failure is counted in `failed` and reported as one process warning per
+  run of consecutive failures; it is never fatal to windows, alerts or `consume()`.
 
 ## 10. Examples (ship with the repo)
 

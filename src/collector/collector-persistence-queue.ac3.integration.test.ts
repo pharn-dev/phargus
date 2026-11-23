@@ -85,6 +85,7 @@ function makeSample(timestamp: number): Record<string, unknown> {
 
 type CollectorUnderTest = {
   readonly windows: { snapshot(): Array<Record<string, unknown>> };
+  subscribe(listener: { window?: (window: Record<string, unknown>) => void }): () => void;
   readonly persistence: { readonly dropped: number; readonly failed: number } | undefined;
   consume(source: Readable | AsyncIterable<unknown>): Promise<void>;
   close(): Promise<void>;
@@ -112,7 +113,7 @@ afterEach(() => {
 });
 
 describe('collector persistence queue — AC-3', () => {
-  it('AC-3: a failing append rejects consume() with that same Error while the source stays open, counting the failure and reporting no unhandled rejection', async () => {
+  it('AC-3: a failing append never rejects consume(): every window still reaches the ring and the subscribers, each failure is counted, one warning is emitted, and no rejection is unhandled', async () => {
     const collectorModule = (await import('./index.js')) as unknown as CollectorModule;
 
     const dir = await mkdtemp(join(tmpdir(), 'phargus-persist-queue-ac3-'));
@@ -122,10 +123,8 @@ describe('collector persistence queue — AC-3', () => {
       unhandled.push(reason);
     };
     process.on('unhandledRejection', onUnhandled);
+    const warn = vi.spyOn(process, 'emitWarning').mockImplementation(() => undefined);
 
-    // Samples spanning the three windows 0, 1000 and 2000; the source then never ends.
-    const source = new Readable({ objectMode: true, read() {} });
-    let consumed: Promise<void> | undefined;
     try {
       const appendError = new Error('test disk: open for append failed');
       disk.targetPath = path;
@@ -136,32 +135,34 @@ describe('collector persistence queue — AC-3', () => {
         capacity: 10,
         persist: { path, maxBytes: 1_000_000 },
       });
+      const seen: number[] = [];
+      collector.subscribe({ window: (window) => seen.push(window['start'] as number) });
 
-      for (const timestamp of [100, 500, 1100, 1500, 2100, 2500])
-        source.push(makeSample(timestamp));
+      // Samples spanning the four windows 0, 1000, 2000 and 3000.
+      const samples = [100, 500, 1100, 1500, 2100, 2500, 3100].map(makeSample);
+      await within(collector.consume(Readable.from(samples)), 3000, 'consume() to resolve');
 
-      consumed = collector.consume(source);
-      let rejection: unknown;
-      try {
-        await within(consumed, 3000, 'consume() to reject while the source stays open');
-      } catch (error) {
-        rejection = error;
-      }
-      expect(rejection).toBe(appendError);
+      const starts = collector.windows.snapshot().map((window) => window['start']);
+      expect(starts).toEqual([0, 1000, 2000, 3000]);
+      expect(seen).toEqual([0, 1000, 2000, 3000]);
       expect(disk.openForAppendCalls).toBeGreaterThanOrEqual(1);
 
       const failed = collector.persistence?.failed;
       expect(Number.isInteger(failed)).toBe(true);
-      expect(failed).toBeGreaterThanOrEqual(1);
+      expect(failed).toBe(4);
       expect(collector.persistence?.dropped).toBe(0);
+      const persistenceWarnings = warn.mock.calls.filter(
+        (call) => String(call[1]) === 'PhargusPersistenceWarning',
+      );
+      expect(persistenceWarnings).toHaveLength(1);
+      expect(String(persistenceWarnings[0]?.[0])).toContain(appendError.message);
 
+      await expect(collector.close()).resolves.toBeUndefined();
       // Give any stray rejection time to be reported.
       await new Promise((resolve) => setTimeout(resolve, 50));
       await new Promise((resolve) => setImmediate(resolve));
       expect(unhandled).toEqual([]);
     } finally {
-      source.destroy();
-      if (consumed !== undefined) await Promise.allSettled([consumed]);
       process.off('unhandledRejection', onUnhandled);
       await rm(dir, { recursive: true, force: true });
     }

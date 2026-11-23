@@ -42,7 +42,11 @@ export type WindowPersistence = {
   readonly bytes: number;
   /** Windows dropped from a full persistence queue (integer, saturating). */
   readonly dropped: number;
-  /** Windows whose append failed, or that arrived after `close()` (integer, saturating). */
+  /**
+   * Persistence failures, counted and warned about but never thrown (integer, saturating): windows
+   * whose append (or the compaction it triggered) failed, windows that arrived after `close()`, and
+   * a file that could not be restored or released.
+   */
   readonly failed: number;
 };
 
@@ -117,11 +121,18 @@ export function createCollector(options: CollectorOptions): Collector {
     if (store === undefined) {
       return Promise.resolve();
     }
-    restoring ??= store.restore().then((restored) => {
-      for (const window of restored) {
-        windows.push(window);
-      }
-    });
+    // A file that cannot be read is a persistence failure like any other: counted and warned
+    // about, and the collector starts without the persisted windows.
+    restoring ??= store.restore().then(
+      (restored) => {
+        for (const window of restored) {
+          windows.push(window);
+        }
+      },
+      (error: unknown) => {
+        queue?.report(error);
+      },
+    );
     return restoring;
   };
   const subscribers = createSubscriberSet();
@@ -162,15 +173,6 @@ export function createCollector(options: CollectorOptions): Collector {
           }
         },
       });
-      let failure: unknown;
-      let failed = false;
-      // A failed append destroys this run's stream with that Error, so pipeline() rejects with it
-      // without waiting for the source.
-      let persistFailure: Error | undefined;
-      const stopListening = queue?.onFailure((error) => {
-        persistFailure ??= error;
-        recordWindows.destroy(error);
-      });
       try {
         await restoreOnce();
         await pipeline(
@@ -188,38 +190,18 @@ export function createCollector(options: CollectorOptions): Collector {
             }
           },
         );
-      } catch (error) {
-        failure = error;
-        failed = true;
-      }
-      await dispatcher.settle();
-      try {
-        // Windows still queued are attempted, each failure counted, before the file is released.
-        await queue?.drained();
       } finally {
-        stopListening?.();
-      }
-      if (!failed && persistFailure !== undefined) {
-        // An append failed after the source had ended.
-        failure = persistFailure;
-        failed = true;
-      }
-      if (store !== undefined) {
-        try {
-          await store.release();
-        } catch (releaseError) {
-          if (!failed) {
-            throw releaseError;
+        await dispatcher.settle();
+        // Windows still queued are attempted before the file is released. A persistence failure is
+        // counted in `persistence.failed` and warned about, never thrown: it cannot stop consume().
+        await queue?.drained();
+        if (store !== undefined) {
+          try {
+            await store.release();
+          } catch (releaseError) {
+            queue?.report(releaseError);
           }
-          throw new AggregateError(
-            [failure, releaseError],
-            'consume failed and the window store could not be released',
-            { cause: releaseError },
-          );
         }
-      }
-      if (failed) {
-        throw failure;
       }
     },
     async close(): Promise<void> {
