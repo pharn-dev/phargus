@@ -101,9 +101,13 @@ export function createWindowStore(options: PersistOptions & { capacity: number }
     // appears in its place, such as a planted symlink, instead of writing through it.
     await rm(tmpPath, { force: true });
     try {
-      const tmp = await open(tmpPath, 'wx', FILE_MODE);
+      const tmp = await open(tmpPath, 'wx', mode);
       try {
-        await tmp.chmod(mode);
+        // fchmod only when the umask narrowed the mode: the permission model refuses fchmod
+        // (Node 24.15 and later), so the usual 0600 file must not need it.
+        if (((await tmp.stat()).mode & 0o777) !== mode) {
+          await tmp.chmod(mode);
+        }
         await tmp.writeFile(content);
         await tmp.datasync();
       } finally {
