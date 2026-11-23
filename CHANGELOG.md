@@ -16,6 +16,7 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- HTTP tracing no longer pins `EventEmitter.prototype.emit` for HTTP and HTTPS servers: a later replacement (`node:domain`, other instrumentation) is now reached, so a domain catches a server's `'error'` again.
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be
   percent-encoded.

@@ -147,6 +147,17 @@ const contribute: Contributor = (request, next) => {
   return entry === undefined ? next() : runInTrace(entry.traceId, next);
 };
 
+/**
+ * The emit our wrapper hands off to. With no own `emit` at install, it is looked up on the
+ * prototype chain at call time, so a later replacement (node:domain, other instrumentation) of
+ * `EventEmitter.prototype.emit` is still reached.
+ */
+function nextEmit(patch: EmitPatch): Emit {
+  return patch.own === undefined
+    ? (Object.getPrototypeOf(patch.proto) as { emit: Emit }).emit
+    : patch.original;
+}
+
 function createEmitWrapper(patch: EmitPatch): Emit {
   const original = patch.original;
   // The named parameter keeps `wrapper.length` at EventEmitter#emit's arity; `arguments` forwards
@@ -161,9 +172,9 @@ function createEmitWrapper(patch: EmitPatch): Emit {
       emitRegistry.contributors.size === 0 ||
       !isObject(request)
     ) {
-      return Reflect.apply(original, this, args) as boolean;
+      return Reflect.apply(nextEmit(patch), this, args) as boolean;
     }
-    let call = (): boolean => Reflect.apply(original, this, args) as boolean;
+    let call = (): boolean => Reflect.apply(nextEmit(patch), this, args) as boolean;
     for (const contributor of emitRegistry.contributors) {
       const next = call;
       call = () => contributor(request, next);
