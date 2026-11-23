@@ -9,6 +9,7 @@ import {
   createHostPolicy,
   isLoopbackHost,
   isTlsRequest,
+  parseAuthority,
   sessionCookie,
   sessionValueFor,
   tokensMatch,
@@ -31,7 +32,8 @@ export type DashboardServerOptions = {
   host: string;
   port: number;
   /**
-   * Required off loopback. A browser opens `/login#token=<token>` once (the fragment never
+   * Required off loopback, and whenever `allowedHosts` names a host that is not loopback (even on a
+   * loopback bind). A browser opens `/login#token=<token>` once (the fragment never
    * reaches the server) and gets an HttpOnly session cookie through `POST /session`;
    * `/?token=<token>` still works for one release and is deprecated; API clients send
    * `Authorization: Bearer <token>`.
@@ -40,7 +42,8 @@ export type DashboardServerOptions = {
   /**
    * Extra `Host` values to answer, beyond the bind address (and, for a loopback or any-address
    * bind, `localhost`, `127.0.0.1` and `[::1]`) on the bound port. A bare hostname matches on any
-   * port; `host:port` matches exactly. Needed behind a reverse proxy or when reached by name.
+   * port; `host:port` matches exactly. Needed behind a reverse proxy or when reached by name. A
+   * name that is not loopback requires a `token`.
    */
   allowedHosts?: readonly string[];
   heartbeatMs?: number;
@@ -75,7 +78,7 @@ const MISDIRECTED_BODY =
   'misdirected request: this dashboard does not answer to the Host this request used.\n' +
   'To reach it by another hostname or IP (behind a proxy or a container port map), add that\n' +
   'host to the allowedHosts option of createDashboardServer(), or pass --allowed-host <host>\n' +
-  'to phargus serve.\n';
+  'to phargus serve. A name that is not a loopback address also requires a token.\n';
 
 function requirePositiveInteger(name: string, value: number): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -89,6 +92,11 @@ function requirePositiveInteger(name: string, value: number): void {
  */
 function isDisconnect(error: NodeJS.ErrnoException): boolean {
   return error.code === 'ECONNRESET' || error.code === 'EPIPE' || error.message === 'aborted';
+}
+
+/** The first `allowedHosts` entry whose hostname is not loopback, if any. */
+function firstNonLoopbackHost(allowedHosts: readonly string[]): string | undefined {
+  return allowedHosts.find((entry) => !isLoopbackHost(parseAuthority(entry)?.hostname ?? ''));
 }
 
 /** Emitted once per server by the first `GET /?token=` exchange; names the replacement, never a token. */
@@ -125,17 +133,26 @@ export async function createDashboardServer(
   if (token !== undefined && (typeof token !== 'string' || token.length === 0)) {
     throw new RangeError('token must be a non-empty string');
   }
-  if (!isLoopbackHost(host) && token !== undefined && token.length < 16) {
-    throw new RangeError('token must be at least 16 characters for non-loopback hosts');
-  }
-  if (!isLoopbackHost(host) && token === undefined) {
-    throw new Error(`a token is required to bind the dashboard to non-loopback host "${host}"`);
-  }
   if (!Array.isArray(allowedHosts)) {
     throw new RangeError('allowedHosts must be an array of host names');
   }
   // Validates every entry before anything binds; rebuilt with the bound port once listening.
   let hostPolicy: HostPolicy = createHostPolicy(host, port, allowedHosts);
+  // One rule: a bind or an allowedHosts name that is not loopback needs a token of 16+ characters.
+  const bindExposed = !isLoopbackHost(host);
+  const exposedName = bindExposed ? undefined : firstNonLoopbackHost(allowedHosts);
+  if (bindExposed || exposedName !== undefined) {
+    if (token === undefined) {
+      throw new Error(
+        exposedName === undefined
+          ? `a token is required to bind the dashboard to non-loopback host "${host}"`
+          : `a token is required to allow non-loopback host "${exposedName}" in the dashboard's allowedHosts`,
+      );
+    }
+    if (token.length < 16) {
+      throw new RangeError('token must be at least 16 characters for non-loopback hosts');
+    }
+  }
 
   const report = (error: Error): void => {
     try {

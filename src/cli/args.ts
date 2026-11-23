@@ -54,6 +54,17 @@ function parseAllowedHost(value: string): string {
   return value;
 }
 
+/** True when an `--allowed-host` value (`name`, `name:port`, `[v6]:port` or a bare v6) is loopback. */
+function allowedHostIsLoopback(entry: string): boolean {
+  const value = entry.toLowerCase();
+  const bracketed = /^(\[[^\]]*\])(?::[0-9]+)?$/.exec(value);
+  if (bracketed?.[1] !== undefined) {
+    return isLoopbackHost(bracketed[1]);
+  }
+  const named = /^([^:]*):[0-9]+$/.exec(value);
+  return isLoopbackHost(named?.[1] ?? value);
+}
+
 function parsePositiveInteger(flag: string, value: string): number {
   const parsed = DIGITS.test(value) ? Number(value) : Number.NaN;
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
@@ -64,8 +75,8 @@ function parsePositiveInteger(flag: string, value: string): number {
 
 /**
  * Parses `argv` (without the node and script entries). `--help` and `--version` win over
- * everything else. The token comes from `--token`, else a non-empty `PHARGUS_TOKEN`; a host that is
- * not loopback without a token is refused here, before anything binds.
+ * everything else. The token comes from `--token`, else a non-empty `PHARGUS_TOKEN`; a host or an
+ * `--allowed-host` that is not loopback without a token is refused here, before anything binds.
  */
 export function parseServeArgs(argv: readonly string[], env: NodeJS.ProcessEnv): ParsedArgs {
   let parsed;
@@ -133,18 +144,28 @@ export function parseServeArgs(argv: readonly string[], env: NodeJS.ProcessEnv):
   }
   const envToken = env['PHARGUS_TOKEN'];
   const token = values.token ?? (envToken === undefined || envToken === '' ? undefined : envToken);
-  if (!isLoopbackHost(host) && token !== undefined && token.length < 16) {
-    const source = values.token === undefined ? 'PHARGUS_TOKEN' : '--token';
-    throw new UsageError(`${source} must be at least 16 characters for a non-loopback host`);
-  }
-  if (!isLoopbackHost(host) && token === undefined) {
-    throw new UsageError(
-      `a token is required to bind --host "${host}" because it is not a loopback address; ` +
-        'pass --token or set PHARGUS_TOKEN',
-    );
-  }
-
   const allowedHosts = (values['allowed-host'] ?? []).map(parseAllowedHost);
+  // One rule: a --host or --allowed-host that is not loopback needs a token of 16+ characters.
+  const bindExposed = !isLoopbackHost(host);
+  const exposedName = bindExposed
+    ? undefined
+    : allowedHosts.find((entry) => !allowedHostIsLoopback(entry));
+  if (bindExposed || exposedName !== undefined) {
+    if (token === undefined) {
+      const what =
+        exposedName === undefined
+          ? `to bind --host "${host}"`
+          : `for --allowed-host "${exposedName}"`;
+      throw new UsageError(
+        `a token is required ${what} because it is not a loopback address; ` +
+          'pass --token or set PHARGUS_TOKEN',
+      );
+    }
+    if (token.length < 16) {
+      const source = values.token === undefined ? 'PHARGUS_TOKEN' : '--token';
+      throw new UsageError(`${source} must be at least 16 characters for a non-loopback host`);
+    }
+  }
 
   const [spec] = rest;
   const input: ServeInput =

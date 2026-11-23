@@ -16,14 +16,17 @@ describe('phargus serve: --allowed-host parsing', () => {
 
   it('collects every occurrence in order, bare names and host:port alike', () => {
     expect(
-      serveOptions([
-        'serve',
-        '--allowed-host',
-        'dash.example',
-        '--allowed-host=192.0.2.10',
-        '--allowed-host',
-        'proxy.example:8443',
-      ]).allowedHosts,
+      serveOptions(
+        [
+          'serve',
+          '--allowed-host',
+          'dash.example',
+          '--allowed-host=192.0.2.10',
+          '--allowed-host',
+          'proxy.example:8443',
+        ],
+        { PHARGUS_TOKEN: 'a'.repeat(16) },
+      ).allowedHosts,
     ).toEqual(['dash.example', '192.0.2.10', 'proxy.example:8443']);
   });
 
@@ -33,6 +36,34 @@ describe('phargus serve: --allowed-host parsing', () => {
     });
     expect(options.host).toBe('0.0.0.0');
     expect(options.allowedHosts).toEqual(['box.lan']);
+  });
+
+  it('requires a token for a non-loopback --allowed-host, even on a loopback bind', () => {
+    let caught: unknown;
+    try {
+      parseServeArgs(['serve', '--allowed-host', 'dash.internal'], {});
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(UsageError);
+    expect((caught as UsageError).exitCode).toBe(2);
+    expect((caught as UsageError).message).toMatch(/token is required.*dash\.internal/);
+  });
+
+  it('allows loopback --allowed-host values without a token', () => {
+    expect(
+      serveOptions([
+        'serve',
+        '--allowed-host',
+        'localhost:8080',
+        '--allowed-host',
+        '127.0.0.1',
+        '--allowed-host',
+        '[::1]:7070',
+        '--allowed-host',
+        '::1',
+      ]).allowedHosts,
+    ).toEqual(['localhost:8080', '127.0.0.1', '[::1]:7070', '::1']);
   });
 
   it('does not lift the token requirement off loopback', () => {

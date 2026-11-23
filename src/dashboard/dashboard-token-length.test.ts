@@ -20,6 +20,34 @@ describe('dashboard token length', () => {
     expect((caught as Error).message).not.toContain(token);
   });
 
+  it('rejects a short token when allowedHosts names a non-loopback host on a loopback bind', async () => {
+    const token = 'secret-short';
+    let caught: unknown;
+    try {
+      await createDashboardServer({
+        collector: collector(),
+        host: '127.0.0.1',
+        port: 0,
+        token,
+        allowedHosts: ['dash.example.com'],
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(RangeError);
+    expect((caught as Error).message).toContain('16 characters');
+    expect((caught as Error).message).not.toContain(token);
+
+    const local = await createDashboardServer({
+      collector: collector(),
+      host: '127.0.0.1',
+      port: 0,
+      token: 'a',
+      allowedHosts: ['localhost:8080', '127.0.0.1'],
+    });
+    await local.close();
+  });
+
   it('accepts a 16-character token off loopback and a one-character token on loopback', async () => {
     const remote = await createDashboardServer({
       collector: collector(),

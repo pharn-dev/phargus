@@ -100,7 +100,9 @@ unless you ask to remain anonymous.
 - Issues that require the attacker to already control the monitored process, or have local code
   execution as the same user.
 - Exposing a loopback-bound, token-less dashboard to other people through your own tunnel or
-  proxy.
+  proxy that sends a loopback `Host` (such as `localhost`). A dashboard refuses to start with a
+  name in `allowedHosts` that is not loopback unless a token of at least 16 characters is set, so a proxy that sends its own
+  public name needs a token.
 - Social engineering, or attacks requiring physical access to a machine.
 - Denial of service that does not exploit a specific vulnerability (e.g. simply sending a very high
   request rate).

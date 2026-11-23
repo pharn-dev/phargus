@@ -124,6 +124,7 @@ describe('dashboard Host and Origin validation (DNS rebinding)', () => {
           );
           expect(response.body, `${what}: names allowedHosts`).toContain('allowedHosts');
           expect(response.body, `${what}: names --allowed-host`).toContain('--allowed-host');
+          expect(response.body, `${what}: says a name needs a token`).toContain('token');
           expect(response.body, `${what}: no echo of the Host`).not.toContain(host);
           expect(response.body, `${what}: no echo of the name`).not.toContain('evil');
           expectErrorHeaders(what, response.headers);
@@ -155,12 +156,43 @@ describe('dashboard Host and Origin validation (DNS rebinding)', () => {
   });
 
   it('serves the hosts allowedHosts adds: a bare name on any port, host:port exactly', async () => {
-    const server = await start({ allowedHosts: ['dash.example.com', 'proxy.example:8443'] });
-    expect((await send(server.port, '/', { host: 'dash.example.com' })).status).toBe(200);
-    expect((await send(server.port, '/', { host: 'dash.example.com:9999' })).status).toBe(200);
-    expect((await send(server.port, '/', { host: 'proxy.example:8443' })).status).toBe(200);
-    expect((await send(server.port, '/', { host: 'proxy.example:8444' })).status).toBe(421);
-    expect((await send(server.port, '/', { host: 'other.example.com' })).status).toBe(421);
+    const server = await start({
+      token: TOKEN,
+      allowedHosts: ['dash.example.com', 'proxy.example:8443'],
+    });
+    const status = async (host: string): Promise<number> =>
+      (await send(server.port, '/', { host, authorization: `Bearer ${TOKEN}` })).status;
+    expect(await status('dash.example.com')).toBe(200);
+    expect(await status('dash.example.com:9999')).toBe(200);
+    expect(await status('proxy.example:8443')).toBe(200);
+    expect(await status('proxy.example:8444')).toBe(421);
+    expect(await status('other.example.com')).toBe(421);
+  });
+
+  it('refuses a non-loopback allowedHosts name without a token before binding', async () => {
+    const collector = createCollector({ windowMs: 1000, capacity: 10 });
+    for (const allowedHosts of [['dash.example.com'], ['localhost', 'proxy.example:8443']]) {
+      await expect(
+        createDashboardServer({ collector, host: '127.0.0.1', port: 0, allowedHosts }),
+        allowedHosts.join(','),
+      ).rejects.toThrow(/token is required/);
+    }
+  });
+
+  it('starts with a non-loopback allowedHosts name when a token is set', async () => {
+    const server = await start({ token: TOKEN, allowedHosts: ['dash.example.com'] });
+    const response = await send(server.port, '/', {
+      host: 'dash.example.com',
+      authorization: `Bearer ${TOKEN}`,
+    });
+    expect(response.status).toBe(200);
+  });
+
+  it('starts without a token when every allowedHosts name is loopback', async () => {
+    const server = await start({
+      allowedHosts: ['localhost:8080', '127.0.0.1', '[::1]', 'LOCALHOST', '127.0.0.2:9000'],
+    });
+    expect((await send(server.port, '/', { host: 'localhost:8080' })).status).toBe(200);
   });
 
   it('rejects an invalid allowedHosts entry before binding', async () => {

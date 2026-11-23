@@ -31,6 +31,28 @@ describe('phargus serve: token length', () => {
     expect((caught as Error).message).not.toContain('secret-short');
   });
 
+  it('rejects a short token with a non-loopback --allowed-host on a loopback bind', () => {
+    let caught: unknown;
+    try {
+      parseServeArgs(['serve', '--allowed-host', 'dash.internal'], {
+        PHARGUS_TOKEN: 'secret-short',
+      });
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(UsageError);
+    expect((caught as UsageError).exitCode).toBe(2);
+    expect((caught as Error).message).toContain('PHARGUS_TOKEN');
+    expect((caught as Error).message).toContain('16 characters');
+    expect((caught as Error).message).not.toContain('secret-short');
+    expect(() =>
+      parseServeArgs(['serve', '--allowed-host', 'dash.internal', '--token', 'a'.repeat(16)], {}),
+    ).not.toThrow();
+    expect(() =>
+      parseServeArgs(['serve', '--allowed-host', 'localhost:8080', '--token', 'a'], {}),
+    ).not.toThrow();
+  });
+
   it('accepts a 16-character off-loopback token and a one-character loopback token', () => {
     expect(() =>
       parseServeArgs(['serve', '--host', '0.0.0.0', '--token', 'a'.repeat(16)], {}),
