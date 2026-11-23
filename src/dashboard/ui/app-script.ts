@@ -83,6 +83,8 @@ export const APP_SCRIPT: string =
     var lagEl = document.getElementById('lag');
     var memoryEl = document.getElementById('memory');
     var gcEl = document.getElementById('gc');
+    var backpressureEl = document.getElementById('backpressure');
+    var hotspotsEl = document.getElementById('hotspots');
     var alertsEl = document.getElementById('alerts');
     var emptyEl = document.getElementById('alerts-empty');
     var waterfallEl = document.getElementById('waterfall');
@@ -94,6 +96,8 @@ export const APP_SCRIPT: string =
       !lagEl ||
       !memoryEl ||
       !gcEl ||
+      !backpressureEl ||
+      !hotspotsEl ||
       !alertsEl ||
       !emptyEl ||
       !waterfallEl ||
@@ -127,6 +131,39 @@ export const APP_SCRIPT: string =
         ' total pause · ' +
         formatMs(w.gc.maxPause) +
         ' max';
+      renderBackpressure(w.backpressure);
+    }
+
+    function renderBackpressure(bp) {
+      while (hotspotsEl.firstChild) {
+        hotspotsEl.removeChild(hotspotsEl.firstChild);
+      }
+      if (bp.events === 0) {
+        backpressureEl.textContent = 'No stalls';
+        return;
+      }
+      backpressureEl.textContent =
+        bp.events +
+        ' stalls · ' +
+        formatMs(bp.totalStall) +
+        ' total · ' +
+        formatMs(bp.maxStall) +
+        ' max';
+      var hotspots = bp.hotspots || [];
+      for (var i = 0; i < hotspots.length; i += 1) {
+        var h = hotspots[i];
+        var item = document.createElement('li');
+        item.textContent =
+          h.site +
+          ' — ' +
+          h.events +
+          ' stalls · ' +
+          formatMs(h.totalStall) +
+          ' total · ' +
+          formatMs(h.maxStall) +
+          ' max';
+        hotspotsEl.appendChild(item);
+      }
     }
 
     function addAlert(a) {

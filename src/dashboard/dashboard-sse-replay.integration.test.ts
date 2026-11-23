@@ -20,7 +20,7 @@ function makeWindow(i: number): AggregatedWindow {
     eventLoop: { max: i, p99: i, mean: i },
     memory: { heapUsedLast: i, heapUsedMax: i, rssLast: i, rssMax: i },
     gc: { count: 0, totalPause: 0, maxPause: 0 },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0 },
+    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
   };
 }
 

@@ -34,7 +34,7 @@ const WINDOW: AggregatedWindow = {
   eventLoop: { max: 50, p99: 50, mean: 10 },
   memory: { heapUsedLast: 1000, heapUsedMax: 2000, rssLast: 3000, rssMax: 4000 },
   gc: { count: 1, totalPause: 5, maxPause: 5 },
-  backpressure: { events: 0, totalStall: 0, maxStall: 0 },
+  backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
 };
 
 let runner: PluginRunnerUnderTest | undefined;

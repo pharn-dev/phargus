@@ -114,6 +114,17 @@ section {
   overflow-wrap: anywhere;
 }
 
+#hotspots {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+#hotspots li {
+  padding: 2px 0;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
 #alerts li:first-child {
   border-top: 0;
 }

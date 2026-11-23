@@ -53,7 +53,7 @@ function windowAt(
     eventLoop: { max: eventLoopMax, p99: eventLoopMax, mean: 1_000_000 },
     memory: { heapUsedLast, heapUsedMax: heapUsedLast, rssLast: 500_000_000, rssMax: 500_000_000 },
     gc: { count: 1, totalPause: gcTotalPause, maxPause: gcTotalPause },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0 },
+    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
   };
 }
 

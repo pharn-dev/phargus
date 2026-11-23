@@ -1,4 +1,5 @@
-import type { AggregatedWindow } from './window.js';
+import type { BackpressureHotspot } from '../agent/index.js';
+import { MAX_HOTSPOT_SITE_LENGTH, MAX_WINDOW_HOTSPOTS, type AggregatedWindow } from './window.js';
 
 /** One window as one NDJSON line, newline included. */
 export function serializeWindow(window: AggregatedWindow): string {
@@ -11,6 +12,41 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function int(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isSafeInteger(value) ? value : undefined;
+}
+
+/**
+ * A persisted window's hotspots: an empty list when the field is absent (a line written before
+ * windows kept them), undefined when it is present but not a list of at most MAX_WINDOW_HOTSPOTS
+ * entries, each a site of at most MAX_HOTSPOT_SITE_LENGTH characters and three safe integers.
+ */
+function hotspotsOf(value: unknown): BackpressureHotspot[] | undefined {
+  if (value === undefined) {
+    return [];
+  }
+  if (!Array.isArray(value) || value.length > MAX_WINDOW_HOTSPOTS) {
+    return undefined;
+  }
+  const hotspots: BackpressureHotspot[] = [];
+  for (const entry of value as unknown[]) {
+    if (!isRecord(entry)) {
+      return undefined;
+    }
+    const { site } = entry;
+    const events = int(entry.events);
+    const totalStall = int(entry.totalStall);
+    const maxStall = int(entry.maxStall);
+    if (
+      typeof site !== 'string' ||
+      site.length > MAX_HOTSPOT_SITE_LENGTH ||
+      events === undefined ||
+      totalStall === undefined ||
+      maxStall === undefined
+    ) {
+      return undefined;
+    }
+    hotspots.push({ site, events, totalStall, maxStall });
+  }
+  return hotspots;
 }
 
 /**
@@ -48,6 +84,7 @@ export function parseWindowLine(line: string): AggregatedWindow | undefined {
   const bpEvents = int(backpressure.events);
   const bpTotal = int(backpressure.totalStall);
   const bpMax = int(backpressure.maxStall);
+  const bpHotspots = hotspotsOf(backpressure.hotspots);
   if (
     start === undefined ||
     end === undefined ||
@@ -65,7 +102,8 @@ export function parseWindowLine(line: string): AggregatedWindow | undefined {
     gcMax === undefined ||
     bpEvents === undefined ||
     bpTotal === undefined ||
-    bpMax === undefined
+    bpMax === undefined ||
+    bpHotspots === undefined
   ) {
     return undefined;
   }
@@ -77,6 +115,11 @@ export function parseWindowLine(line: string): AggregatedWindow | undefined {
     eventLoop: { max: elMax, p99: elP99, mean: elMean },
     memory: { heapUsedLast: heapLast, heapUsedMax: heapMax, rssLast, rssMax },
     gc: { count: gcCount, totalPause: gcTotal, maxPause: gcMax },
-    backpressure: { events: bpEvents, totalStall: bpTotal, maxStall: bpMax },
+    backpressure: {
+      events: bpEvents,
+      totalStall: bpTotal,
+      maxStall: bpMax,
+      hotspots: bpHotspots,
+    },
   };
 }
