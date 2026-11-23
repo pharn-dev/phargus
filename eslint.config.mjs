@@ -67,7 +67,7 @@ export default tseslint.config(
               message: 'agent code may import only node: builtins and its own files.',
             },
             {
-              regex: '(^|/)(collector|analyzer|dashboard|plugin-runner|otel|cli)(/|$)',
+              regex: '(^|/)(collector|analyzer|dashboard|plugin-runner|otel|cli|shared)(/|$)',
               message: 'The agent must not import from other modules of this package.',
             },
           ],

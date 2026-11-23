@@ -87,7 +87,9 @@ describe('analyzer heap-snapshot diff', () => {
       for (let i = 1; i < diff.entries.length; i += 1) {
         const previous = diff.entries[i - 1];
         const current = diff.entries[i];
-        expect(previous?.selfSizeDelta).toBeGreaterThanOrEqual(current?.selfSizeDelta ?? Infinity);
+        expect(Math.abs(previous?.selfSizeDelta ?? 0)).toBeGreaterThanOrEqual(
+          Math.abs(current?.selfSizeDelta ?? Infinity),
+        );
       }
 
       const marker = diff.entries.find((entry) => entry.name === 'PhargusAc3DiffGrowthMarker');

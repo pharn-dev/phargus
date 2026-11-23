@@ -47,6 +47,8 @@ const MAX_KEY_BYTES = 256;
 /** Values (of any kind) accepted inside the small `snapshot` header object. */
 const MAX_META_VALUES = 100_000;
 const MAX_NUMBER_BYTES = 64;
+// Real V8 snapshots nest a few levels deep; deeper nesting would grow the stack without bound.
+const MAX_DEPTH = 64;
 const JSON_NUMBER = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 
 // Tokenizer states: what the next structural byte may be.
@@ -173,6 +175,7 @@ function createTokenizer(handler: TokenHandler) {
   }
 
   function startValue(byte: number): void {
+    if ((byte === 0x7b || byte === 0x5b) && stack.length >= MAX_DEPTH) fail('nesting too deep');
     if (byte === 0x7b) {
       stack.push('object');
       handler.open('object');
@@ -444,10 +447,10 @@ function createSnapshotParser(path: string) {
     key(text) {
       const role = top();
       if (role === 'root') {
-        if (seenRootKeys.has(text) && ['snapshot', 'nodes', 'strings'].includes(text)) {
-          throw invalid(path, `duplicate ${text}`);
+        if (text === 'snapshot' || text === 'nodes' || text === 'strings') {
+          if (seenRootKeys.has(text)) throw invalid(path, `duplicate ${text}`);
+          seenRootKeys.add(text);
         }
-        seenRootKeys.add(text);
         rootKey = text;
       } else if (role === 'meta') {
         const frame = metaStack[metaStack.length - 1];
@@ -654,16 +657,22 @@ async function handle(payload: unknown): Promise<unknown> {
     const beforeGroups = before.groups;
     const after = await load(request.afterPath, 'afterPath', maxBytes);
     const names = new Set([...beforeGroups.keys(), ...after.groups.keys()]);
-    const entries = [...names].map((name) => {
-      const was = beforeGroups.get(name);
-      const now = after.groups.get(name);
-      return {
-        name,
-        countDelta: (now?.count ?? 0) - (was?.count ?? 0),
-        selfSizeDelta: (now?.selfSize ?? 0) - (was?.selfSize ?? 0),
-      };
-    });
-    entries.sort((a, b) => b.selfSizeDelta - a.selfSizeDelta || byNameAscending(a.name, b.name));
+    const entries = [...names]
+      .map((name) => {
+        const was = beforeGroups.get(name);
+        const now = after.groups.get(name);
+        return {
+          name,
+          countDelta: (now?.count ?? 0) - (was?.count ?? 0),
+          selfSizeDelta: (now?.selfSize ?? 0) - (was?.selfSize ?? 0),
+        };
+      })
+      .filter((entry) => entry.countDelta !== 0 || entry.selfSizeDelta !== 0);
+    // Growth and shrink rank together by size change, so a shrink is not cut off below the top.
+    entries.sort(
+      (a, b) =>
+        Math.abs(b.selfSizeDelta) - Math.abs(a.selfSizeDelta) || byNameAscending(a.name, b.name),
+    );
     return {
       entries: entries.slice(0, top),
       before: beforeTotals,

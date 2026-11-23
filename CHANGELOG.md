@@ -39,6 +39,9 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- `diffHeapSnapshots` now shows what shrank as well as what grew: it leaves out types whose count
+  and self size did not change and ranks the rest by absolute self-size change, so a type that
+  lost objects is no longer cut off below the unchanged rows.
 - Rule sandbox edges: `loadRulesDirectory` reports a rule file over 1 MiB as a
   `RULE_FILE_UNREADABLE` failure without reading it, and a run's watchdog now starts only once the
   sandbox child has loaded `isolated-vm`, so a cold first run with a short `timeoutMs` is no longer
@@ -80,12 +83,26 @@ All notable changes to Phargus are recorded here. The format follows
 - A partial line that reaches the collector's NDJSON decoder in tiny pieces (progress dots, a
   spinner) is now held in one buffer that doubles as it fills, capped at `maxLineBytes`, instead
   of one Buffer per piece: 1,000,000 one-byte chunks held 109 MiB of heap before, about 1 MiB now.
+- The plugin runner's ESM build now finds its sandbox child script when the package is installed
+  under a path containing `)` (a `proj (copy)` or `Dropbox (Company)` folder). It used to look
+  for the child at a path relative to the filesystem root, so every rule failed with
+  `PHARGUS_SANDBOX_CRASHED`. The plugin runner and the analyzer now find their own directory the
+  same way.
+- The plugin runner's sandbox child no longer starts a second agent or writes sample lines to the
+  host's stdout when the host preloads the agent through `NODE_OPTIONS`: it is forked with its
+  stdout ignored and a minimal environment (`PATH`, `SystemRoot` on Windows, and
+  `PHARGUS_ENABLED=false`), so it no longer receives `NODE_OPTIONS` or any of the host's secrets.
 
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be
   percent-encoded.
 
 ### Security
+
+- A heap snapshot file under the 256 MiB cap can no longer abort the host process:
+  `summarizeHeapSnapshot` and `diffHeapSnapshots` reject JSON nested more than 64 levels deep
+  ("nesting too deep"), and the worker no longer keeps every distinct top-level key, only
+  `snapshot`, `nodes` and `strings`. Both now fail with a `WorkerTaskError` instead.
 
 - The dashboard returns `400` for malformed request targets and catches request-handler errors, so one request cannot crash the process hosting it.
 
@@ -113,6 +130,14 @@ All notable changes to Phargus are recorded here. The format follows
   webhook sink does, and a failed delivery no longer copies `fetch`'s message, which could quote
   the full URL or a header value: it reports a fixed text or the network error code (for example
   `fetch failed (ECONNREFUSED)`).
+
+- A hostile source map no longer aborts the process or crashes the symbolization worker.
+  `symbolizeStackFrames` now reports a map as malformed (`MalformedSourceMapError` on its frames)
+  when its `sources` is not an array or its `mappings` is not a string, in the map or any section
+  (a 70-byte map with `"sources":{"length":4294967295}` made V8 end the host with exit code 134),
+  or when its mappings are longer than 1/32 of the free worker heap (a mapping-dense map of about
+  24 MiB or more killed the worker and rejected the whole call). A built file of up to 64 MiB of
+  newlines no longer kills the worker while its `sourceMappingURL` comment is looked for.
 
 ## [0.2.1] - 2026-11-08
 
