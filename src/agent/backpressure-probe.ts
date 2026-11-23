@@ -367,8 +367,12 @@ export function createBackpressureProbe(options: BackpressureProbeOptions = {}):
     const stats = statsFor(site);
     stats.events = saturatingAdd(stats.events, 1);
 
-    const onDrain = (): void => {
-      stream.removeListener('close', onClose);
+    // A stall ends with whichever comes first: 'drain', 'finish' (the stream was ended, so no
+    // 'drain' follows, as with `res.write(big); res.end()`) or 'close' (destroyed mid-stall).
+    const settle = (): void => {
+      stream.removeListener('drain', settle);
+      stream.removeListener('finish', settle);
+      stream.removeListener('close', settle);
       const stall = open.get(stream);
       open.delete(stream);
       if (stall === undefined || !enabled) {
@@ -381,12 +385,9 @@ export function createBackpressureProbe(options: BackpressureProbeOptions = {}):
       siteStats.totalStall = saturatingAdd(siteStats.totalStall, duration);
       siteStats.maxStall = Math.max(siteStats.maxStall, duration);
     };
-    const onClose = (): void => {
-      stream.removeListener('drain', onDrain);
-      open.delete(stream);
-    };
-    stream.once('drain', onDrain);
-    stream.once('close', onClose);
+    stream.once('drain', settle);
+    stream.once('finish', settle);
+    stream.once('close', settle);
   };
 
   return {
