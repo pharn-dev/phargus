@@ -130,6 +130,12 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 
 ## 5. Packaging
 
+- **One agent per process, main thread only.** `--import` and `--require` preloads run in every
+  worker thread and are passed on to `child_process.fork` and `cluster` children. The agent starts
+  only in the main thread, so worker threads are not sampled: their event loops, heaps and GC do
+  not appear, and their streams and HTTP servers are not patched. Each forked or cluster child is
+  its own process and runs its own agent; every sample line carries the writer's integer `pid`, but
+  the collector does not yet separate lines by `pid`.
 - **ESM and CJS can both be loaded.** The package ships both formats. If an application loads
   `@pharn-dev/phargus/agent` once through `import` and once through `require`, it gets two copies of the module
   (the "dual package hazard"). The agent itself starts only once per process, and the two copies

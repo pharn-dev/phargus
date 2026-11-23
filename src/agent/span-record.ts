@@ -13,8 +13,11 @@ export type SpanRecord = { type: typeof SPAN_RECORD_TYPE } & TraceSpan;
  */
 export type AgentLossCounters = { samples: number; spans: number };
 
-/** A sample line as the auto-started agent writes it: the sample plus its loss accounting. */
-export type AgentSampleLine = AgentSample & { dropped: AgentLossCounters };
+/**
+ * A sample line as the auto-started agent writes it: the sample, the writer's integer
+ * `process.pid`, and its loss accounting. Lines from older agents carry no `pid`.
+ */
+export type AgentSampleLine = AgentSample & { pid: number; dropped: AgentLossCounters };
 
 export function toSpanRecord(span: TraceSpan): SpanRecord {
   return { type: SPAN_RECORD_TYPE, ...span };
