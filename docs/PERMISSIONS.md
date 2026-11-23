@@ -78,7 +78,10 @@ it over the file, so it needs write access to both paths (one `--allow-fs-write`
 one for their directory), and the directory must be writable by the process's user. With write access to the file alone, persistence works
 until the file reaches `maxBytes`; from then on every compaction fails, nothing more is appended,
 and each failure is counted in `collector.persistence.failed` with one process warning per run of
-failures. Windows, alerts and `consume()` are not affected.
+failures. Windows, alerts and `consume()` are not affected. Recent Node releases refuse `fchmod`
+and `fdatasync` on a file descriptor under the permission model, so there compaction skips both:
+the temp file keeps the mode it was created with, and the rewrite is not flushed to disk before
+the rename.
 
 Only the agent, plugin-runner and window persistence grants are exercised by tests that run under
 `--permission` (`permission-model.ac2/ac3`, `plugin-runner-caps.integration.test.ts` and

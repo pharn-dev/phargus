@@ -1,4 +1,5 @@
 import { open, readFile, rename, rm, stat, type FileHandle } from 'node:fs/promises';
+import { isPermissionModelEnabled } from '../agent/permission.js';
 import { createRingBuffer } from './ring-buffer.js';
 import type { AggregatedWindow } from './window.js';
 import { parseWindowLine, serializeWindow } from './window-codec.js';
@@ -102,14 +103,18 @@ export function createWindowStore(options: PersistOptions & { capacity: number }
     await rm(tmpPath, { force: true });
     try {
       const tmp = await open(tmpPath, 'wx', mode);
+      // Recent Node releases refuse fd-based fchmod and fdatasync under the permission model. There
+      // the temp file keeps the mode open() gave it (the umask can only narrow it), and the rewrite
+      // is not flushed before the rename, so a power loss can cost the compacted windows.
+      const fdCallsAllowed = !isPermissionModelEnabled();
       try {
-        // fchmod only when the umask narrowed the mode: the permission model refuses fchmod
-        // (Node 24.15 and later), so the usual 0600 file must not need it.
-        if (((await tmp.stat()).mode & 0o777) !== mode) {
+        if (fdCallsAllowed && ((await tmp.stat()).mode & 0o777) !== mode) {
           await tmp.chmod(mode);
         }
         await tmp.writeFile(content);
-        await tmp.datasync();
+        if (fdCallsAllowed) {
+          await tmp.datasync();
+        }
       } finally {
         await tmp.close();
       }
