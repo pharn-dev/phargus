@@ -70,6 +70,16 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   `collector.persistence.dropped`; neither the dashboard nor `phargus serve` shows it yet.
   `close()` stops accepting windows, then waits for the queued appends with no time limit, so a
   disk that never completes an append stalls it.
+- **Runtime figures are for one process per stream.** When several agents write to one stream (a
+  `node:cluster` app, or an app that forks children, where every child inherits `--import` and
+  stdout), each `collector.consume()` run follows the first sample `pid` it sees. Samples from
+  every other process are skipped, counted in `collector.ignored` with the reason
+  `other-process`, and passed to `onIgnored`; the run emits one process warning saying how many
+  other processes it skipped. To choose the process, enable the agent only there: load it in the
+  primary, or set `PHARGUS_ENABLED=false` in the environment of the processes you do not want to
+  see. Spans are not filtered: requests from every process appear in the waterfall. Samples
+  without a `pid` (an older agent) are treated as one process. One window series per process is
+  not built yet.
 - **Event loop lag is observed by the loop itself.** A loop blocked completely cannot report
   until it resumes, so the longest stalls are reported late, with their full length.
 - **Event loop figures are delay beyond the timer interval.** The histogram samples on a 10 ms timer

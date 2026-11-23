@@ -24,6 +24,11 @@ All notable changes to Phargus are recorded here. The format follows
   alerts carry on. `persist.maxBytes` now caps the file: compaction keeps the newest windows that
   fit in half of it, so the file is rewritten rarely. Compaction writes `<file>.compact.tmp`, so
   grant `--allow-fs-write` for that path too (`docs/PERMISSIONS.md`).
+- The collector no longer adds samples from several processes on one stream (a `node:cluster`
+  app, forked children) into one window: each `consume()` run follows the first sample `pid` it
+  sees, skips samples from other processes as the new `IgnoredReason` `other-process` (counted in
+  `collector.ignored`, passed to `onIgnored`), and emits one process warning saying how many
+  other processes it skipped. Samples without a `pid` and all spans are kept as before.
 
 ### Removed
 

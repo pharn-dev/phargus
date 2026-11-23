@@ -27,8 +27,9 @@ export type CollectorOptions = {
   persist?: PersistOptions;
   /**
    * Called once per record `consume()` skips, after `ignored` is incremented. Foreign records
-   * (not agent data) and malformed ones (agent-shaped but unusable) are skipped and counted,
-   * never thrown. A hook that throws rejects `consume()` with that error.
+   * (not agent data), malformed ones (agent-shaped but unusable) and samples from a process other
+   * than the first `pid` a run saw (`other-process`) are skipped and counted, never thrown. A hook
+   * that throws rejects `consume()` with that error.
    */
   onIgnored?: IgnoredRecordHandler;
 };
@@ -56,7 +57,7 @@ export type Collector = {
   readonly spans: RingBuffer<SpanRecord>;
   readonly sinks: readonly AlertSink[];
   readonly persistence: WindowPersistence | undefined;
-  /** Records `consume()` skipped as foreign or malformed, across all runs (integer, saturating). */
+  /** Records `consume()` skipped (any `IgnoredReason`), across all runs (integer, saturating). */
   readonly ignored: number;
   subscribe(listener: CollectorListener): () => void;
   consume(source: Readable | AsyncIterable<unknown>): Promise<void>;

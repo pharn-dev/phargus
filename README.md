@@ -88,6 +88,10 @@ Your app's stdout is the pipe, so it may log there too: lines that are not agent
 and counted. When the app exits, the dashboard keeps serving what it collected until you press
 Ctrl-C.
 
+With `node:cluster` or forked children, every process inherits the agent and the pipe, but the
+runtime figures follow one process only; see
+[`docs/LIMITS.md`](./docs/LIMITS.md#2-in-process-so-shared-fate).
+
 ### Other ways to load the agent
 
 For a CommonJS app, use `--require` instead of `--import`:

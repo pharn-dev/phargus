@@ -82,7 +82,9 @@ with an alert rule.
    forwards sample and span records and skips and counts the rest in `collector.ignored`, as
    `foreign` (not agent data) or `malformed` (agent-shaped but unusable), with an optional
    `onIgnored` hook. A sample whose `timestamp` is not a safe integer, or is more than 24 hours
-   ahead of the collector's `Date.now()`, is `malformed`. Windows follow sample timestamps: a
+   ahead of the collector's `Date.now()`, is `malformed`. Each run follows the first sample `pid`
+   it sees: a sample with another `pid` is `other-process`, and the run emits one process warning
+   naming how many other processes it skipped; samples without a `pid` and all spans pass. Windows follow sample timestamps: a
    sample up to 60 windows older than the open window is counted in its `late` and dropped, and
    one more than 60 windows older (a clock stepped back) emits the open window and restarts
    aggregation at the sample's time, so window `start` values are then not monotonic. Then span
