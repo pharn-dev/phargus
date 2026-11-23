@@ -25,6 +25,17 @@ All notable changes to Phargus are recorded here. The format follows
   with no token. Such a name now needs a token of at least 16 characters, as a non-loopback bind
   does. The `421` body now says such a name needs a token.
 
+- **Breaking change:** The dashboard session cookie is now named `phargus_session_<port>` after
+  the port the dashboard is bound to (the actual port on a port 0 bind), instead of
+  `phargus_token`, so two dashboards on one host no longer overwrite each other's session. The
+  rename signs every browser out once; open the `/login#token=<token>` link again.
+
+- The dashboard refuses `/events` with `503` while 64 clients are connected; closing one frees a
+  slot.
+
+- Removed the dead `Secure` cookie branch: the dashboard serves plain HTTP only, so its session
+  cookie is never `Secure` (now stated in `docs/LIMITS.md`).
+
 ## [0.2.1] - 2026-11-08
 
 ### Fixed

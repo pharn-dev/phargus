@@ -3,19 +3,21 @@ import type { IncomingMessage } from 'node:http';
 import { isIPv4 } from 'node:net';
 
 /**
- * The cookie both token exchanges set (`POST /session`, and the deprecated `GET /?token=`). Its
- * value is an HMAC of the token, never the token.
+ * The name of the session cookie both token exchanges set (`POST /session`, and the deprecated
+ * `GET /?token=`), scoped to the server's bound port: cookies ignore ports, so two dashboards on
+ * one host would otherwise overwrite each other's session. Its value is an HMAC of the token,
+ * never the token.
  */
-export const SESSION_COOKIE = 'phargus_token';
-
-/** The `Set-Cookie` line of a session: one string, built here, for every exchange. */
-export function sessionCookie(value: string, secure: boolean): string {
-  return `${SESSION_COOKIE}=${value}; HttpOnly; SameSite=Strict; Path=/${secure ? '; Secure' : ''}`;
+export function sessionCookieName(port: number): string {
+  return `phargus_session_${port}`;
 }
 
-/** True when the request arrived over a TLS socket (the dashboard behind a terminating proxy is not). */
-export function isTlsRequest(req: IncomingMessage): boolean {
-  return (req.socket as { encrypted?: unknown }).encrypted === true;
+/**
+ * The `Set-Cookie` line of a session: one string, built here, for every exchange. Never `Secure`:
+ * the dashboard serves plain HTTP only (see docs/LIMITS.md).
+ */
+export function sessionCookie(name: string, value: string): string {
+  return `${name}=${value}; HttpOnly; SameSite=Strict; Path=/`;
 }
 
 function unbracket(host: string): string {

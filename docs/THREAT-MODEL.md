@@ -72,8 +72,9 @@ These are accepted, not hidden:
    re-opens unconfined reads, and a broad working directory such as `/` or `$HOME` confines
    little, so pass `roots` naming your build output when frames may come from anywhere other
    than your own build.
-7. **The number of SSE clients is not capped.** Each client's queue is bounded, but the server
-   accepts as many authenticated connections as the operating system allows.
+7. **SSE clients are capped at 64 per dashboard, not per caller.** Once 64 `/events` clients are
+   connected, the next `/events` request gets `503` until one closes; each client's queue is
+   bounded. One authenticated caller can hold all 64 slots and lock other viewers out.
 8. **Provenance shows where a package was built, not that its source is benign.** The publish
    pipeline narrows the window for tampering (the tarball is built in an unprivileged job) but a
    compromised dev dependency there could still alter the package contents.
