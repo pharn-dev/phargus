@@ -75,6 +75,12 @@ All notable changes to Phargus are recorded here. The format follows
 - Removed the dead `Secure` cookie branch: the dashboard serves plain HTTP only, so its session
   cookie is never `Secure` (now stated in `docs/LIMITS.md`).
 
+- The webhook sink and the OTLP exporters refuse a URL with a username or password when they are
+  created (send credentials with the `headers` option), the OTLP exporters check `headers` as the
+  webhook sink does, and a failed delivery no longer copies `fetch`'s message, which could quote
+  the full URL or a header value: it reports a fixed text or the network error code (for example
+  `fetch failed (ECONNREFUSED)`).
+
 ## [0.2.1] - 2026-11-08
 
 ### Fixed

@@ -1,8 +1,15 @@
+import { refuseUrlCredentials, resolveRequestHeaders } from '../collector/http-request.js';
 import type { OtlpTarget } from './otlp-transport.js';
 
 /** Options shared by every OTLP/HTTP JSON exporter (metrics and traces). */
 export type OtlpExporterOptions = {
+  /** The OTLP/HTTP endpoint. A URL with a username or password is refused: use `headers`. */
   url: string;
+  /**
+   * Extra request headers, for example `{ authorization: 'Bearer …' }`. Names must be HTTP tokens
+   * and values may hold no control characters (tab aside) or characters above U+00FF;
+   * `content-type` is reserved. Values are never put in an error.
+   */
   headers?: Record<string, string>;
   serviceName?: string;
   timeoutMs?: number;
@@ -67,6 +74,7 @@ export function resolveOtlpExporterOptions(
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new TypeError('url must use the http: or https: protocol');
   }
+  refuseUrlCredentials('OTLP exporter', parsed);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   requirePositiveSafeInteger('timeoutMs', timeoutMs);
   // Deprecated and otherwise ignored, but an invalid value is still rejected as before.
@@ -85,18 +93,13 @@ export function resolveOtlpExporterOptions(
       `closeTimeoutMs must be a non-negative safe integer, got ${String(closeTimeoutMs)}`,
     );
   }
-  const headers = options.headers ?? {};
-  for (const [name, value] of Object.entries(headers)) {
-    if (typeof value !== 'string') {
-      throw new TypeError(`header ${name} must have a string value`);
-    }
-  }
+  const headers = Object.fromEntries(resolveRequestHeaders('OTLP exporter', options.headers));
   const serviceName = options.serviceName ?? DEFAULT_SERVICE_NAME;
   if (typeof serviceName !== 'string' || serviceName.length === 0) {
     throw new TypeError('serviceName must be a non-empty string');
   }
   return {
-    target: { url: options.url, origin: parsed.origin, headers: { ...headers }, timeoutMs },
+    target: { url: options.url, origin: parsed.origin, headers, timeoutMs },
     serviceName,
     flushIntervalMs,
     maxBatchSize,

@@ -1,11 +1,10 @@
 import type { Alert } from './alert-evaluator.js';
+import { reportSinkError, sinkLabel, type AlertSink, type SinkErrorHandler } from './alert-sink.js';
 import {
-  reportSinkError,
-  sinkLabel,
-  toError,
-  type AlertSink,
-  type SinkErrorHandler,
-} from './alert-sink.js';
+  refuseUrlCredentials,
+  requestFailureReason,
+  resolveRequestHeaders,
+} from './http-request.js';
 import { createRequestSignal, discardResponseBody, isRedirect } from './http-response.js';
 
 export type WebhookSinkOptions = {
@@ -14,7 +13,8 @@ export type WebhookSinkOptions = {
   /**
    * Extra request headers, for example `{ authorization: 'Bearer …' }`. Copied when the sink is
    * created. Names must be HTTP tokens and values may hold no control characters (tab aside) or
-   * characters above U+00FF. `content-type` is reserved (always `application/json`); a name given
+   * characters above U+00FF. Put credentials here, never in `url`: a URL with a username or
+   * password is refused. `content-type` is reserved (always `application/json`); a name given
    * twice in different case, and `__proto__`, are rejected. Values are never logged or put in an
    * error.
    */
@@ -37,53 +37,6 @@ const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_RETRIES = 2;
 const DEFAULT_BACKOFF_MS = 100;
 const DEFAULT_MAX_IN_FLIGHT = 100;
-
-/** RFC 9110 `token`: the characters a header name may use. */
-const HEADER_NAME = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
-/** RFC 9110 field-content characters: HTAB, SP, VCHAR and obs-text. No CR, LF, NUL or DEL. */
-const HEADER_VALUE = /^[\t\x20-\x7e\x80-\xff]*$/;
-
-/**
- * Validates and copies the caller's headers. Every message names the header, never its value,
- * which may be a credential. Checking here also keeps `fetch` from rejecting a bad value later
- * with an error that quotes it.
- */
-function resolveHeaders(label: string, headers: unknown): [string, string][] {
-  if (headers === undefined) {
-    return [];
-  }
-  if (typeof headers !== 'object' || headers === null || Array.isArray(headers)) {
-    throw new TypeError(`${label}: headers must be an object of header names to string values`);
-  }
-  const resolved: [string, string][] = [];
-  const seen = new Set<string>();
-  for (const [name, value] of Object.entries(headers)) {
-    // The name is not quoted either: a malformed one may be a whole `name: value` line.
-    if (!HEADER_NAME.test(name)) {
-      throw new TypeError(`${label}: a header name is not a valid HTTP token`);
-    }
-    const lower = name.toLowerCase();
-    if (lower === '__proto__') {
-      // Node's fetch silently drops this name; refuse it rather than send less than asked.
-      throw new TypeError(`${label}: header ${name} cannot be sent by fetch`);
-    }
-    if (lower === 'content-type') {
-      throw new TypeError(`${label}: header ${name} is reserved, the sink always sends JSON`);
-    }
-    if (seen.has(lower)) {
-      throw new TypeError(`${label}: header ${name} is given more than once`);
-    }
-    seen.add(lower);
-    if (typeof value !== 'string') {
-      throw new TypeError(`${label}: header ${name} must have a string value`);
-    }
-    if (!HEADER_VALUE.test(value)) {
-      throw new TypeError(`${label}: header ${name} has a value with an invalid character`);
-    }
-    resolved.push([name, value]);
-  }
-  return resolved;
-}
 
 /**
  * POSTs each alert as JSON (plus any caller `headers`) with a per-request timeout, bounded retries
@@ -109,6 +62,7 @@ export function createWebhookSink(options: WebhookSinkOptions): AlertSink {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     throw new TypeError(`${label}: url protocol must be http: or https:, got ${parsed.protocol}`);
   }
+  refuseUrlCredentials(label, parsed);
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
     throw new RangeError(`${label}: timeoutMs must be a positive safe integer`);
   }
@@ -125,7 +79,7 @@ export function createWebhookSink(options: WebhookSinkOptions): AlertSink {
     throw new RangeError(`${label}: closeTimeoutMs must be a non-negative safe integer`);
   }
   const headers: [string, string][] = [
-    ...resolveHeaders(label, options.headers),
+    ...resolveRequestHeaders(label, options.headers),
     ['content-type', 'application/json'],
   ];
 
@@ -176,7 +130,11 @@ export function createWebhookSink(options: WebhookSinkOptions): AlertSink {
           reason: `aborted, sink closed and closeTimeoutMs ${closeTimeoutMs} elapsed`,
         };
       }
-      return { ok: false, retry: true, reason: toError(error).message };
+      if (error instanceof Error && error.name === 'TimeoutError') {
+        return { ok: false, retry: true, reason: `timed out after ${timeoutMs}ms` };
+      }
+      // Never the platform's message: it can quote the URL or a header value.
+      return { ok: false, retry: true, reason: requestFailureReason(error) };
     } finally {
       request.dispose();
     }
