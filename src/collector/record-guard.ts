@@ -1,14 +1,20 @@
 import { Transform } from 'node:stream';
 import { isSpanRecord, type SpanRecord } from '../agent/span-record.js';
 
-/** Why a record was skipped: not agent data at all, or agent-shaped but unusable. */
-export type IgnoredReason = 'foreign' | 'malformed';
+/**
+ * Why a record was skipped: not agent data at all, agent-shaped but unusable, or a sample from a
+ * process other than the one this `consume()` run follows (the first sample `pid` it saw).
+ */
+export type IgnoredReason = 'foreign' | 'malformed' | 'other-process';
 
 /** Called once for every skipped record, after the collector's `ignored` counter is incremented. */
 export type IgnoredRecordHandler = (record: unknown, reason: IgnoredReason) => void;
 
 /** The keys the agent always writes on a sample line and `addSample` reads. */
 const SAMPLE_KEYS = ['timestamp', 'eventLoop', 'memory', 'gc', 'backpressure'] as const;
+
+/** Distinct other pids counted for a run's warning; from this many on it says "or more". */
+export const MAX_COUNTED_OTHER_PIDS = 1024;
 
 /** How far ahead of the collector's clock a sample's timestamp may be: 24 hours, in ms. */
 export const MAX_SAMPLE_FUTURE_MS = 24 * 60 * 60 * 1000;
@@ -132,7 +138,7 @@ export function parseSpanRecord(value: unknown): SpanRecord | undefined {
 export function classifyRecord(
   value: unknown,
   now: number = Date.now(),
-): 'sample' | 'span' | IgnoredReason {
+): 'sample' | 'span' | 'foreign' | 'malformed' {
   if (isSpanRecord(value)) {
     return parseSpanRecord(value) === undefined ? 'malformed' : 'span';
   }
@@ -147,19 +153,56 @@ export function classifyRecord(
   return isValidSample(value, now) ? 'sample' : 'malformed';
 }
 
+/** A sample's writer: its integer `pid`, or `undefined` for an older agent that wrote none. */
+function samplePid(sample: Record<string, unknown>): number | undefined {
+  const { pid } = sample;
+  return Number.isSafeInteger(pid) ? (pid as number) : undefined;
+}
+
+/** The one process warning of a run that skipped samples from `others` other processes. */
+function warnOtherProcesses(followed: number | undefined, others: number): void {
+  const count =
+    others >= MAX_COUNTED_OTHER_PIDS
+      ? `${String(MAX_COUNTED_OTHER_PIDS)} or more other processes`
+      : `${String(others)} other process${others === 1 ? '' : 'es'}`;
+  process.emitWarning(
+    `phargus collector: skipped samples from ${count} on this stream; windows follow pid ` +
+      `${String(followed)} only (counted in collector.ignored as other-process; see docs/LIMITS.md)`,
+    'PhargusCollectorWarning',
+  );
+}
+
 /**
  * Object-mode Transform that forwards sample records unchanged, forwards each well-formed span as
  * the fresh object `parseSpanRecord` builds, and hands every other record to `onSkip`. A throw
  * from `onSkip` errors the Transform, so the surrounding pipeline rejects.
+ *
+ * One guard serves one `consume()` run and follows one process: the first sample `pid` it sees.
+ * A sample with another `pid` is skipped as `other-process`; samples without a `pid` (an older
+ * agent) and all spans are forwarded. When the guard is destroyed (its run ended, failed or was
+ * aborted) it emits one process warning saying how many other processes it skipped, if any.
  */
 export function createRecordGuard(
   onSkip: (record: unknown, reason: IgnoredReason) => void,
 ): Transform {
+  let followed: number | undefined;
+  const others = new Set<number>();
   return new Transform({
     objectMode: true,
     transform(chunk: unknown, _encoding, callback): void {
       const span = parseSpanRecord(chunk);
-      const kind = span === undefined ? classifyRecord(chunk) : 'span';
+      let kind: ReturnType<typeof classifyRecord> | 'other-process' =
+        span === undefined ? classifyRecord(chunk) : 'span';
+      if (kind === 'sample') {
+        const pid = samplePid(chunk as Record<string, unknown>);
+        followed ??= pid;
+        if (pid !== undefined && pid !== followed) {
+          kind = 'other-process';
+          if (others.size < MAX_COUNTED_OTHER_PIDS) {
+            others.add(pid);
+          }
+        }
+      }
       if (kind === 'sample' || kind === 'span') {
         callback(null, span ?? chunk);
         return;
@@ -171,6 +214,13 @@ export function createRecordGuard(
         return;
       }
       callback();
+    },
+    destroy(error, callback): void {
+      if (others.size > 0) {
+        warnOtherProcesses(followed, others.size);
+        others.clear();
+      }
+      callback(error);
     },
   });
 }
