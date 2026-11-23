@@ -82,6 +82,10 @@ All notable changes to Phargus are recorded here. The format follows
   for the child at a path relative to the filesystem root, so every rule failed with
   `PHARGUS_SANDBOX_CRASHED`. The plugin runner and the analyzer now find their own directory the
   same way.
+- The plugin runner's sandbox child no longer starts a second agent or writes sample lines to the
+  host's stdout when the host preloads the agent through `NODE_OPTIONS`: it is forked with its
+  stdout ignored and a minimal environment (`PATH`, `SystemRoot` on Windows, and
+  `PHARGUS_ENABLED=false`), so it no longer receives `NODE_OPTIONS` or any of the host's secrets.
 
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be
