@@ -77,7 +77,10 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 
 - **Only incoming HTTP requests are traced.** Requests to `node:http` and `node:https` servers get a
   trace id and a span. Outgoing requests, HTTP/2, database calls and queue consumers get no span of
-  their own; work they do inside a traced request sees that request's trace id.
+  their own; work they do inside a traced request sees that request's trace id. A request that
+  closes before its response finishes (the client disconnects, the response is destroyed or times
+  out) still gets a span, marked `aborted: true`, with the status code if a head was sent (else
+  `0`) and the time until the close.
 - **Trace context can be lost.** `AsyncLocalStorage` propagates through promises and most callbacks,
   but not across every native addon, connection pool or queue, and not across processes. Spans can
   be missing or attached to the wrong request. Worker Threads need explicit propagation.

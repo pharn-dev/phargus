@@ -48,7 +48,7 @@ function toOtlpSpan(record: SpanRecord): OtlpSpan {
     { key: 'url.path', value: { stringValue: record.path } },
     { key: 'http.response.status_code', value: { intValue: String(record.statusCode) } },
   ];
-  const isServerError = record.statusCode >= 500 && record.statusCode <= 599;
+  const isError = record.aborted === true || (record.statusCode >= 500 && record.statusCode <= 599);
   return {
     traceId: record.traceId,
     spanId: record.spanId,
@@ -57,7 +57,7 @@ function toOtlpSpan(record: SpanRecord): OtlpSpan {
     startTimeUnixNano: start.toString(),
     endTimeUnixNano: end.toString(),
     attributes,
-    status: { code: isServerError ? STATUS_CODE_ERROR : STATUS_CODE_UNSET },
+    status: { code: isError ? STATUS_CODE_ERROR : STATUS_CODE_UNSET },
   };
 }
 

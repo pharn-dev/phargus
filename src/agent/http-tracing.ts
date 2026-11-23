@@ -1,4 +1,5 @@
 import { subscribe, unsubscribe } from 'node:diagnostics_channel';
+import { EventEmitter } from 'node:events';
 import { Server as HttpServer } from 'node:http';
 import { Server as HttpsServer } from 'node:https';
 import { runInTrace } from './context.js';
@@ -69,6 +70,36 @@ function onStart(message: unknown): void {
       method: typeof request.method === 'string' ? request.method : '',
       path: url.slice(0, pathEnd),
     });
+    if (message.response instanceof EventEmitter) {
+      message.response.once('close', onClose);
+    }
+  } catch (error) {
+    warn(error);
+  }
+}
+
+/**
+ * The response closed. After a normal finish the entry is gone; one still in flight means the
+ * request ended early (client disconnected, `destroy()`, a timeout), so it gets an aborted span.
+ */
+function onClose(this: unknown): void {
+  onResponseClose(this);
+}
+
+function onResponseClose(response: unknown): void {
+  try {
+    if (!enabled || !isObject(response) || !isObject(response.req)) {
+      return;
+    }
+    const entry = inflight.get(response.req);
+    if (entry === undefined) {
+      return;
+    }
+    const statusCode =
+      response.headersSent === true && typeof response.statusCode === 'number'
+        ? response.statusCode
+        : 0;
+    recordSpan(response.req, entry, statusCode, true);
   } catch (error) {
     warn(error);
   }
@@ -84,20 +115,30 @@ function onFinish(message: unknown): void {
     if (entry === undefined) {
       return;
     }
-    inflight.delete(request);
-    const elapsed = Number(process.hrtime.bigint() - entry.startNs);
-    // The span id is made here, as bytes in the buffer: nothing reads it while the request runs.
-    buffer.record(
-      entry.traceId,
-      entry.method,
-      entry.path,
+    recordSpan(
+      request,
+      entry,
       typeof message.response.statusCode === 'number' ? message.response.statusCode : 0,
-      entry.startTimeMs,
-      Math.min(Math.max(elapsed, 0), Number.MAX_SAFE_INTEGER),
+      false,
     );
   } catch (error) {
     warn(error);
   }
+}
+
+function recordSpan(request: object, entry: Inflight, statusCode: number, aborted: boolean): void {
+  inflight.delete(request);
+  const elapsed = Number(process.hrtime.bigint() - entry.startNs);
+  // The span id is made here, as bytes in the buffer: nothing reads it while the request runs.
+  buffer.record(
+    entry.traceId,
+    entry.method,
+    entry.path,
+    statusCode,
+    entry.startTimeMs,
+    Math.min(Math.max(elapsed, 0), Number.MAX_SAFE_INTEGER),
+    aborted,
+  );
 }
 
 // ---- Shared `emit` wrap ----------------------------------------------------------------------
