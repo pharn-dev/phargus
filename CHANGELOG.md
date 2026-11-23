@@ -39,6 +39,10 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- The dashboard waterfall rebuilds at most once per animation frame instead of once per span event,
+  so a page load that replays 1,024 spans builds it once; an aborted span keeps its "aborted" marker
+  when later spans arrive; the stream reader no longer builds a promise chain that grows for as long
+  as the tab stays open; and the embedded layout function survives a minifier renaming it.
 - `diffHeapSnapshots` now shows what shrank as well as what grew: it leaves out types whose count
   and self size did not change and ranks the rest by absolute self-size change, so a type that
   lost objects is no longer cut off below the unchanged rows.
