@@ -68,6 +68,20 @@ describe('span buffer — keeps span fields, not span objects', () => {
     expect(spans[2]).toEqual(plain);
   });
 
+  it('keeps aborted: true through record() and push(), and writes no aborted key otherwise', () => {
+    const buffer = createSpanBuffer(2);
+    buffer.record(TRACE_ID, 'GET', '/gone', 0, 1, 2, true);
+    buffer.push(makeSpan(4, { aborted: true }));
+    expect(buffer.drain().spans.map((span) => span.aborted)).toEqual([true, true]);
+
+    // The same slots, reused for spans that finished normally, carry no aborted key.
+    buffer.record(TRACE_ID, 'GET', '/ok', 200, 1, 2, false);
+    buffer.push(makeSpan(5));
+    const { spans } = buffer.drain();
+    expect(spans.map((span) => Object.hasOwn(span, 'aborted'))).toEqual([false, false]);
+    expect(spans[1]).toEqual(makeSpan(5));
+  });
+
   it('round-trips paths of every shape: empty, Latin-1, longer than a slot, and beyond Latin-1', () => {
     const buffer = createSpanBuffer(8);
     const paths = [

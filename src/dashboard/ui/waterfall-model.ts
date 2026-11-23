@@ -44,6 +44,7 @@ export function buildWaterfall(spans: readonly unknown[], maxTraces: number): Wa
     statusCode: number;
     startTimeMs: number;
     durationNs: number;
+    aborted: boolean;
   }
 
   function isFiniteNumber(value: unknown): value is number {
@@ -84,6 +85,7 @@ export function buildWaterfall(spans: readonly unknown[], maxTraces: number): Wa
       statusCode: s['statusCode'],
       startTimeMs: s['startTimeMs'],
       durationNs: s['durationNs'],
+      aborted: s['aborted'] === true,
     };
     let group = byTrace.get(span.traceId);
     if (group === undefined) {
@@ -139,7 +141,7 @@ export function buildWaterfall(spans: readonly unknown[], maxTraces: number): Wa
       startTimeMs: span.startTimeMs,
       offsetPct: rangeMs > 0 ? ((span.startTimeMs - rangeStartMs) / rangeMs) * 100 : 0,
       widthPct: rangeMs > 0 ? (span.durationNs / 1e6 / rangeMs) * 100 : 0,
-      isError: span.statusCode >= 500 && span.statusCode <= 599,
+      isError: span.aborted || (span.statusCode >= 500 && span.statusCode <= 599),
       label:
         span.method +
         ' ' +
@@ -148,7 +150,8 @@ export function buildWaterfall(spans: readonly unknown[], maxTraces: number): Wa
         span.statusCode +
         ' ' +
         (span.durationNs / 1e6).toFixed(1) +
-        ' ms',
+        ' ms' +
+        (span.aborted ? ' aborted' : ''),
     })),
   }));
 

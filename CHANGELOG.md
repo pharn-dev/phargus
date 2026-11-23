@@ -7,6 +7,12 @@ All notable changes to Phargus are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A request that closes before its response finishes (client disconnect, `res.destroy()`, a
+  timeout) now leaves a span with `aborted: true`; the dashboard waterfall shows it as an error
+  marked "aborted", and OTLP export sets its status to error.
+
 ### Removed
 
 - **Breaking:** the deprecated dashboard login link `/?token=<token>` is gone, along with its

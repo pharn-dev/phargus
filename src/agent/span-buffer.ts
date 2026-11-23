@@ -10,6 +10,8 @@ export type TraceSpan = {
   statusCode: number;
   startTimeMs: number;
   durationNs: number;
+  /** Set only when the request closed before its response finished (client gone, destroyed). */
+  aborted?: true;
 };
 
 export type SpanDrain = { spans: TraceSpan[]; dropped: number };
@@ -29,6 +31,7 @@ export type SpanBuffer = {
     statusCode: number,
     startTimeMs: number,
     durationNs: number,
+    aborted?: boolean,
   ): void;
   /** Return buffered spans (oldest first) and the drop count since the last drain, then reset. */
   drain(): SpanDrain;
@@ -99,6 +102,7 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
   const statusCodes = new Float64Array(capacity);
   const startTimes = new Float64Array(capacity);
   const durations = new Float64Array(capacity);
+  const abortedFlags = new Uint8Array(capacity);
   const methods: (string | undefined)[] = new Array<string | undefined>(capacity).fill(undefined);
   const pathBytes = Buffer.alloc(capacity * PATH_SLOT_BYTES);
   const pathLengths = new Uint16Array(capacity);
@@ -136,6 +140,7 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
     statusCode: number,
     startTimeMs: number,
     durationNs: number,
+    aborted: boolean,
   ): void => {
     methods[slot] = method;
     if (writeLatin1(pathBytes, slot * PATH_SLOT_BYTES, path, PATH_SLOT_BYTES)) {
@@ -146,6 +151,7 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
     statusCodes[slot] = statusCode;
     startTimes[slot] = startTimeMs;
     durations[slot] = durationNs;
+    abortedFlags[slot] = aborted ? 1 : 0;
   };
 
   const release = (slot: number): void => {
@@ -161,7 +167,15 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
     push(span: TraceSpan): void {
       const slot = nextSlot();
       release(slot);
-      store(slot, span.method, span.path, span.statusCode, span.startTimeMs, span.durationNs);
+      store(
+        slot,
+        span.method,
+        span.path,
+        span.statusCode,
+        span.startTimeMs,
+        span.durationNs,
+        span.aborted === true,
+      );
       if (!writeLowerHex(traceIds, slot * TRACE_ID_BYTES, span.traceId, TRACE_ID_BYTES)) {
         traceIdText[slot] = span.traceId;
       }
@@ -172,10 +186,10 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
         names[slot] = span.name;
       }
     },
-    record(traceId, method, path, statusCode, startTimeMs, durationNs): void {
+    record(traceId, method, path, statusCode, startTimeMs, durationNs, aborted): void {
       const slot = nextSlot();
       release(slot);
-      store(slot, method, path, statusCode, startTimeMs, durationNs);
+      store(slot, method, path, statusCode, startTimeMs, durationNs, aborted === true);
       if (!writeLowerHex(traceIds, slot * TRACE_ID_BYTES, traceId, TRACE_ID_BYTES)) {
         traceIdText[slot] = traceId;
       }
@@ -193,7 +207,7 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
           pathBytes.toString('latin1', pathOffset, pathOffset + (pathLengths[slot] ?? 0));
         const traceOffset = slot * TRACE_ID_BYTES;
         const spanOffset = slot * SPAN_ID_BYTES;
-        spans.push({
+        const span: TraceSpan = {
           traceId:
             traceIdText[slot] ??
             traceIds.toString('hex', traceOffset, traceOffset + TRACE_ID_BYTES),
@@ -205,7 +219,11 @@ export function createSpanBuffer(capacity: number): SpanBuffer {
           statusCode: statusCodes[slot] ?? 0,
           startTimeMs: startTimes[slot] ?? 0,
           durationNs: durations[slot] ?? 0,
-        });
+        };
+        if (abortedFlags[slot] === 1) {
+          span.aborted = true;
+        }
+        spans.push(span);
         release(slot);
       }
       head = 0;

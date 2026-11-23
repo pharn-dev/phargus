@@ -42,7 +42,9 @@ Status legend:
   `http.ServerResponse` and `http.ClientRequest`.
 - 🟡 Request tracing with an automatic `traceId` — **no user-code instrumentation**, powered by
   AsyncLocalStorage. Covers incoming requests to `node:http` and `node:https` servers, honouring
-  an incoming W3C `traceparent`. Outgoing requests and other entry points get no span.
+  an incoming W3C `traceparent`. A request aborted by the client or destroyed (a timeout) leaves a
+  span marked `aborted: true`, shown as an error in the waterfall and in OTLP. Outgoing requests
+  and other entry points get no span.
 - ✅ Loss accounting: bounded output lanes with `dropped: { samples, spans }` on every sample line.
 
 ## 3. V8 / memory deep-dive
