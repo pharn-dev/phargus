@@ -10,6 +10,9 @@ export type IgnoredRecordHandler = (record: unknown, reason: IgnoredReason) => v
 /** The keys the agent always writes on a sample line and `addSample` reads. */
 const SAMPLE_KEYS = ['timestamp', 'eventLoop', 'memory', 'gc', 'backpressure'] as const;
 
+/** How far ahead of the collector's clock a sample's timestamp may be: 24 hours, in ms. */
+export const MAX_SAMPLE_FUTURE_MS = 24 * 60 * 60 * 1000;
+
 /** Every numeric field the window aggregator reads, as [group, field]. */
 const NUMERIC_FIELDS: ReadonlyArray<readonly [string, string]> = [
   ['eventLoop', 'max'],
@@ -29,9 +32,10 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isValidSample(record: Record<string, unknown>): boolean {
+function isValidSample(record: Record<string, unknown>, now: number): boolean {
   const { timestamp } = record;
-  if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) {
+  // A future-dated line would open a window no real sample can close.
+  if (!Number.isSafeInteger(timestamp) || (timestamp as number) > now + MAX_SAMPLE_FUTURE_MS) {
     return false;
   }
   for (const [group, field] of NUMERIC_FIELDS) {
@@ -45,9 +49,13 @@ function isValidSample(record: Record<string, unknown>): boolean {
 
 /**
  * Deterministic key-membership classification of one parsed record.
- * `span` and `sample` are forwarded; `foreign` and `malformed` are skipped.
+ * `span` and `sample` are forwarded; `foreign` and `malformed` are skipped. A sample whose
+ * `timestamp` is not a safe integer, or is more than 24 hours ahead of `now`, is `malformed`.
  */
-export function classifyRecord(value: unknown): 'sample' | 'span' | IgnoredReason {
+export function classifyRecord(
+  value: unknown,
+  now: number = Date.now(),
+): 'sample' | 'span' | IgnoredReason {
   if (isSpanRecord(value)) {
     return 'span';
   }
@@ -59,7 +67,7 @@ export function classifyRecord(value: unknown): 'sample' | 'span' | IgnoredReaso
       return 'foreign';
     }
   }
-  return isValidSample(value) ? 'sample' : 'malformed';
+  return isValidSample(value, now) ? 'sample' : 'malformed';
 }
 
 /**
