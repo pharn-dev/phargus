@@ -53,6 +53,10 @@ All notable changes to Phargus are recorded here. The format follows
   present); anything else is skipped and counted in `ignored` as malformed. A stored span keeps
   only those fields, with strings cut to 1,024 characters, so large span-shaped lines no longer
   fill the span ring and every dashboard client with up to 1 GiB.
+- An alert rule with `forWindows: N` now fires only on N adjacent breaching windows: a gap between
+  windows (dropped agent lines, an agent restart, a clock step back) restarts the count. A rule's
+  state is kept by its collector, so a rule firing when one `consume()` run ends no longer fires
+  again in the next, and resolves there when it stops breaching.
 
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be
