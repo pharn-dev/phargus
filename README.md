@@ -131,6 +131,7 @@ phargus serve [options] [file|-]
 | `--window-ms <n>`       | `1000`      | Aggregation window in milliseconds.                                                                                        |
 | `--max-line-bytes <n>`  | `1048576`   | Longest accepted input line in bytes.                                                                                      |
 | `--no-passthrough`      |             | Do not copy the app's own lines to stdout.                                                                                 |
+| `--alert <rule>`        | none        | Raise an alert: `<metric><op><threshold>[:<windows>]`, for example `eventLoop.p99>50ms:3`. Repeatable.                     |
 | `-h`, `--help`          |             | Print the usage text.                                                                                                      |
 | `-v`, `--version`       |             | Print the version.                                                                                                         |
 
@@ -171,6 +172,23 @@ phargus serve [options] [file|-]
   dropped and counted (not on Windows, where a stuck reader blocks the process; see
   [`docs/LIMITS.md`](./docs/LIMITS.md)); if stdout closes (`EPIPE`), passthrough stops with one
   stderr line and the server keeps running.
+- **Alerts from the command line.** `--alert '<metric><op><threshold>[:<windows>]'` defines a
+  collector alert rule; repeat the flag for several rules. `<metric>` is a window field such as
+  `eventLoop.p99`, `eventLoop.max`, `memory.rssLast`, `gc.maxPause` or `backpressure.maxStall`
+  (`--alert` with an unknown name lists them all). `<op>` is `>` or `>=`. `<threshold>` is an
+  integer in the metric's own unit (nanoseconds, bytes or a count), or with a unit: `ms` or `s`
+  for the time metrics, `MiB` or `GiB` for the memory metrics. `:<windows>` makes the rule fire
+  only after that many consecutive windows (default 1). Each rule prints one stderr line when it
+  fires and one when it resolves, and the dashboard's Alerts panel shows both:
+
+  ```bash
+  node --import @pharn-dev/phargus/agent app.mjs | npx phargus serve --alert 'eventLoop.p99>50ms:3'
+  npx phargus serve --alert 'memory.rssLast>=512MiB' capture.ndjson
+  ```
+
+  An unknown metric, another operator, a bad number or unit, a unit that does not fit the metric,
+  or the same rule twice is a usage error (exit `2`). Quote the value: `>` is a shell redirect.
+
 - **Diagnostics go to stderr only.** The dashboard URL, a line when the input ends, and a
   `counts:` line when the input ends and again at exit: `decoder.invalid` (text lines),
   `decoder.oversized`, `decoder.foreign` (JSON objects that are not agent records, such as JSON

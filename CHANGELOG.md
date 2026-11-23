@@ -9,6 +9,12 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Added
 
+- `phargus serve --alert '<metric><op><threshold>[:<windows>]'` raises collector alerts from the
+  command line, for example `--alert 'eventLoop.p99>50ms:3'` or `--alert 'memory.rssLast>=512MiB'`.
+  The flag is repeatable, the rule id is its text, and the threshold takes `ms`/`s` for time
+  metrics and `MiB`/`GiB` for memory metrics. Each rule prints one stderr line when it fires and
+  one when it resolves, and the dashboard's Alerts panel shows them. A bad rule is a usage error
+  (exit 2) that quotes it; an unknown metric lists the valid names.
 - Each dashboard card now shows the recent trend, not only the last value: the page keeps the last
   300 windows it received and draws an inline SVG sparkline of event loop p99, heap used and RSS,
   GC total pause, and backpressure total stall, labelled with the line's maximum. Sparkline redraws
