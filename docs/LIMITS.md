@@ -159,11 +159,17 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   reach, but it is a defense in depth, not a guarantee. Load only rules you would run anyway.
 - **Worker memory limits are best-effort for custom workers.** A worker file that makes one large
   native allocation (for example `JSON.parse` of a big string) can exceed its `resourceLimits` far
-  enough to abort the whole process. The analyzer's own workers cap their input to avoid this.
+  enough to abort the whole process. The analyzer's own workers cap their input to avoid this; the
+  heap-snapshot worker also rejects JSON nested more than 64 levels deep.
 - **The symbolizer's confinement is only as narrow as the working directory.** `symbolizeStackFrames`
   reads only files inside the working directory unless `roots` names other directories. `roots: null`
   turns confinement off. A broad working directory (`/`, `$HOME`) confines little, and Phargus does
   not detect or refuse one.
+- **A source map the worker heap cannot decode is reported as malformed.** Any file a frame names
+  inside the roots, `node_modules` included, can carry a source map. The symbolizer refuses one
+  before decoding it when its `sources` is not an array or its `mappings` is not a string (in the
+  map or any section), or when its mappings are longer than 1/32 of the free worker heap: decoding
+  costs about 20 bytes of heap per mapping byte. A genuine map that large is not symbolized either.
 
 ## 5. Packaging
 

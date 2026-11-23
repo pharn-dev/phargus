@@ -141,14 +141,18 @@ function exceedsParseBudget(text: string, budget: number): boolean {
   return false;
 }
 
-/** The value of the last sourceMappingURL comment, found by scanning lines from the end. */
+/**
+ * The value of the last sourceMappingURL comment, found by scanning lines from the end. One line
+ * is sliced at a time: splitting a file of millions of empty lines would exhaust the heap.
+ */
 function findMappingUrl(text: string): string | undefined {
-  const lines = text.split('\n');
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = (lines[index] ?? '').trim();
+  for (let end = text.length; end >= 0;) {
+    const newline = end === 0 ? -1 : text.lastIndexOf('\n', end - 1);
+    const line = text.slice(newline + 1, end).trim();
     for (const prefix of COMMENT_PREFIXES) {
       if (line.startsWith(prefix)) return line.slice(prefix.length).trim();
     }
+    end = newline;
   }
   return undefined;
 }
@@ -159,8 +163,36 @@ function findMappingUrl(text: string): string | undefined {
  * might not fit in half the heap still free is refused before parsing.
  */
 function fitsInHeap(text: string): boolean {
+  return !exceedsParseBudget(text, freeHeap() / 2);
+}
+
+function freeHeap(): number {
   const { heap_size_limit: limit, used_heap_size: used } = getHeapStatistics();
-  return !exceedsParseBudget(text, Math.max(0, (limit - used) / 2));
+  return Math.max(0, limit - used);
+}
+
+type MapPart = { sources: unknown[]; mappings: string };
+
+/** Node's SourceMap loops to `sources.length`: a forged length (an object) would never end. */
+function isMapPart(value: unknown): value is MapPart {
+  const part = value as { sources?: unknown; mappings?: unknown } | null;
+  return (
+    typeof part === 'object' &&
+    part !== null &&
+    Array.isArray(part.sources) &&
+    typeof part.mappings === 'string'
+  );
+}
+
+/** The maps Node's SourceMap decodes (each section's, or the map itself); undefined if malformed. */
+function mapParts(parsed: object): MapPart[] | undefined {
+  const { sections } = parsed as { sections?: unknown };
+  let parts: unknown[] = [parsed];
+  if (sections) {
+    if (!Array.isArray(sections)) return undefined;
+    parts = sections.map((section: unknown) => (section as { map?: unknown } | null)?.map);
+  }
+  return parts.every(isMapPart) ? parts : undefined;
 }
 
 /** Reasons are fixed strings: no part of `text` (which may be any file a frame named) leaks. */
@@ -176,6 +208,18 @@ function buildMap(text: string, baseUrl: string): LoadedMap {
   }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
     return { kind: 'malformed', reason: 'source map is not a JSON object' };
+  }
+  const parts = mapParts(parsed);
+  if (parts === undefined) {
+    return { kind: 'malformed', reason: 'source map has no sources array or mappings string' };
+  }
+  // Decoding costs about 20 bytes of heap per mapping byte, and an overrun kills the worker.
+  const mappingBytes = parts.reduce((sum, part) => sum + part.mappings.length, 0);
+  if (mappingBytes > freeHeap() / 32) {
+    return {
+      kind: 'malformed',
+      reason: 'source map mappings are too large to decode in the worker heap',
+    };
   }
   const root = (parsed as { sourceRoot?: unknown }).sourceRoot;
   let sourceRoot = typeof root === 'string' ? root : '';
