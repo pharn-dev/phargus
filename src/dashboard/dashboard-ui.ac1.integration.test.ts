@@ -31,9 +31,14 @@ type HttpResult = { status: number; headers: IncomingHttpHeaders; body: string }
 type Tag = { name: string; attrs: Map<string, string> };
 
 /** One GET over a fresh connection, with exactly the given request headers. */
-function httpGet(url: string, headers: Record<string, string> = {}): Promise<HttpResult> {
+function httpGet(
+  url: string,
+  headers: Record<string, string> = {},
+  method = 'GET',
+  body?: string,
+): Promise<HttpResult> {
   return new Promise((resolve, reject) => {
-    const req = request(url, { method: 'GET', headers, agent: false }, (res) => {
+    const req = request(url, { method, headers, agent: false }, (res) => {
       const chunks: Buffer[] = [];
       res.on('data', (chunk: Buffer) => chunks.push(chunk));
       res.on('error', reject);
@@ -46,8 +51,8 @@ function httpGet(url: string, headers: Record<string, string> = {}): Promise<Htt
       );
     });
     req.on('error', reject);
-    req.setTimeout(5_000, () => req.destroy(new Error(`timed out: GET ${url}`)));
-    req.end();
+    req.setTimeout(5_000, () => req.destroy(new Error(`timed out: ${method} ${url}`)));
+    req.end(body);
   });
 }
 
@@ -135,7 +140,7 @@ function expectRestrictiveCsp(what: string, headers: IncomingHttpHeaders): void 
 }
 
 describe('dashboard UI — AC-1', () => {
-  it('AC-1: GET /?token=s3cret leads, via the session cookie, to an HTML page whose same-origin script and stylesheet load like a browser would, all under a restrictive CSP', async () => {
+  it('AC-1: POST /session leads, via the session cookie, to an HTML page whose same-origin script and stylesheet load like a browser would, all under a restrictive CSP', async () => {
     const collectorModule = (await import('../collector/index.js')) as unknown as CollectorModule;
     const dashboardModule = (await import('./index.js')) as unknown as DashboardModule;
 
@@ -148,14 +153,17 @@ describe('dashboard UI — AC-1', () => {
         port: 0,
         token: 's3cret',
       });
-      const loginUrl = `http://127.0.0.1:${server.port}/?token=s3cret`;
       const pageUrl = `http://127.0.0.1:${server.port}/`;
       const pageOrigin = new URL(pageUrl).origin;
 
-      // The token exchange: a redirect to the clean page URL, carrying the session cookie.
-      const login = await httpGet(loginUrl);
-      expect(login.status, 'GET /?token=s3cret').toBe(303);
-      expect(new URL(header(login.headers, 'location'), loginUrl).href).toBe(pageUrl);
+      // Login sends the token only in the JSON body.
+      const login = await httpGet(
+        `${pageOrigin}/session`,
+        { 'content-type': 'application/json' },
+        'POST',
+        JSON.stringify({ token: 's3cret' }),
+      );
+      expect(login.status, 'POST /session').toBe(204);
       const cookie = cookieHeader(login.headers);
       expect(cookie, 'the session cookie').not.toBe('');
 

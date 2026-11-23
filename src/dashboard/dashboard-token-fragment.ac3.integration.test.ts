@@ -2,7 +2,7 @@ import { request, type IncomingHttpHeaders } from 'node:http';
 import { describe, expect, it } from 'vitest';
 
 // AC-3: POST /session with the right token as JSON answers 204 with an HttpOnly, SameSite=Strict,
-// Path=/ session cookie that opens /events and is the same cookie the legacy ?token= exchange sets.
+// Path=/ session cookie that opens /events.
 
 const TOKEN = 's3cret';
 
@@ -85,7 +85,7 @@ function cookiePair(setCookie: string): { name: string; value: string } {
 }
 
 describe('dashboard POST /session — AC-3', () => {
-  it('AC-3: POST /session with {"token":"s3cret"} (no Origin, or its own origin) answers 204 with an HttpOnly SameSite=Strict Path=/ cookie that is not the token, opens /events, and equals the legacy ?token= cookie', async () => {
+  it('AC-3: POST /session with {"token":"s3cret"} (no Origin, or its own origin) answers 204 with an HttpOnly SameSite=Strict Path=/ cookie that is not the token and opens /events', async () => {
     const collectorModule = (await import('../collector/index.js')) as unknown as CollectorModule;
     const dashboardModule = (await import('./index.js')) as unknown as DashboardModule;
 
@@ -100,12 +100,6 @@ describe('dashboard POST /session — AC-3', () => {
       });
       const port = server.port;
       const host = `127.0.0.1:${port}`;
-
-      // The legacy exchange on the same server, for the cookie comparison.
-      const legacy = await send(port, `/?token=${TOKEN}`, { headers: { host } });
-      expect(legacy.status, 'GET /?token=s3cret').toBe(303);
-      expect(setCookies(legacy)).toHaveLength(1);
-      const legacyPair = cookiePair(setCookies(legacy)[0] ?? '');
 
       const variants: [string, Record<string, string>][] = [
         ['no Origin', {}],
@@ -140,9 +134,6 @@ describe('dashboard POST /session — AC-3', () => {
         });
         expect(events.status, `${what}: GET /events with the cookie`).toBe(200);
         expect(events.headers['content-type'] ?? '').toMatch(/^text\/event-stream/);
-
-        // The same cookie the legacy exchange sets on this server.
-        expect(pair, `${what}: equals the legacy ?token= cookie`).toEqual(legacyPair);
       }
     } finally {
       await server?.close();

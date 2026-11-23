@@ -3,10 +3,9 @@ import type { IncomingMessage } from 'node:http';
 import { isIPv4 } from 'node:net';
 
 /**
- * The name of the session cookie both token exchanges set (`POST /session`, and the deprecated
- * `GET /?token=`), scoped to the server's bound port: cookies ignore ports, so two dashboards on
- * one host would otherwise overwrite each other's session. Its value is an HMAC of the token,
- * never the token.
+ * The name of the session cookie `POST /session` sets, scoped to the server's bound port: cookies
+ * ignore ports, so two dashboards on one host would otherwise overwrite each other's session. Its
+ * value is an HMAC of the token, never the token.
  */
 export function sessionCookieName(port: number): string {
   return `phargus_session_${port}`;

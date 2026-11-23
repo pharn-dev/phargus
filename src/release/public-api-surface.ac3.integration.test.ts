@@ -339,16 +339,11 @@ describe('the public API documentation', () => {
 
   it('AC-3: CHANGELOG has a Removed subsection naming every removed name and calling it breaking', () => {
     const changelog = readFileSync(join(repoRoot, 'CHANGELOG.md'), 'utf8');
-    // The removal ships in the first release after it landed: its section moves from Unreleased
-    // to the versioned heading when that release is cut.
-    const unreleased = [
-      '## [Unreleased]',
-      ...changelog.split('\n').filter((l) => l.startsWith('## [0.2.0]')),
-    ]
-      .map((heading) => sectionOf(changelog, heading, (line) => line.startsWith('## [')))
-      .join('\n');
+    // The removal shipped in 0.2.0; later releases have Removed subsections of their own.
+    const heading = changelog.split('\n').find((l) => l.startsWith('## [0.2.0]')) ?? '## [0.2.0]';
+    const released = sectionOf(changelog, heading, (line) => line.startsWith('## ['));
     const removed = sectionOf(
-      unreleased,
+      released,
       '### Removed',
       (line) => line.startsWith('### ') || line.startsWith('## '),
     );
