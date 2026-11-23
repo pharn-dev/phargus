@@ -4,7 +4,8 @@ import { buildWaterfall } from './waterfall-model.js';
  * The dashboard client, served verbatim as one classic script (no import/export). Vanilla JS with
  * string concatenation only: the String.raw templates must hold no backtick and no dollar-brace
  * sequence. The waterfall layout function is embedded as its own compiled text, so the unit-tested
- * function is the one the browser runs.
+ * function is the one the browser runs; it is assigned to a var because a minifier may rename the
+ * function itself.
  */
 export const APP_SCRIPT: string =
   String.raw`(function () {
@@ -16,9 +17,9 @@ export const APP_SCRIPT: string =
   var BACKOFF_START_MS = 1000;
   var BACKOFF_CAP_MS = 30000;
 
-  ` +
+  var buildWaterfall = ` +
   buildWaterfall.toString() +
-  String.raw`
+  String.raw`;
 
   function formatMs(ns) {
     return (ns / 1e6).toFixed(1) + ' ms';
@@ -191,26 +192,44 @@ export const APP_SCRIPT: string =
       waterfallEmptyEl.hidden = model.traces.length > 0;
     }
 
+    // Renders run at most once per animation frame: a change sets its dirty flag and calls
+    // scheduleFrame, and the one pending frame redraws whatever is dirty.
+    var frameRequested = false;
+    var waterfallDirty = false;
+
+    function scheduleFrame() {
+      if (!frameRequested) {
+        frameRequested = true;
+        requestAnimationFrame(onFrame);
+      }
+    }
+
+    function onFrame() {
+      frameRequested = false;
+      try {
+        if (waterfallDirty) {
+          waterfallDirty = false;
+          renderWaterfall(buildWaterfall(spans, MAX_TRACES));
+        }
+      } catch (error) {
+        console.error('phargus dashboard: render failed', error);
+        setStatus('error: render failed', 'error');
+      }
+    }
+
     function clearWaterfall() {
       spans = [];
-      renderWaterfall({ rangeStartMs: 0, rangeEndMs: 0, traces: [] });
+      waterfallDirty = true;
+      scheduleFrame();
     }
 
     function addSpan(span) {
       spans.push(span);
       if (spans.length > MAX_SPANS) {
-        spans = spans.slice(spans.length - MAX_SPANS);
+        spans.shift();
       }
-      var model = buildWaterfall(spans, MAX_TRACES);
-      var kept = [];
-      for (var t = 0; t < model.traces.length; t += 1) {
-        var rows = model.traces[t].rows;
-        for (var r = 0; r < rows.length; r += 1) {
-          kept.push(rows[r]);
-        }
-      }
-      spans = kept;
-      renderWaterfall(model);
+      waterfallDirty = true;
+      scheduleFrame();
     }
 
     function handleFrame(frame) {
@@ -255,10 +274,13 @@ export const APP_SCRIPT: string =
       scheduleRetry();
     }
 
-    function readLoop(reader, decoder, buffer) {
-      return reader.read().then(function (result) {
+    async function readLoop(reader) {
+      var decoder = new TextDecoder();
+      var buffer = '';
+      while (true) {
+        var result = await reader.read();
         if (result.done) {
-          return null;
+          return;
         }
         buffer += decoder.decode(result.value, { stream: true });
         buffer = buffer.replace(/\r\n/g, '\n');
@@ -266,8 +288,8 @@ export const APP_SCRIPT: string =
         for (var i = 0; i < split.frames.length; i += 1) {
           handleFrame(split.frames[i]);
         }
-        return readLoop(reader, decoder, split.rest);
-      });
+        buffer = split.rest;
+      }
     }
 
     function connect() {
@@ -291,7 +313,7 @@ export const APP_SCRIPT: string =
           clearAlerts();
           clearWaterfall();
           setStatus('live', 'live');
-          return readLoop(response.body.getReader(), new TextDecoder(), '').then(function () {
+          return readLoop(response.body.getReader()).then(function () {
             onDisconnect(null);
           });
         })
