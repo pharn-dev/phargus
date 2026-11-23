@@ -74,6 +74,10 @@ All notable changes to Phargus are recorded here. The format follows
 - A partial line that reaches the collector's NDJSON decoder in tiny pieces (progress dots, a
   spinner) is now held in one buffer that doubles as it fills, capped at `maxLineBytes`, instead
   of one Buffer per piece: 1,000,000 one-byte chunks held 109 MiB of heap before, about 1 MiB now.
+- The plugin runner's sandbox child no longer starts a second agent or writes sample lines to the
+  host's stdout when the host preloads the agent through `NODE_OPTIONS`: it is forked with its
+  stdout ignored and a minimal environment (`PATH`, `SystemRoot` on Windows, and
+  `PHARGUS_ENABLED=false`), so it no longer receives `NODE_OPTIONS` or any of the host's secrets.
 
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be

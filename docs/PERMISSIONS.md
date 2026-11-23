@@ -46,7 +46,9 @@ Heap-snapshot summaries and diffs and stack-trace symbolization run in Worker Th
 | `--allow-fs-read=<snapshot or build dir>` | Reading the snapshots, built files and maps |
 
 Analyzer workers inherit the host's flags, except entry-point and tooling flags such as
-`--input-type`, `-e`, `-p`, `--test*`, `--watch*` and `--inspect*`, which are dropped.
+`--input-type`, `-e`, `-p`, `--test*`, `--watch*` and `--inspect*`, which are dropped. A preloaded
+agent's `--require` or `--import` reaches the workers too, but the agent starts in the main thread
+only, so pool workers write no sample lines.
 
 ## Plugin runner (`@pharn-dev/phargus/plugin-runner`)
 
@@ -64,6 +66,11 @@ The sandbox child is forked with `--no-node-snapshot` (which `isolated-vm` needs
 `--permission`, `--experimental-permission` and `--allow-*` flag from the host's `execArgv`, so it
 runs under the same permission model as the host. Without `--allow-addons`, every rule fails with
 `PHARGUS_ISOLATED_VM_MISSING`, and the host keeps running.
+
+The child gets a scrubbed environment: `PATH` (plus `SystemRoot` on Windows) and
+`PHARGUS_ENABLED=false`, nothing else. `NODE_OPTIONS` is dropped, so an agent the host preloads
+there does not start in the child, and the child holds none of the host's secrets. Its stdout is
+ignored; it reports on stderr only.
 
 ## Collector, dashboard and OpenTelemetry export
 

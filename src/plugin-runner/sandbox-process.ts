@@ -141,8 +141,15 @@ export function createSandboxProcess(
   function start(): ChildProcess {
     const proc = fork(scriptPath, [], {
       execArgv,
+      // A minimal environment: no NODE_OPTIONS (a preloaded agent would start in the child)
+      // and none of the host's secrets. Its stdout is ignored, so nothing reaches the host's.
+      env: {
+        PATH: process.env['PATH'],
+        SystemRoot: process.env['SystemRoot'],
+        PHARGUS_ENABLED: 'false',
+      },
       serialization: 'json',
-      stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+      stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
     });
     proc.on('message', (message: unknown) => {
       if (proc !== child) {
