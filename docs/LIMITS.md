@@ -159,7 +159,8 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   reach, but it is a defense in depth, not a guarantee. Load only rules you would run anyway.
 - **Worker memory limits are best-effort for custom workers.** A worker file that makes one large
   native allocation (for example `JSON.parse` of a big string) can exceed its `resourceLimits` far
-  enough to abort the whole process. The analyzer's own workers cap their input to avoid this.
+  enough to abort the whole process. The analyzer's own workers cap their input to avoid this; the
+  heap-snapshot worker also rejects JSON nested more than 64 levels deep.
 - **The symbolizer's confinement is only as narrow as the working directory.** `symbolizeStackFrames`
   reads only files inside the working directory unless `roots` names other directories. `roots: null`
   turns confinement off. A broad working directory (`/`, `$HOME`) confines little, and Phargus does
