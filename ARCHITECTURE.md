@@ -57,8 +57,10 @@ with an alert rule.
 
 ## Data flow, step by step
 
-1. **Collection (agent).** `import '@pharn-dev/phargus/agent'` (or `--require`/`--import`) starts the agent once
-   per process. Tracing subscribes to the `http.server.request.start` and
+1. **Collection (agent).** `import '@pharn-dev/phargus/agent'` (or `--require`/`--import`) starts one agent
+   per process, in the main thread only: worker threads run the preload too but are not sampled,
+   and each forked or cluster child runs its own agent. Every sample line carries the writer's
+   `pid`. Tracing subscribes to the `http.server.request.start` and
    `http.server.response.finish` diagnostics channels and wraps `Server.prototype.emit` for
    `node:http` and `node:https`, so each request's handler runs inside an `AsyncLocalStorage`
    context holding its trace id. A sampler controller ticks every `intervalMs`: event loop delay

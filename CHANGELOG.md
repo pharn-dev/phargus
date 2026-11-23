@@ -23,7 +23,9 @@ All notable changes to Phargus are recorded here. The format follows
 - A backpressure stall that ends with `finish` or `close` instead of `drain` (a
   `res.write(big)` followed by `res.end()`, or a client that disconnects mid-stall) now reports
   its duration in `totalStall`, `maxStall` and its hotspot instead of 0.
-
+- A preloaded agent (`--import` or `--require`) now starts in the main thread only, so worker
+  threads no longer each start their own agent and write extra sample lines. Every sample line now
+  carries the writer's integer `pid`; forked and cluster children each still run their own agent.
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be
   percent-encoded.

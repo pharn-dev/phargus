@@ -1,5 +1,6 @@
 /// <reference types="node" />
 import type { Writable } from 'node:stream';
+import { isMainThread } from 'node:worker_threads';
 import { openAgentOutput } from './agent-output.js';
 import { loadAgentConfig } from './config.js';
 import { enable as enableTracing, disable as disableTracing, drainSpans } from './http-tracing.js';
@@ -73,7 +74,7 @@ export function createAgentExport(
       spans.flush();
     },
     exportSample(sample: AgentSample): void {
-      const line: AgentSampleLine = { ...sample, dropped: lossCounters() };
+      const line: AgentSampleLine = { ...sample, pid: process.pid, dropped: lossCounters() };
       exporter.export(line);
     },
     get dropped(): AgentLossCounters {
@@ -141,8 +142,14 @@ function failStart(err: unknown): void {
   reportOnce(err);
 }
 
-/** Start the agent once per process (shared across ESM/CJS copies via globalThis). Never throws. */
+/**
+ * Start the agent once per process (shared across ESM/CJS copies via globalThis). Never throws.
+ * Worker threads run preloads too but are not sampled: only the main thread starts the agent.
+ */
 export function startAgentOnce(): void {
+  if (!isMainThread) {
+    return;
+  }
   try {
     const g = globalThis as AgentGlobal;
     if (g[AGENT_KEY] === true) {
