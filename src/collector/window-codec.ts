@@ -1,4 +1,4 @@
-import type { BackpressureHotspot } from '../agent/index.js';
+import type { AgentLossCounters, BackpressureHotspot } from '../agent/index.js';
 import { MAX_HOTSPOT_SITE_LENGTH, MAX_WINDOW_HOTSPOTS, type AggregatedWindow } from './window.js';
 
 /** One window as one NDJSON line, newline included. */
@@ -50,6 +50,25 @@ function hotspotsOf(value: unknown): BackpressureHotspot[] | undefined {
 }
 
 /**
+ * A persisted window's drop counters: zeros when the field is absent (a line written before windows
+ * kept them), undefined when it is present but not two non-negative safe integers.
+ */
+function droppedOf(value: unknown): AgentLossCounters | undefined {
+  if (value === undefined) {
+    return { samples: 0, spans: 0 };
+  }
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const samples = int(value.samples);
+  const spans = int(value.spans);
+  if (samples === undefined || samples < 0 || spans === undefined || spans < 0) {
+    return undefined;
+  }
+  return { samples, spans };
+}
+
+/**
  * Parse one line back into a window. Returns undefined for anything that is not valid JSON or
  * that lacks a safe integer in any field; the result holds exactly the known fields.
  */
@@ -85,6 +104,7 @@ export function parseWindowLine(line: string): AggregatedWindow | undefined {
   const bpTotal = int(backpressure.totalStall);
   const bpMax = int(backpressure.maxStall);
   const bpHotspots = hotspotsOf(backpressure.hotspots);
+  const dropped = droppedOf(raw.dropped);
   if (
     start === undefined ||
     end === undefined ||
@@ -103,7 +123,8 @@ export function parseWindowLine(line: string): AggregatedWindow | undefined {
     bpEvents === undefined ||
     bpTotal === undefined ||
     bpMax === undefined ||
-    bpHotspots === undefined
+    bpHotspots === undefined ||
+    dropped === undefined
   ) {
     return undefined;
   }
@@ -121,5 +142,6 @@ export function parseWindowLine(line: string): AggregatedWindow | undefined {
       maxStall: bpMax,
       hotspots: bpHotspots,
     },
+    dropped,
   };
 }

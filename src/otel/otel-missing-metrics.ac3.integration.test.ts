@@ -69,6 +69,7 @@ const window: AggregatedWindow = {
   memory: { heapUsedLast: 0, heapUsedMax: 0, rssLast: 0, rssMax: 0 },
   gc: { count: 0, totalPause: 0, maxPause: 0 },
   backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
+  dropped: { samples: 0, spans: 0 },
 };
 
 function instanceId(request: MetricsRequest): string | undefined {

@@ -92,15 +92,20 @@ export async function runServe(
     return 1;
   }
 
-  const counts = (): string =>
-    formatCounts({
+  const counts = (): string => {
+    // The agent's drop counters are cumulative: the latest window holds the current totals.
+    const agentDropped = collector.windows.snapshot().at(-1)?.dropped;
+    return formatCounts({
       invalid: decoder.invalid,
       oversized: decoder.oversized,
       foreign: decoder.foreign,
       ignored: collector.ignored,
       droppedEvents: dashboard.droppedEvents,
       passthroughDropped: passthrough.dropped,
+      droppedSamples: agentDropped?.samples ?? 0,
+      droppedSpans: agentDropped?.spans ?? 0,
     });
+  };
 
   write(`dashboard at ${dashboard.url}`);
   if (options.token !== undefined) {

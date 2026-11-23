@@ -52,6 +52,7 @@ function makeWindow(start: number): AggregatedWindow {
     memory: { heapUsedLast: 1, heapUsedMax: 1, rssLast: 1, rssMax: 1 },
     gc: { count: 0, totalPause: 0, maxPause: 0 },
     backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
+    dropped: { samples: 0, spans: 0 },
   };
 }
 

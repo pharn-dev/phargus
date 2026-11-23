@@ -1,4 +1,4 @@
-import type { AgentSample, BackpressureHotspot } from '../agent/index.js';
+import type { AgentLossCounters, AgentSample, BackpressureHotspot } from '../agent/index.js';
 import { truncToNonNegativeInt } from '../agent/int.js';
 
 /** Hotspots a closed window keeps: the top ones by `totalStall`. */
@@ -31,6 +31,8 @@ export type AggregatedWindow = {
     maxStall: number;
     hotspots: BackpressureHotspot[];
   };
+  /** The agent's cumulative drop counters from the window's last sample (0 when missing). */
+  dropped: AgentLossCounters;
 };
 
 /** The open, mutable state of a window while samples are still being added. */
@@ -53,6 +55,7 @@ export type WindowAccumulator = {
   bpMaxStall: number;
   /** Hotspot stats by (cut) site, at most MAX_TRACKED_SITES entries. */
   bpSites: Map<string, SiteStats>;
+  dropped: AgentLossCounters;
 };
 
 function saturatingAdd(a: number, b: number): number {
@@ -82,6 +85,7 @@ export function openWindow(start: number): WindowAccumulator {
     bpTotalStall: 0,
     bpMaxStall: 0,
     bpSites: new Map(),
+    dropped: { samples: 0, spans: 0 },
   };
 }
 
@@ -129,6 +133,19 @@ function addHotspots(sites: Map<string, SiteStats>, hotspots: unknown): void {
   }
 }
 
+function counter(value: unknown): number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
+}
+
+/** A sample's drop counters; a missing or malformed counter is 0. */
+function droppedOf(value: unknown): AgentLossCounters {
+  if (typeof value !== 'object' || value === null) {
+    return { samples: 0, spans: 0 };
+  }
+  const { samples, spans } = value as Record<string, unknown>;
+  return { samples: counter(samples), spans: counter(spans) };
+}
+
 /** The top MAX_WINDOW_HOTSPOTS sites by totalStall, then events, then site. */
 function topHotspots(sites: Map<string, SiteStats>): BackpressureHotspot[] {
   return [...sites.entries()]
@@ -168,6 +185,8 @@ export function addSample(acc: WindowAccumulator, sample: AgentSample): void {
   // Typed as the agent writes it, but the line is untrusted input: read it as unknown.
   const hotspots: unknown = sample.backpressure.hotspots;
   addHotspots(acc.bpSites, hotspots);
+  // Older agents write no `dropped`; the agent writes it on its sample lines, not on AgentSample.
+  acc.dropped = droppedOf((sample as { dropped?: unknown }).dropped);
 }
 
 export function closeWindow(acc: WindowAccumulator, windowMs: number): AggregatedWindow {
@@ -194,5 +213,6 @@ export function closeWindow(acc: WindowAccumulator, windowMs: number): Aggregate
       maxStall: acc.bpMaxStall,
       hotspots: topHotspots(acc.bpSites),
     },
+    dropped: acc.dropped,
   };
 }

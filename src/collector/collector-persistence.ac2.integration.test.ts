@@ -31,6 +31,7 @@ function makeWindow(start: number, seed: number): Record<string, unknown> {
     memory: { heapUsedLast: 100 + seed, heapUsedMax: 200 + seed, rssLast: 300, rssMax: 400 },
     gc: { count: seed, totalPause: 2 * seed, maxPause: seed },
     backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
+    dropped: { samples: 0, spans: 0 },
   };
 }
 
