@@ -139,7 +139,11 @@ describe('dashboard — Backpressure section', () => {
       const cookie = session.setCookie.split(';')[0] ?? '';
       const page = await httpCall(`${base}/`, 'GET', { cookie });
       expect(page.status).toBe(200);
-      expect(page.body).not.toMatch(/<script>|<style>|\sstyle=/);
+      // No inline script or style: the page keeps working under the unchanged CSP.
+      const html = page.body.toLowerCase();
+      expect(html).not.toContain('<script>');
+      expect(html).not.toContain('<style');
+      expect(html).not.toContain(' style=');
 
       window = new happyDom.Window({
         url: `${base}/`,
