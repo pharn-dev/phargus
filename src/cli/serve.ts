@@ -1,9 +1,10 @@
 import { pipeline } from 'node:stream/promises';
-import type { Readable } from 'node:stream';
+import type { Readable, Writable } from 'node:stream';
 import { createCollector, createNdjsonDecoder } from '../collector/index.js';
 import { createDashboardServer, type DashboardServer } from '../dashboard/index.js';
 import type { ServeOptions } from './args.js';
 import { openInput, type OpenedInput } from './input.js';
+import { createPassthrough } from './passthrough.js';
 import { describeError, formatCounts, isDebug, writeLine } from './report.js';
 
 /** Windows kept for replay: five minutes at the default one-second window, as in the README. */
@@ -20,6 +21,8 @@ type SignalSource = {
 export type ServeIo = {
   env: NodeJS.ProcessEnv;
   stdin: () => Readable;
+  /** Where the app's own lines are passed through; `process.stdout`, touched on the first line. */
+  output: () => Writable;
   signals: SignalSource;
   write: (text: string) => void;
   forceExit: (code: number) => void;
@@ -29,6 +32,7 @@ export function defaultServeIo(): ServeIo {
   return {
     env: process.env,
     stdin: () => process.stdin,
+    output: () => process.stdout,
     signals: process,
     write: writeLine,
     forceExit: (code) => process.exit(code),
@@ -61,7 +65,12 @@ export async function runServe(
     windowMs: options.windowMs,
     capacity: RING_CAPACITY,
   });
-  const decoder = createNdjsonDecoder({ maxLineBytes: options.maxLineBytes });
+  const passthrough = createPassthrough(io.output, write);
+  const decoder = createNdjsonDecoder({
+    maxLineBytes: options.maxLineBytes,
+    agentOnly: true,
+    ...(options.passthrough ? { onSkipped: passthrough.onSkipped } : {}),
+  });
 
   let dashboard: DashboardServer;
   try {
@@ -87,8 +96,10 @@ export async function runServe(
     formatCounts({
       invalid: decoder.invalid,
       oversized: decoder.oversized,
+      foreign: decoder.foreign,
       ignored: collector.ignored,
       droppedEvents: dashboard.droppedEvents,
+      passthroughDropped: passthrough.dropped,
     });
 
   write(`dashboard at ${dashboard.url}`);

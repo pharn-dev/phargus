@@ -31,7 +31,7 @@ const TEST_TIMEOUT_MS = 300_000;
 const URL_LINE = /http:\/\/127\.0\.0\.1:(\d+)/;
 const INPUT_ENDED_LINE = /input ended/i;
 const COUNTS_LINE =
-  /decoder\.invalid=(\d+)[^\n]*decoder\.oversized=(\d+)[^\n]*collector\.ignored=(\d+)/;
+  /decoder\.invalid=(\d+)[^\n]*decoder\.oversized=(\d+)[^\n]*decoder\.foreign=(\d+)[^\n]*collector\.ignored=(\d+)/;
 
 const lockDir = join(
   tmpdir(),
@@ -455,9 +455,12 @@ describe('phargus serve: stdin with mixed agent and log lines', () => {
       const counts = await waitForStderr(run, COUNTS_LINE, EVENT_TIMEOUT_MS);
       const invalid = Number(counts[1]);
       const oversized = Number(counts[2]);
-      const ignored = Number(counts[3]);
+      const foreign = Number(counts[3]);
+      const ignored = Number(counts[4]);
       expect(invalid + oversized, `decoder skip count\n${diagnostics(run)}`).toBe(N);
-      expect(ignored, `collector ignored count\n${diagnostics(run)}`).toBe(M);
+      // The CLI's decoder skips JSON log lines itself (agentOnly), so they never reach the collector.
+      expect(foreign, `decoder foreign count\n${diagnostics(run)}`).toBe(M);
+      expect(ignored, `collector ignored count\n${diagnostics(run)}`).toBe(0);
 
       expect(
         run.exitInfo(),

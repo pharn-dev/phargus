@@ -44,6 +44,7 @@ describe('phargus serve: --allowed-host reaches the dashboard Host check', () =>
     const io: MainIo = {
       env: { PHARGUS_TOKEN: TOKEN },
       stdin: () => stdin,
+      output: () => new PassThrough(),
       signals,
       write: (text) => {
         lines.push(text);

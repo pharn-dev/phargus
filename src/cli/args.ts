@@ -23,6 +23,8 @@ export type ServeOptions = {
   windowMs: number;
   maxLineBytes: number;
   input: ServeInput;
+  /** Write the app's own lines to stdout: on for stdin unless `--no-passthrough`, off for a file. */
+  passthrough: boolean;
 };
 
 export type ParsedArgs =
@@ -94,6 +96,7 @@ export function parseServeArgs(argv: readonly string[], env: NodeJS.ProcessEnv):
         'allowed-host': { type: 'string', multiple: true },
         'window-ms': { type: 'string' },
         'max-line-bytes': { type: 'string' },
+        'no-passthrough': { type: 'boolean' },
       },
     });
   } catch (error) {
@@ -181,6 +184,7 @@ export function parseServeArgs(argv: readonly string[], env: NodeJS.ProcessEnv):
       windowMs,
       maxLineBytes: maxLineBytes ?? DEFAULT_MAX_LINE_BYTES,
       input,
+      passthrough: input.kind === 'stdin' && values['no-passthrough'] !== true,
     },
   };
 }

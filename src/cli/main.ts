@@ -5,7 +5,7 @@ import { USAGE } from './usage.js';
 import { readPackageVersion } from './version.js';
 
 export type MainIo = ServeIo & {
-  /** Where `--help` and `--version` print; stdout, and the only thing that ever goes there. */
+  /** Where `--help` and `--version` print: stdout. */
   stdout: (text: string) => void;
 };
 

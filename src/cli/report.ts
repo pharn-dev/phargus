@@ -4,8 +4,10 @@ export type LineWriter = (text: string) => void;
 export type Counts = {
   invalid: number;
   oversized: number;
+  foreign: number;
   ignored: number;
   droppedEvents: number;
+  passthroughDropped: number;
 };
 
 /** True when `PHARGUS_DEBUG` is set to anything non-empty. */
@@ -23,7 +25,9 @@ export function writeLine(text: string): void {
 export function formatCounts(counts: Counts): string {
   return (
     `counts: decoder.invalid=${String(counts.invalid)} decoder.oversized=${String(counts.oversized)}` +
-    ` collector.ignored=${String(counts.ignored)} dashboard.droppedEvents=${String(counts.droppedEvents)}`
+    ` decoder.foreign=${String(counts.foreign)} collector.ignored=${String(counts.ignored)}` +
+    ` dashboard.droppedEvents=${String(counts.droppedEvents)}` +
+    ` passthrough.dropped=${String(counts.passthroughDropped)}`
   );
 }
 
