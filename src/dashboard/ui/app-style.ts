@@ -113,6 +113,31 @@ section {
   color: var(--muted);
 }
 
+.trend {
+  display: block;
+  width: 100%;
+  height: 40px;
+  margin-top: 8px;
+}
+
+.trend-line {
+  fill: none;
+  stroke: var(--live);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.trend-line-1 {
+  stroke: var(--muted);
+}
+
+.trend-max {
+  margin: 2px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
 #alerts {
   margin: 0;
   padding: 0;

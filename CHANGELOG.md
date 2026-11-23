@@ -9,6 +9,10 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Added
 
+- Each dashboard card now shows the recent trend, not only the last value: the page keeps the last
+  300 windows it received and draws an inline SVG sparkline of event loop p99, heap used and RSS,
+  GC total pause, and backpressure total stall, labelled with the line's maximum. Sparkline redraws
+  are coalesced to one per animation frame, and a reconnect refills the lines from the new replay.
 - The agent's drop counters now reach the user: each collector window carries
   `dropped: { samples, spans }` from its last sample (missing or malformed counts as 0; persisted
   windows without the field restore with zeros), the dashboard header shows "agent dropped N
