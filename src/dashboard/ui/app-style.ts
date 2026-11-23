@@ -101,6 +101,12 @@ section {
   overflow-wrap: anywhere;
 }
 
+.window-end {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
 #alerts {
   margin: 0;
   padding: 0;

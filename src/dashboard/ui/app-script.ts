@@ -16,6 +16,7 @@ export const APP_SCRIPT: string =
   var MAX_SPANS = 500;
   var BACKOFF_START_MS = 1000;
   var BACKOFF_CAP_MS = 30000;
+  var STALE_MIN_MS = 5000;
 
   var buildWaterfall = ` +
   buildWaterfall.toString() +
@@ -89,6 +90,7 @@ export const APP_SCRIPT: string =
     var emptyEl = document.getElementById('alerts-empty');
     var waterfallEl = document.getElementById('waterfall');
     var waterfallEmptyEl = document.getElementById('waterfall-empty');
+    var windowEndEls = document.querySelectorAll('.window-end');
 
     if (
       !meta ||
@@ -114,6 +116,11 @@ export const APP_SCRIPT: string =
     var eventsUrl = new URL(meta.getAttribute('content') || 'events', document.baseURI);
     var backoffMs = BACKOFF_START_MS;
     var retryTimer = null;
+    // Staleness: windows close only when a later sample arrives, so a frozen app sends nothing.
+    var connected = false;
+    var stale = false;
+    var lastWindowAt = 0;
+    var windowMs = 0;
 
     function setStatus(text, kind) {
       statusEl.textContent = text;
@@ -131,7 +138,28 @@ export const APP_SCRIPT: string =
         ' total pause · ' +
         formatMs(w.gc.maxPause) +
         ' max';
+      for (var i = 0; i < windowEndEls.length; i += 1) {
+        windowEndEls[i].textContent = 'window ending ' + formatTime(w.end);
+      }
+      lastWindowAt = Date.now();
+      windowMs = w.end - w.start;
+      if (stale) {
+        stale = false;
+        setStatus('live', 'live');
+      }
       renderBackpressure(w.backpressure);
+    }
+
+    /** Runs every second: after max(3 windows, 5 s) without a window, a live stream reads stale. */
+    function checkStale() {
+      if (!connected || lastWindowAt === 0) {
+        return;
+      }
+      var silentMs = Date.now() - lastWindowAt;
+      if (silentMs >= Math.max(3 * windowMs, STALE_MIN_MS)) {
+        stale = true;
+        setStatus('stale: no data for ' + Math.floor(silentMs / 1000) + ' s', 'error');
+      }
     }
 
     function renderBackpressure(bp) {
@@ -307,6 +335,8 @@ export const APP_SCRIPT: string =
       if (error) {
         console.error('phargus dashboard: stream error', error);
       }
+      connected = false;
+      stale = false;
       setStatus('reconnecting', 'reconnecting');
       scheduleRetry();
     }
@@ -349,6 +379,7 @@ export const APP_SCRIPT: string =
           backoffMs = BACKOFF_START_MS;
           clearAlerts();
           clearWaterfall();
+          connected = true;
           setStatus('live', 'live');
           return readLoop(response.body.getReader()).then(function () {
             onDisconnect(null);
@@ -358,6 +389,7 @@ export const APP_SCRIPT: string =
     }
 
     connect();
+    setInterval(checkStale, 1000);
   }
 
   if (document.readyState !== 'loading') {

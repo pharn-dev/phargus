@@ -82,6 +82,12 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   not built yet.
 - **Event loop lag is observed by the loop itself.** A loop blocked completely cannot report
   until it resumes, so the longest stalls are reported late, with their full length.
+- **A window appears when the next sample arrives, so the figures are one window behind.** The
+  collector has no clock: a window closes only when a sample from a later window arrives (or the
+  input ends). Each dashboard card shows the end time of the window on display. A frozen app (a
+  loop blocked for good, a stopped process) sends no samples, so no window closes; the dashboard
+  then shows the status `stale: no data for N s` after `max(3 × window length, 5 s)` without a
+  window. While the stream is disconnected it shows `reconnecting` instead.
 - **Event loop figures are delay beyond the timer interval.** The histogram samples on a 10 ms timer
   and records the whole interval on every tick, so the agent subtracts 10 ms from min, max, mean, p50
   and p99 and clamps at 0. An idle loop therefore reads close to 0, not exactly 0: the remainder is
