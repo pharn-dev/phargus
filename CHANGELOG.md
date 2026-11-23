@@ -77,6 +77,11 @@ All notable changes to Phargus are recorded here. The format follows
 - A partial line that reaches the collector's NDJSON decoder in tiny pieces (progress dots, a
   spinner) is now held in one buffer that doubles as it fills, capped at `maxLineBytes`, instead
   of one Buffer per piece: 1,000,000 one-byte chunks held 109 MiB of heap before, about 1 MiB now.
+- The plugin runner's ESM build now finds its sandbox child script when the package is installed
+  under a path containing `)` (a `proj (copy)` or `Dropbox (Company)` folder). It used to look
+  for the child at a path relative to the filesystem root, so every rule failed with
+  `PHARGUS_SANDBOX_CRASHED`. The plugin runner and the analyzer now find their own directory the
+  same way.
 
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be

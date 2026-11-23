@@ -126,6 +126,10 @@ with an alert rule.
 
 `async_hooks` is imported in exactly one file: `src/agent/context.ts`.
 
+`src/shared` holds Node-core-only helpers that more than one module needs (today the analyzer and
+the plugin runner use `module-directory.ts` to find their bundled worker and child files). It is not
+an `exports` subpath, and the agent never imports it.
+
 ---
 
 ## Performance contract
