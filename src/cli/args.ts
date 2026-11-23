@@ -1,5 +1,5 @@
 import { parseArgs } from 'node:util';
-import { DEFAULT_MAX_LINE_BYTES } from '../collector/index.js';
+import { DEFAULT_MAX_LINE_BYTES, type AlertMetric, type AlertRule } from '../collector/index.js';
 import { isLoopbackHost } from '../dashboard/index.js';
 
 /** A bad command line: reported as `phargus: <message>` and exit code 2, never with a stack. */
@@ -25,6 +25,8 @@ export type ServeOptions = {
   input: ServeInput;
   /** Write the app's own lines to stdout: on for stdin unless `--no-passthrough`, off for a file. */
   passthrough: boolean;
+  /** Collector alert rules from `--alert`, in flag order; empty without the flag. */
+  alerts: readonly AlertRule[];
 };
 
 export type ParsedArgs =
@@ -75,6 +77,95 @@ function parsePositiveInteger(flag: string, value: string): number {
   return parsed;
 }
 
+type MetricUnit = 'nanoseconds' | 'bytes' | 'count';
+
+/** Every alertable metric and the unit of its values; a new collector metric must be added here. */
+const METRIC_UNITS: Record<AlertMetric, MetricUnit> = {
+  'eventLoop.max': 'nanoseconds',
+  'eventLoop.p99': 'nanoseconds',
+  'eventLoop.mean': 'nanoseconds',
+  'memory.heapUsedLast': 'bytes',
+  'memory.heapUsedMax': 'bytes',
+  'memory.rssLast': 'bytes',
+  'memory.rssMax': 'bytes',
+  'gc.count': 'count',
+  'gc.totalPause': 'nanoseconds',
+  'gc.maxPause': 'nanoseconds',
+  'backpressure.events': 'count',
+  'backpressure.totalStall': 'nanoseconds',
+  'backpressure.maxStall': 'nanoseconds',
+};
+
+/** Threshold units, each with the metric unit it belongs to and its size in that unit. */
+const UNITS: Record<string, { of: MetricUnit; times: bigint }> = {
+  ms: { of: 'nanoseconds', times: 1_000_000n },
+  s: { of: 'nanoseconds', times: 1_000_000_000n },
+  MiB: { of: 'bytes', times: 1_048_576n },
+  GiB: { of: 'bytes', times: 1_073_741_824n },
+};
+
+const METRIC = /^[A-Za-z0-9_.]*/;
+const THRESHOLD = /^([0-9]+)([A-Za-z]*)(?::([0-9]+))?$/;
+const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+
+/** Parses one `--alert '<metric><op><threshold>[:<windows>]'` value; the rule id is the value. */
+function parseAlertFlag(value: string): AlertRule {
+  const fail = (problem: string): never => {
+    throw new UsageError(`--alert "${value}": ${problem}`);
+  };
+  const name = METRIC.exec(value)?.[0] ?? '';
+  if (!Object.hasOwn(METRIC_UNITS, name)) {
+    fail(`unknown metric "${name}"; expected one of ${Object.keys(METRIC_UNITS).join(', ')}`);
+  }
+  const metric = name as AlertMetric;
+  const rest = value.slice(name.length);
+  const comparison = rest.startsWith('>=') ? '>=' : rest.startsWith('>') ? '>' : undefined;
+  if (comparison === undefined) {
+    return fail('the operator after the metric must be > or >=');
+  }
+  const parts = THRESHOLD.exec(rest.slice(comparison.length));
+  if (parts?.[1] === undefined) {
+    return fail(
+      'the threshold must be a non-negative integer with an optional unit (ms, s, MiB, GiB), then an optional :<windows>',
+    );
+  }
+  const [, digits, unitName = '', windows] = parts;
+  let threshold = BigInt(digits);
+  if (unitName !== '') {
+    const unit = UNITS[unitName];
+    if (unit === undefined) {
+      return fail(`unknown unit "${unitName}"; expected ms, s, MiB or GiB`);
+    }
+    const metricUnit = METRIC_UNITS[metric];
+    if (unit.of !== metricUnit) {
+      const fits =
+        metricUnit === 'nanoseconds'
+          ? 'ms or s'
+          : metricUnit === 'bytes'
+            ? 'MiB or GiB'
+            : 'no unit';
+      return fail(
+        `unit "${unitName}" does not fit ${metric}, which counts ${metricUnit}; use ${fits}`,
+      );
+    }
+    threshold *= unit.times;
+  }
+  if (threshold > MAX_SAFE) {
+    fail(`the threshold is larger than ${String(Number.MAX_SAFE_INTEGER)}`);
+  }
+  const forWindows = windows === undefined ? 1n : BigInt(windows);
+  if (forWindows < 1n || forWindows > MAX_SAFE) {
+    fail(`the window count must be an integer from 1 to ${String(Number.MAX_SAFE_INTEGER)}`);
+  }
+  return {
+    id: value,
+    metric,
+    comparison,
+    threshold: Number(threshold),
+    forWindows: Number(forWindows),
+  };
+}
+
 /**
  * Parses `argv` (without the node and script entries). `--help` and `--version` win over
  * everything else. The token comes from `--token`, else a non-empty `PHARGUS_TOKEN`; a host or an
@@ -97,6 +188,7 @@ export function parseServeArgs(argv: readonly string[], env: NodeJS.ProcessEnv):
         'window-ms': { type: 'string' },
         'max-line-bytes': { type: 'string' },
         'no-passthrough': { type: 'boolean' },
+        alert: { type: 'string', multiple: true },
       },
     });
   } catch (error) {
@@ -170,6 +262,13 @@ export function parseServeArgs(argv: readonly string[], env: NodeJS.ProcessEnv):
     }
   }
 
+  const alertValues = values.alert ?? [];
+  const repeated = alertValues.find((value, index) => alertValues.indexOf(value) !== index);
+  if (repeated !== undefined) {
+    throw new UsageError(`--alert "${repeated}" is given more than once`);
+  }
+  const alerts = alertValues.map(parseAlertFlag);
+
   const [spec] = rest;
   const input: ServeInput =
     spec === undefined || spec === '-' ? { kind: 'stdin' } : { kind: 'file', path: spec };
@@ -185,6 +284,7 @@ export function parseServeArgs(argv: readonly string[], env: NodeJS.ProcessEnv):
       maxLineBytes: maxLineBytes ?? DEFAULT_MAX_LINE_BYTES,
       input,
       passthrough: input.kind === 'stdin' && values['no-passthrough'] !== true,
+      alerts,
     },
   };
 }

@@ -1,3 +1,5 @@
+import type { Alert } from '../collector/index.js';
+
 /** A sink for the CLI's diagnostics: stderr in production, a collector array in tests. */
 export type LineWriter = (text: string) => void;
 
@@ -31,6 +33,17 @@ export function formatCounts(counts: Counts): string {
     ` dashboard.droppedEvents=${String(counts.droppedEvents)}` +
     ` passthrough.dropped=${String(counts.passthroughDropped)}` +
     ` agent.droppedSamples=${String(counts.droppedSamples)} agent.droppedSpans=${String(counts.droppedSpans)}`
+  );
+}
+
+/**
+ * The stderr line for one alert edge, e.g.
+ * `alert firing "eventLoop.p99>50ms": eventLoop.p99 is 61000000 in the window starting 1700000001000`.
+ */
+export function formatAlert(alert: Alert): string {
+  return (
+    `alert ${alert.state} "${alert.ruleId}": ${alert.metric} is ${String(alert.observed)}` +
+    ` in the window starting ${String(alert.windowStart)}`
   );
 }
 

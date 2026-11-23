@@ -117,6 +117,12 @@ Status legend:
 - ✅ Window-based alerts emitted from the pipeline.
 - ✅ Alert thresholds configurable per metric (`>` or `>=`, optionally for N consecutive,
   adjacent windows; no hysteresis, see `docs/LIMITS.md` §3).
+- ✅ Alerts from the command line: `phargus serve --alert '<metric><op><threshold>[:<windows>]'`
+  (repeatable; the rule id is the flag text) prints one stderr line when a rule fires and one when
+  it resolves, and the dashboard's Alerts panel shows them. The threshold takes `ms` or `s` for
+  time metrics and `MiB` or `GiB` for memory metrics. For example
+  `--alert 'eventLoop.p99>50ms:3'` or `--alert 'memory.rssLast>=512MiB'`. No sink flags: use the
+  collector API for stdout, file or webhook sinks.
 - ✅ Alert sinks: stdout / file / webhook. Webhook uses Node core `fetch` only, never follows
   redirects, and has a bounded `close()`. Its optional `headers` (for example
   `{ authorization: 'Bearer …' }`) go on every request; they are checked when the sink is created,

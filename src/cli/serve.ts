@@ -5,7 +5,7 @@ import { createDashboardServer, type DashboardServer } from '../dashboard/index.
 import type { ServeOptions } from './args.js';
 import { openInput, type OpenedInput } from './input.js';
 import { createPassthrough } from './passthrough.js';
-import { describeError, formatCounts, isDebug, writeLine } from './report.js';
+import { describeError, formatAlert, formatCounts, isDebug, writeLine } from './report.js';
 
 /** Windows kept for replay: five minutes at the default one-second window, as in the README. */
 const RING_CAPACITY = 300;
@@ -64,7 +64,9 @@ export async function runServe(
   const collector = createCollector({
     windowMs: options.windowMs,
     capacity: RING_CAPACITY,
+    alerts: options.alerts,
   });
+  collector.subscribe({ alert: (alert) => write(formatAlert(alert)) });
   const passthrough = createPassthrough(io.output, write);
   const decoder = createNdjsonDecoder({
     maxLineBytes: options.maxLineBytes,

@@ -34,6 +34,14 @@ Options:
   --window-ms <n>        Aggregation window in milliseconds (default: 1000)
   --max-line-bytes <n>   Longest accepted input line in bytes (default: 1048576)
   --no-passthrough       Do not write the app's own lines to stdout
+  --alert <rule>         Raise an alert when a window matches <rule> (repeatable):
+                         <metric><op><threshold>[:<windows>]. <op> is > or >=. The
+                         threshold is an integer in the metric's unit (nanoseconds, bytes
+                         or a count), or with ms or s (time metrics) or MiB or GiB (memory
+                         metrics). :<windows> needs that many windows in a row (default 1).
+                         Each rule prints a stderr line when it fires and when it resolves.
+                         Examples: --alert 'eventLoop.p99>50ms:3'
+                                   --alert 'memory.rssLast>=512MiB'
   -h, --help             Print this help and exit
   -v, --version          Print the version and exit
 
@@ -46,7 +54,7 @@ Environment:
 Exit codes:
   0  help, version, or a graceful shutdown on SIGINT/SIGTERM
   1  runtime error (unreadable input file, port in use, failed shutdown)
-  2  usage error (unknown flag, bad value, non-loopback host without a token)
+  2  usage error (unknown flag, bad value or --alert rule, non-loopback host without a token)
 
 Diagnostics go to stderr. The counts: line names decoder.invalid (text lines),
 decoder.oversized, decoder.foreign (JSON objects that are not agent records),
