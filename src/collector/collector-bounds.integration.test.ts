@@ -4,11 +4,13 @@ import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { describe, expect, it } from 'vitest';
 import type { Alert } from './alert-evaluator.js';
 import type { AlertSink } from './alert-sink.js';
 import { createCollector } from './collector.js';
 import { createFileSink } from './file-sink.js';
+import { createNdjsonDecoder, DEFAULT_MAX_LINE_BYTES } from './ndjson-decoder.js';
 import { createSinkDispatcher } from './sink-dispatcher.js';
 import type { AggregatedWindow } from './window.js';
 import { createWindowStore } from './window-store.js';
@@ -383,4 +385,38 @@ describe('window store latch and file modes (F-21, F-14)', () => {
       }
     },
   );
+});
+
+describe('span ring bound on large span lines (CORE-242)', () => {
+  it('keeps the span ring under 4 MiB after 1,024 one-MiB span lines with a huge extra field', async () => {
+    const head = {
+      type: 'span',
+      traceId: '4bf92f3577b34da6a3ce929d0e0e4736',
+      spanId: 'b7ad6b7169203331',
+      name: 'GET /big',
+      method: 'GET',
+      statusCode: 200,
+      startTimeMs: 1_700_000_000_000,
+      durationNs: 1_000,
+    };
+    const prefix = JSON.stringify(head).slice(0, -1);
+    const pathLength = 4096;
+    const fixed = `${prefix},"path":"/${'p'.repeat(pathLength)}","junk":""}`.length;
+    const junk = 'x'.repeat(DEFAULT_MAX_LINE_BYTES - fixed);
+    const line = Buffer.from(`${prefix},"path":"/${'p'.repeat(pathLength)}","junk":"${junk}"}\n`);
+    expect(line.length - 1).toBe(DEFAULT_MAX_LINE_BYTES);
+
+    const collector = createCollector({ windowMs: 1000, capacity: 4 });
+    const decoder = createNdjsonDecoder();
+    async function* lines(): AsyncGenerator<Buffer> {
+      for (let i = 0; i < 1024; i += 1) yield line;
+    }
+    await pipeline(Readable.from(lines()), decoder, (records) => collector.consume(records));
+
+    expect(decoder.oversized).toBe(0);
+    const stored = collector.spans.snapshot();
+    expect(stored).toHaveLength(1024);
+    expect(Object.keys(stored[0] ?? {})).not.toContain('junk');
+    expect(Buffer.byteLength(JSON.stringify(stored))).toBeLessThan(4 * 1024 * 1024);
+  }, 120_000);
 });

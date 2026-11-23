@@ -39,9 +39,10 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   sample (one per second) plus one line per traced request to the process's stdout, interleaved
   with your own output. Set `PHARGUS_OUTPUT` to a file path, or to `none`, if that matters. The
   collector tolerates that output: `createNdjsonDecoder` and the collector skip and count lines and
-  records that are not agent data. What remains: an app line that has the agent's sample keys (or
-  `type: "span"`) is taken as agent data, a malformed agent record is dropped (counted, not
-  aggregated), and a line longer than `maxLineBytes` is dropped.
+  records that are not agent data. What remains: an app line that has the agent's sample keys, or
+  `type: "span"` with every field of the agent's span shape, is taken as agent data; a malformed
+  agent record (including a `type: "span"` line without that shape) is dropped (counted, not
+  aggregated); and a line longer than `maxLineBytes` is dropped.
 - **Heap snapshots pause the process.** Taking one blocks the event loop and can need as much memory
   again as the heap holds. On a large heap in a memory-constrained container, that can end in an OOM
   kill. Snapshots are opt-in and manual for this reason.
