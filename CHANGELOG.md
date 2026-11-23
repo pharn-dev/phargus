@@ -39,6 +39,9 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- `diffHeapSnapshots` now shows what shrank as well as what grew: it leaves out types whose count
+  and self size did not change and ranks the rest by absolute self-size change, so a type that
+  lost objects is no longer cut off below the unchanged rows.
 - One sample line dated in the future, or a host clock stepping back, no longer stops all windows
   and alerts until the collector restarts. A sample whose `timestamp` is not a safe integer or is
   more than 24 hours ahead of the collector's clock is now `malformed` and counted in
@@ -86,6 +89,11 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Security
 
+- A heap snapshot file under the 256 MiB cap can no longer abort the host process:
+  `summarizeHeapSnapshot` and `diffHeapSnapshots` reject JSON nested more than 64 levels deep
+  ("nesting too deep"), and the worker no longer keeps every distinct top-level key, only
+  `snapshot`, `nodes` and `strings`. Both now fail with a `WorkerTaskError` instead.
+
 - The dashboard returns `400` for malformed request targets and catches request-handler errors, so one request cannot crash the process hosting it.
 
 - Dashboard binds outside loopback now require a token of at least 16 characters; short tokens are refused before the server binds.
@@ -112,6 +120,14 @@ All notable changes to Phargus are recorded here. The format follows
   webhook sink does, and a failed delivery no longer copies `fetch`'s message, which could quote
   the full URL or a header value: it reports a fixed text or the network error code (for example
   `fetch failed (ECONNREFUSED)`).
+
+- A hostile source map no longer aborts the process or crashes the symbolization worker.
+  `symbolizeStackFrames` now reports a map as malformed (`MalformedSourceMapError` on its frames)
+  when its `sources` is not an array or its `mappings` is not a string, in the map or any section
+  (a 70-byte map with `"sources":{"length":4294967295}` made V8 end the host with exit code 134),
+  or when its mappings are longer than 1/32 of the free worker heap (a mapping-dense map of about
+  24 MiB or more killed the worker and rejected the whole call). A built file of up to 64 MiB of
+  newlines no longer kills the worker while its `sourceMappingURL` comment is looked for.
 
 ## [0.2.1] - 2026-11-08
 
