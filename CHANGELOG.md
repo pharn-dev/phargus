@@ -25,6 +25,11 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- One sample line dated in the future, or a host clock stepping back, no longer stops all windows
+  and alerts until the collector restarts. A sample whose `timestamp` is not a safe integer or is
+  more than 24 hours ahead of the collector's clock is now `malformed` and counted in
+  `collector.ignored`, and a sample more than 60 windows older than the open window restarts
+  aggregation at its time instead of being counted as `late`.
 - HTTP tracing no longer pins `EventEmitter.prototype.emit` for HTTP and HTTPS servers: a later replacement (`node:domain`, other instrumentation) is now reached, so a domain catches a server's `'error'` again.
 - A span's path is now the path the client requested, read when the request starts, so a framework
   that rewrites `req.url` (an Express mounted router) no longer changes it. It is cut to its first

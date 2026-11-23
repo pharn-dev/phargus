@@ -81,9 +81,13 @@ with an alert rule.
    parsed records and runs a `pipeline()` of Transform streams. A record guard comes first: it
    forwards sample and span records and skips and counts the rest in `collector.ignored`, as
    `foreign` (not agent data) or `malformed` (agent-shaped but unusable), with an optional
-   `onIgnored` hook. Then span records go to a ring buffer, samples become fixed time windows with
-   integer math, windows go to the alert evaluator and, when persistence is on, into a bounded
-   queue (`persist.maxQueueSize`, default 1024) that is appended to a file one window at a time in
+   `onIgnored` hook. A sample whose `timestamp` is not a safe integer, or is more than 24 hours
+   ahead of the collector's `Date.now()`, is `malformed`. Windows follow sample timestamps: a
+   sample up to 60 windows older than the open window is counted in its `late` and dropped, and
+   one more than 60 windows older (a clock stepped back) emits the open window and restarts
+   aggregation at the sample's time, so window `start` values are then not monotonic. Then span
+   records go to a ring buffer, samples become fixed time windows with integer math, windows go to
+   the alert evaluator and, when persistence is on, into a bounded queue (`persist.maxQueueSize`, default 1024) that is appended to a file one window at a time in
    emission order, and alerts go to the sinks. A slow disk drops the oldest queued windows, counted
    in `collector.persistence.dropped`, instead of slowing the pipeline; a failed append is counted
    in `failed` and rejects `consume()`; `close()` and the end of `consume()` wait for the queue to
