@@ -200,7 +200,8 @@ The recording above is that example.
 - On a loopback address (`127.x.x.x`, `localhost`, `::1`) the token is optional, unless
   `allowedHosts` names a host that is not loopback. Binding any other address, or allowing such a
   name, requires a token with at least 16 characters; generate one with `openssl rand -hex 16`.
-  A shorter token is refused at startup.
+  A shorter token is refused at startup. Use a hex or base64url token; any other character can be
+  percent-encoded in the login link (`+` as `%2B`).
 - With a token, open `http://<host>:<port>/login#token=<token>` once in a browser. The token is in
   the URL fragment, which the browser never sends to the server. The login page removes the
   fragment from the address bar and history, then posts the token to `POST /session` in a JSON
