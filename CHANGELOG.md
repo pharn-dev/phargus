@@ -47,6 +47,12 @@ All notable changes to Phargus are recorded here. The format follows
 - The stdout alert sink keeps delivering when its stream is backed up: after a `write()` that
   returned `false` it no longer waits for a `drain` that had already fired, so later alerts are
   written and `close()`, `collector.close()` and `consume()` resolve again.
+- The collector stores a `type: "span"` record as a span only when it has the agent's span shape
+  (hex `traceId` and `spanId`, string `name`, `method` and `path`, non-negative integer
+  `statusCode`, `startTimeMs` and `durationNs`, and a valid `parentSpanId` or `aborted` when
+  present); anything else is skipped and counted in `ignored` as malformed. A stored span keeps
+  only those fields, with strings cut to 1,024 characters, so large span-shaped lines no longer
+  fill the span ring and every dashboard client with up to 1 GiB.
 
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be
