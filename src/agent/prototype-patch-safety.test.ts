@@ -1,8 +1,10 @@
-import { once } from 'node:events';
+import { spawnSync } from 'node:child_process';
+import { EventEmitter, once } from 'node:events';
 import { createServer, get, OutgoingMessage, Server as HttpServer } from 'node:http';
 import { Server as HttpsServer } from 'node:https';
 import type { AddressInfo } from 'node:net';
 import { Duplex, Writable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Regression tests for F-01, F-13 and F-22 (production-readiness audit): Phargus must never leave a
@@ -24,6 +26,7 @@ const pristineWrite = writeTargets.map((target) =>
 );
 const emitTargets = [HttpServer.prototype, HttpsServer.prototype];
 const pristineEmit = emitTargets.map((target) => Object.getOwnPropertyDescriptor(target, 'emit'));
+const pristineEventEmitterEmit = Object.getOwnPropertyDescriptor(EventEmitter.prototype, 'emit');
 const cleanups: (() => void)[] = [];
 
 function restoreDescriptor(target: object, key: string, own: PropertyDescriptor | undefined): void {
@@ -40,6 +43,7 @@ afterEach(() => {
   }
   writeTargets.forEach((target, i) => restoreDescriptor(target, 'write', pristineWrite[i]));
   emitTargets.forEach((target, i) => restoreDescriptor(target, 'emit', pristineEmit[i]));
+  restoreDescriptor(EventEmitter.prototype, 'emit', pristineEventEmitterEmit);
 });
 
 /** A fresh, independent evaluation of the probe module: a second "copy" of Phargus. */
@@ -353,4 +357,106 @@ describe('prototype patch safety — http tracing emit wrapper (F-13)', () => {
       });
     },
   );
+
+  it('a function assigned to EventEmitter.prototype.emit after enable() sees every server emit', async () => {
+    const tracing = track(await loadTracingCopy());
+    tracing.enable();
+    const beneath = EventEmitter.prototype.emit as AnyFn;
+    const seenEvents: unknown[] = [];
+    EventEmitter.prototype.emit = function laterEmit(this: unknown, ...args: unknown[]): boolean {
+      if (this instanceof HttpServer || this instanceof HttpsServer) {
+        seenEvents.push(args[0]);
+      }
+      return Reflect.apply(beneath, this, args) as boolean;
+    };
+
+    for (const server of [new HttpServer(), new HttpsServer()]) {
+      seenEvents.length = 0;
+      server.emit('custom');
+      server.emit('request', {}, {});
+      expect(seenEvents).toEqual(['custom', 'request']);
+    }
+
+    seenEvents.length = 0;
+    const seenTraceIds: (string | undefined)[] = [];
+    const server = createServer((_req, res) => {
+      seenTraceIds.push(tracing.currentTraceId());
+      res.end('ok');
+    });
+    cleanups.push(() => server.close());
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const { port } = server.address() as AddressInfo;
+    const traceId = '4bf92f3577b34da6a3ce929d0e0e4736';
+    const response = await new Promise<import('node:http').IncomingMessage>((resolve, reject) => {
+      get(
+        {
+          host: '127.0.0.1',
+          port,
+          path: '/',
+          agent: false,
+          headers: { traceparent: `00-${traceId}-00f067aa0ba902b7-01` },
+        },
+        resolve,
+      ).on('error', reject);
+    });
+    response.resume();
+    await once(response, 'end');
+    expect(seenEvents).toContain('request');
+    expect(seenTraceIds).toEqual([traceId]);
+  });
+
+  it('node:domain loaded after enable() still catches an error emitted on a domain-bound server', () => {
+    // node:domain cannot be unloaded, so this runs in a child process. A resolve hook lets plain
+    // `node` load the agent's TypeScript sources (`./x.js` -> `./x.ts`).
+    const hooks = `
+      import { registerHooks } from 'node:module';
+      registerHooks({
+        resolve(specifier, context, next) {
+          try {
+            return next(specifier, context);
+          } catch (error) {
+            if (specifier.startsWith('.') && specifier.endsWith('.js')) {
+              return next(specifier.slice(0, -3) + '.ts', context);
+            }
+            throw error;
+          }
+        },
+      });
+    `;
+    const tracingUrl = new URL('./http-tracing.ts', import.meta.url).href;
+    const script = `
+      const tracing = await import(${JSON.stringify(tracingUrl)});
+      tracing.enable();
+      const domain = await import('node:domain');
+      const { Server } = await import('node:http');
+      const d = domain.create();
+      let caught;
+      d.on('error', (error) => { caught = error.message; });
+      const server = new Server();
+      d.add(server);
+      let thrown;
+      try {
+        server.emit('error', new Error('boom'));
+      } catch (error) {
+        thrown = error.message;
+      }
+      tracing.disable();
+      console.log(JSON.stringify({ caught, thrown }));
+    `;
+    const child = spawnSync(
+      process.execPath,
+      [
+        '--import',
+        `data:text/javascript,${encodeURIComponent(hooks)}`,
+        '--input-type=module',
+        '--eval',
+        script,
+      ],
+      { cwd: fileURLToPath(new URL('.', import.meta.url)), encoding: 'utf8', timeout: 30_000 },
+    );
+    expect(child.status, child.stderr).toBe(0);
+    const lines = child.stdout.trim().split('\n');
+    expect(JSON.parse(lines[lines.length - 1] ?? '')).toEqual({ caught: 'boom' });
+  });
 });
