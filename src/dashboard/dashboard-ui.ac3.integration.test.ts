@@ -72,9 +72,14 @@ type HttpResult = { status: number; headers: IncomingHttpHeaders; body: string }
 type Tag = { name: string; attrs: Map<string, string> };
 
 /** One GET over a fresh connection, with exactly the given request headers. */
-function httpGet(url: string, headers: Record<string, string> = {}): Promise<HttpResult> {
+function httpGet(
+  url: string,
+  headers: Record<string, string> = {},
+  method = 'GET',
+  body?: string,
+): Promise<HttpResult> {
   return new Promise((resolve, reject) => {
-    const req = request(url, { method: 'GET', headers, agent: false }, (res) => {
+    const req = request(url, { method, headers, agent: false }, (res) => {
       const chunks: Buffer[] = [];
       res.on('data', (chunk: Buffer) => chunks.push(chunk));
       res.on('error', reject);
@@ -87,15 +92,20 @@ function httpGet(url: string, headers: Record<string, string> = {}): Promise<Htt
       );
     });
     req.on('error', reject);
-    req.setTimeout(5_000, () => req.destroy(new Error(`timed out: GET ${url}`)));
-    req.end();
+    req.setTimeout(5_000, () => req.destroy(new Error(`timed out: ${method} ${url}`)));
+    req.end(body);
   });
 }
 
-/** Exchanges `?token=` for the session cookie: the Set-Cookie line and the request Cookie value. */
+/** Uses the supported JSON endpoint and returns its session cookie. */
 async function login(base: string, token: string): Promise<{ setCookie: string; cookie: string }> {
-  const response = await httpGet(`${base}/?token=${encodeURIComponent(token)}`);
-  expect(response.status, 'GET /?token=…').toBe(303);
+  const response = await httpGet(
+    `${base}/session`,
+    { 'content-type': 'application/json' },
+    'POST',
+    JSON.stringify({ token }),
+  );
+  expect(response.status, 'POST /session').toBe(204);
   const setCookie = response.headers['set-cookie']?.[0] ?? '';
   expect(setCookie, 'the session cookie').not.toBe('');
   return { setCookie, cookie: setCookie.split(';')[0] ?? '' };

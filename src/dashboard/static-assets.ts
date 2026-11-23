@@ -12,8 +12,8 @@ function asset(contentType: string, text: string): StaticAsset {
 
 /**
  * The page and its two assets, keyed by pathname. None of them carries a credential: the browser
- * authenticates every request with the session cookie that `POST /session` (or the deprecated
- * `GET /?token=` exchange) set. These are the gated assets; see `createLoginAssets` for the others.
+ * authenticates every request with the session cookie that `POST /session` sets. These are the
+ * gated assets; see `createLoginAssets` for the others.
  */
 export function createStaticAssets(): ReadonlyMap<string, StaticAsset> {
   return new Map<string, StaticAsset>([

@@ -8,7 +8,6 @@ import {
   createHostPolicy,
   isLoopbackHost,
   parseAuthority,
-  sessionCookie,
   sessionCookieName,
   sessionValueFor,
   tokensMatch,
@@ -33,9 +32,8 @@ export type DashboardServerOptions = {
   /**
    * Required off loopback, and whenever `allowedHosts` names a host that is not loopback (even on a
    * loopback bind). A browser opens `/login#token=<token>` once (the fragment never
-   * reaches the server) and gets an HttpOnly session cookie through `POST /session`;
-   * `/?token=<token>` still works for one release and is deprecated; API clients send
-   * `Authorization: Bearer <token>`.
+   * reaches the server) and gets an HttpOnly session cookie through `POST /session`; API
+   * clients send `Authorization: Bearer <token>`. A `?token=` query is not a credential.
    */
   token?: string;
   /**
@@ -99,11 +97,6 @@ function isDisconnect(error: NodeJS.ErrnoException): boolean {
 function firstNonLoopbackHost(allowedHosts: readonly string[]): string | undefined {
   return allowedHosts.find((entry) => !isLoopbackHost(parseAuthority(entry)?.hostname ?? ''));
 }
-
-/** Emitted once per server by the first `GET /?token=` exchange; names the replacement, never a token. */
-const TOKEN_QUERY_DEPRECATION =
-  'the dashboard login link /?token=<token> is deprecated and will be removed in a later release; ' +
-  'open /login#token=<token> instead';
 
 /** A bodyless raw response for a connection the HTTP parser gave up on. */
 function rawErrorResponse(error: NodeJS.ErrnoException): string {
@@ -187,27 +180,6 @@ export async function createDashboardServer(
 
   const unauthorized = (res: ServerResponse): void => {
     plain(res, 401, 'unauthorized\n', { 'www-authenticate': 'Bearer' });
-  };
-
-  let tokenQueryWarned = false;
-
-  /** Deprecated `GET /?token=…`: trade a correct token for the session cookie and a clean URL. */
-  const exchangeToken = (req: IncomingMessage, res: ServerResponse, presented: string): void => {
-    if (!tokenQueryWarned) {
-      tokenQueryWarned = true;
-      process.emitWarning(TOKEN_QUERY_DEPRECATION, {
-        type: 'DeprecationWarning',
-        code: 'PHARGUS_DEP_TOKEN_QUERY',
-      });
-    }
-    if (token === undefined || sessionValue === undefined || !tokensMatch(presented, token)) {
-      unauthorized(res);
-      return;
-    }
-    plain(res, 303, 'see other\n', {
-      location: '/',
-      'set-cookie': sessionCookie(cookieName, sessionValue),
-    });
   };
 
   const serveAsset = (req: IncomingMessage, res: ServerResponse, asset: StaticAsset): void => {
@@ -320,16 +292,6 @@ export async function createDashboardServer(
       return;
     }
     if (token !== undefined) {
-      const presented = url.searchParams.get('token');
-      if (presented !== null) {
-        // The token rides in a URL only on its way to becoming a cookie, and only to the page.
-        if (url.pathname === '/' && req.method === 'GET') {
-          exchangeToken(req, res, presented);
-        } else {
-          unauthorized(res);
-        }
-        return;
-      }
       // Before authentication: a visitor has no cookie yet. Neither route can leak the token.
       if (url.pathname === '/session' && sessionValue !== undefined) {
         handleSessionRequest(req, res, {

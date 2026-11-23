@@ -5,8 +5,8 @@ import { createCollector } from '../collector/index.js';
 import { createDashboardServer, type DashboardServer } from './index.js';
 
 // Regression tests for the dashboard's network-facing defences: Host/Origin validation (DNS
-// rebinding), the `?token=` → cookie exchange (no token in any URL but the first), the security
-// headers on every response, and rate-limited reporting of malformed requests.
+// rebinding), the session cookie (no token in any URL: a `?token=` query is not a credential), the
+// security headers on every response, and rate-limited reporting of malformed requests.
 
 const TOKEN = 'tok-9f2c-Very-Secret-Value';
 
@@ -38,6 +38,7 @@ function send(
   path: string,
   headers: Record<string, string> = {},
   method = 'GET',
+  body?: string,
 ): Promise<Result> {
   return new Promise((resolve, reject) => {
     const req = request({ host: '127.0.0.1', port, path, method, headers, agent: false }, (res) => {
@@ -67,7 +68,7 @@ function send(
       }
     });
     req.setTimeout(5_000, () => req.destroy(new Error(`timed out: ${method} ${path}`)));
-    req.end();
+    req.end(body);
   });
 }
 
@@ -93,10 +94,14 @@ function expectErrorHeaders(what: string, headers: IncomingHttpHeaders): void {
 }
 
 async function login(port: number): Promise<{ setCookie: string; cookie: string }> {
-  const response = await send(port, `/?token=${encodeURIComponent(TOKEN)}`, {
-    host: `127.0.0.1:${port}`,
-  });
-  expect(response.status).toBe(303);
+  const response = await send(
+    port,
+    '/session',
+    { host: `127.0.0.1:${port}`, 'content-type': 'application/json' },
+    'POST',
+    JSON.stringify({ token: TOKEN }),
+  );
+  expect(response.status).toBe(204);
   const setCookie = response.headers['set-cookie']?.[0] ?? '';
   return { setCookie, cookie: setCookie.split(';')[0] ?? '' };
 }
@@ -231,29 +236,15 @@ describe('dashboard Host and Origin validation (DNS rebinding)', () => {
 });
 
 describe('dashboard token exchange (no token in URLs)', () => {
-  it('trades ?token= on / for a 303 to / and an HttpOnly SameSite=Strict cookie that is not the token', async () => {
+  it('answers 401 and sets no cookie for the right ?token= on /: the query is not a login', async () => {
     const server = await start({ token: TOKEN });
     const response = await send(server.port, `/?token=${encodeURIComponent(TOKEN)}`, {
       host: `127.0.0.1:${server.port}`,
     });
-    expect(response.status).toBe(303);
-    expect(response.headers.location).toBe('/');
-    expectErrorHeaders('303', response.headers);
-    const cookies = response.headers['set-cookie'] ?? [];
-    expect(cookies).toHaveLength(1);
-    const setCookie = cookies[0] ?? '';
-    const attributes = setCookie.split(';').map((part) => part.trim().toLowerCase());
-    expect(attributes[0]).toMatch(
-      new RegExp(`^phargus_session_${server.port}=[A-Za-z0-9_-]{20,}$`, 'i'),
-    );
-    expect(attributes).toContain('httponly');
-    expect(attributes).toContain('samesite=strict');
-    expect(attributes).toContain('path=/');
-    expect(attributes).not.toContain('secure');
-    expect(setCookie).not.toContain(TOKEN);
-    expect(setCookie).not.toContain(encodeURIComponent(TOKEN));
-    expect(setCookie).not.toContain(Buffer.from(TOKEN).toString('base64'));
-    expect(setCookie).not.toContain(Buffer.from(TOKEN).toString('base64url'));
+    expect(response.status).toBe(401);
+    expect(response.headers.location).toBeUndefined();
+    expect(response.headers['set-cookie']).toBeUndefined();
+    expectErrorHeaders('401', response.headers);
   });
 
   it('answers 401 and sets no cookie for a wrong ?token= on /', async () => {
@@ -292,7 +283,7 @@ describe('dashboard token exchange (no token in URLs)', () => {
     }
   });
 
-  it('answers 401 to ?token= on /events and the assets, even with the right token or a valid cookie', async () => {
+  it('answers 401 to ?token= on /events and the assets with the right token, and ignores the query next to a valid cookie', async () => {
     const server = await start({ token: TOKEN });
     const host = `127.0.0.1:${server.port}`;
     const { cookie } = await login(server.port);
@@ -303,7 +294,8 @@ describe('dashboard token exchange (no token in URLs)', () => {
       expect(bare.body).not.toMatch(/^event:/m);
       expect(bare.headers['set-cookie']).toBeUndefined();
       const withCookie = await send(server.port, url, { host, cookie });
-      expect(withCookie.status, `GET ${url} with the cookie`).toBe(401);
+      expect(withCookie.status, `GET ${url} with the cookie`).toBe(200);
+      expect(withCookie.headers['set-cookie'], `GET ${url} with the cookie`).toBeUndefined();
     }
   });
 

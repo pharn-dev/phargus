@@ -7,6 +7,13 @@ All notable changes to Phargus are recorded here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- **Breaking:** the deprecated dashboard login link `/?token=<token>` is gone, along with its
+  `PHARGUS_DEP_TOKEN_QUERY` warning. A `?token=` query is no longer a credential: `GET /?token=…`
+  answers `401` and sets no cookie. Open `/login#token=<token>` in a browser, or send
+  `Authorization: Bearer <token>`.
+
 ### Fixed
 
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token

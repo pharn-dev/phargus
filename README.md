@@ -207,9 +207,6 @@ The recording above is that example.
   fragment from the address bar and history, then posts the token to `POST /session` in a JSON
   body; the server answers `204` with an `HttpOnly`, `SameSite=Strict` cookie and the page opens
   `/`. A wrong token gets `401` and no cookie.
-- `http://<host>:<port>/?token=<token>` still works for one release and is deprecated: it puts the
-  token in a request line. The server emits a `PHARGUS_DEP_TOKEN_QUERY` deprecation warning the
-  first time it is used. `?token=` is accepted on `/` only.
 - Scripts and `curl` send `Authorization: Bearer <token>`, for example to `/events`.
 - The server answers only requests whose `Host` is the bound address on the bound port (plus
   `localhost`, `127.0.0.1` and `[::1]` for a loopback or `0.0.0.0`/`::` bind); anything else gets
