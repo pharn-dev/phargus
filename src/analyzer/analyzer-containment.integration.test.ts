@@ -2,10 +2,11 @@
 // Anything that could kill the process (a V8 fatal OOM aborts the whole process, not just the
 // worker) runs in a child Node process, so a regression fails the test instead of the runner.
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { writeHeapSnapshot } from 'node:v8';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   createWorkerPool,
@@ -190,6 +191,99 @@ console.log(JSON.stringify({ results, exitCode: process.exitCode ?? null }));
       expect(result.after, JSON.stringify(result)).toBe(2);
     }
   }, 180_000);
+});
+
+describe('hostile heap snapshots under the cap (CORE-252)', () => {
+  it('rejects deep nesting and many root keys with a typed error, and the host survives', async () => {
+    // On the unfixed worker, the nesting file made V8 abort the host ("Reached heap limit"), and
+    // the root-key file ran the worker out of heap (a 200 MiB one aborted the host too).
+    const script = `
+import { writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+const [srcDir, dir] = process.argv.slice(2);
+const { createHeapSnapshotPool, summarizeHeapSnapshot, diffHeapSnapshots } = await import(
+  pathToFileURL(join(srcDir, 'heap-snapshot.ts')).href
+);
+const deep = join(dir, 'deep.heapsnapshot');
+writeFileSync(deep, '{"x":' + '['.repeat(40 * 1024 * 1024));
+const keys = join(dir, 'keys.heapsnapshot');
+const parts = ['{"a":0'];
+for (let i = 0; i < 2_000_000; i += 1) parts.push(',"' + i + '":0');
+writeFileSync(keys, parts.join('') + '}');
+const small = join(dir, 'hostile-small.heapsnapshot');
+writeFileSync(small, ${JSON.stringify(SMALL_SNAPSHOT)});
+const describe = (error) => ({ name: error.name, code: error.code, message: error.message });
+// Small heap limits, so a parser that keeps every root key fails here too.
+const pool = createHeapSnapshotPool({
+  resourceLimits: { maxOldGenerationSizeMb: 32, maxYoungGenerationSizeMb: 8 },
+});
+const options = { pool, timeoutMs: 120_000 };
+const results = [];
+for (const file of [deep, keys]) {
+  for (const run of [
+    () => summarizeHeapSnapshot(file, options),
+    () => diffHeapSnapshots(file, small, options),
+    () => diffHeapSnapshots(small, file, options),
+  ]) {
+    results.push(await run().then(() => ({ resolved: true }), describe));
+  }
+}
+await pool.close();
+console.log(JSON.stringify({ results, exitCode: process.exitCode ?? null }));
+`;
+    const scriptPath = join(dir, 'hostile-host.mjs');
+    await writeFile(scriptPath, script);
+    const child = runNode(['--import', TS_HOOKS_URL, scriptPath, srcDir, dir], 170_000);
+    expect(child.signal, child.output).toBeNull();
+    expect(child.status, child.output).toBe(0);
+    const report = child.last as {
+      results: { name: string; code: string; message: string }[];
+      exitCode: unknown;
+    };
+    expect(report.exitCode).toBeNull();
+    expect(report.results).toHaveLength(6);
+    for (const result of report.results.slice(0, 3)) {
+      expect(result).toMatchObject({ name: 'WorkerTaskError', code: 'ERR_WORKER_TASK_FAILED' });
+      expect(result.message).toMatch(/cannot parse heap snapshot .*deep.*: nesting too deep/);
+    }
+    for (const result of report.results.slice(3)) {
+      expect(result).toMatchObject({ name: 'WorkerTaskError', code: 'ERR_WORKER_TASK_FAILED' });
+      expect(result.message).toMatch(/invalid heap snapshot .*keys.*: /);
+    }
+  }, 180_000);
+
+  it('summarizes a real v8.writeHeapSnapshot() file the same as a JSON.parse reference', async () => {
+    const path = writeHeapSnapshot(join(dir, 'real.heapsnapshot'));
+    const raw = JSON.parse(await readFile(path, 'utf8')) as {
+      snapshot: { meta: { node_fields: string[]; node_types: [string[]] } };
+      nodes: number[];
+      strings: string[];
+    };
+    const fields = raw.snapshot.meta.node_fields;
+    const [typeAt, nameAt, sizeAt] = ['type', 'name', 'self_size'].map((f) => fields.indexOf(f));
+    const groups = new Map<string, { count: number; selfSize: number }>();
+    let totalSelfSize = 0;
+    for (let i = 0; i < raw.nodes.length; i += fields.length) {
+      const type = raw.snapshot.meta.node_types[0][raw.nodes[i + (typeAt ?? 0)] ?? 0] ?? '';
+      const size = raw.nodes[i + (sizeAt ?? 0)] ?? 0;
+      const name =
+        type === 'object' || type === 'native'
+          ? (raw.strings[raw.nodes[i + (nameAt ?? 0)] ?? 0] ?? '')
+          : `(${type})`;
+      const stats = groups.get(name) ?? { count: 0, selfSize: 0 };
+      stats.count += 1;
+      stats.selfSize += size;
+      groups.set(name, stats);
+      totalSelfSize += size;
+    }
+    const top = [...groups]
+      .map(([name, stats]) => ({ name, ...stats }))
+      .sort((a, b) => b.selfSize - a.selfSize || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
+      .slice(0, 20);
+    const summary = await summarizeHeapSnapshot(path, { top: 20, timeoutMs: 120_000 });
+    expect(summary).toEqual({ nodeCount: raw.nodes.length / fields.length, totalSelfSize, top });
+  }, 130_000);
 });
 
 describe('worker heap limits (F-02)', () => {
