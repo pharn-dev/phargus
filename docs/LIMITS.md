@@ -88,9 +88,11 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   subclasses, `fs.WriteStream`, `Duplex`, `Transform`, `PassThrough`, `net.Socket`,
   `tls.TLSSocket`, `http.ServerResponse` and `http.ClientRequest`. A socket stall inside
   `res.write()` is counted once, on the response. Writes Node makes internally (such as the data
-  passed to `res.end(data)`) show up as socket stalls. A stream class that overrides `write`
-  without calling the prototype's is not seen. Hotspots point to where to look, not to a proven
-  root cause.
+  passed to `res.end(data)`) show up as socket stalls. A stall lasts from the `write()` that
+  returned `false` until whichever comes first: `drain`, `finish` (the stream was ended, so no
+  `drain` follows, as with `res.write(big); res.end()`) or `close` (the stream was destroyed, for
+  example by a client that disconnected). A stream class that overrides `write` without calling
+  the prototype's is not seen. Hotspots point to where to look, not to a proven root cause.
 - **Windows are aggregates.** Percentiles over a time window hide what happened inside it, and
   counters use integer math, so very small or very large values are bounded by the unit chosen.
 - **GC and deoptimization detail depend on Node and V8.** GC data comes from `PerformanceObserver`

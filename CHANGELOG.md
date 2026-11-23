@@ -20,6 +20,10 @@ All notable changes to Phargus are recorded here. The format follows
 - A span's path is now the path the client requested, read when the request starts, so a framework
   that rewrites `req.url` (an Express mounted router) no longer changes it. It is cut to its first
   256 characters, so a long URL cannot grow a span line past a few hundred bytes.
+- A backpressure stall that ends with `finish` or `close` instead of `drain` (a
+  `res.write(big)` followed by `res.end()`, or a client that disconnects mid-stall) now reports
+  its duration in `totalStall`, `maxStall` and its hotspot instead of 0.
+
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be
   percent-encoded.
