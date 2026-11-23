@@ -10,7 +10,16 @@ export const DEFAULT_SPAN_BUFFER_SIZE = 1024;
 
 export type HttpTracingOptions = { spanBufferSize?: number };
 
-type Inflight = { traceId: string; startTimeMs: number; startNs: bigint };
+type Inflight = {
+  traceId: string;
+  startTimeMs: number;
+  startNs: bigint;
+  method: string;
+  path: string;
+};
+
+/** A span keeps at most this many characters of the requested path. */
+const MAX_PATH_CHARS = 256;
 
 const START_CHANNEL = 'http.server.request.start';
 const FINISH_CHANNEL = 'http.server.response.finish';
@@ -49,10 +58,16 @@ function onStart(message: unknown): void {
     }
     const request = message.request;
     const traceId = parseTraceparent(headerValue(request.headers)) ?? newTraceId();
+    // Read now: a framework may rewrite `req.url` before the response finishes.
+    const url = typeof request.url === 'string' ? request.url : '';
+    const queryAt = url.indexOf('?');
+    const pathEnd = Math.min(queryAt === -1 ? url.length : queryAt, MAX_PATH_CHARS);
     inflight.set(request, {
       traceId,
       startTimeMs: Date.now(),
       startNs: process.hrtime.bigint(),
+      method: typeof request.method === 'string' ? request.method : '',
+      path: url.slice(0, pathEnd),
     });
   } catch (error) {
     warn(error);
@@ -70,16 +85,12 @@ function onFinish(message: unknown): void {
       return;
     }
     inflight.delete(request);
-    const url = typeof request.url === 'string' ? request.url : '';
-    const queryAt = url.indexOf('?');
     const elapsed = Number(process.hrtime.bigint() - entry.startNs);
-    const method = typeof request.method === 'string' ? request.method : '';
-    const path = queryAt === -1 ? url : url.slice(0, queryAt);
     // The span id is made here, as bytes in the buffer: nothing reads it while the request runs.
     buffer.record(
       entry.traceId,
-      method,
-      path,
+      entry.method,
+      entry.path,
       typeof message.response.statusCode === 'number' ? message.response.statusCode : 0,
       entry.startTimeMs,
       Math.min(Math.max(elapsed, 0), Number.MAX_SAFE_INTEGER),

@@ -113,8 +113,9 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   reverse proxy. The token gate stops casual access, not a network attacker. The session cookie is
   never marked `Secure`, because the dashboard itself always serves plain HTTP; a TLS-terminating
   proxy in front of it does not change that.
-- **There is no redaction step.** Phargus records method, path without query string, status and
-  timing, and nothing else from a request. A secret in a path segment is recorded as is.
+- **There is no redaction step.** Phargus records method, the first 256 characters of the path
+  as requested (no query string), status and timing, and nothing else from a request. A secret in a
+  path segment is recorded as is.
 - **Sandboxed rules are limited, not safe.** `isolated-vm` constrains memory, time, result size and
   reach, but it is a defense in depth, not a guarantee. Load only rules you would run anyway.
 - **Worker memory limits are best-effort for custom workers.** A worker file that makes one large

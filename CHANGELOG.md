@@ -17,6 +17,9 @@ All notable changes to Phargus are recorded here. The format follows
 ### Fixed
 
 - HTTP tracing no longer pins `EventEmitter.prototype.emit` for HTTP and HTTPS servers: a later replacement (`node:domain`, other instrumentation) is now reached, so a domain catches a server's `'error'` again.
+- A span's path is now the path the client requested, read when the request starts, so a framework
+  that rewrites `req.url` (an Express mounted router) no longer changes it. It is cut to its first
+  256 characters, so a long URL cannot grow a span line past a few hundred bytes.
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be
   percent-encoded.
