@@ -39,6 +39,9 @@ All notable changes to Phargus are recorded here. The format follows
   patches `http.Server.prototype.emit` for a moment or executes `phargus.config.js`, and an agent
   that disables itself (for example after an output error) also disables its `AsyncLocalStorage`,
   so `currentTraceId()` is `undefined` everywhere and Node 22 stops paying for its async hooks.
+- The stdout alert sink keeps delivering when its stream is backed up: after a `write()` that
+  returned `false` it no longer waits for a `drain` that had already fired, so later alerts are
+  written and `close()`, `collector.close()` and `consume()` resolve again.
 
 - The dashboard login link (`/login#token=<token>`) now keeps `+`, `/` and `=` in a token
   instead of turning `+` into a space, so base64 tokens work; other characters can be
