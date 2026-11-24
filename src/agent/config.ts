@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { open, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 /** Resolved agent configuration. `output` is 'stdout', 'none' (disabled) or an absolute file path. */
@@ -194,27 +194,32 @@ async function readConfigFile(
       `unsupported extension ${JSON.stringify(extension)}; use .json`,
     );
   }
-  const info = await stat(file).catch((error: unknown) => {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-      return undefined;
+  // One handle for the check and the read, so the file cannot change between them.
+  const handle = await open(file, 'r').catch((error: unknown) => {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw new PhargusConfigError(source, undefined, 'cannot be accessed', { cause: error });
     }
-    throw new PhargusConfigError(source, undefined, 'cannot be accessed', { cause: error });
+    if (pinned !== undefined) {
+      throw new PhargusConfigError(source, undefined, 'file does not exist', { cause: error });
+    }
   });
-  if (info === undefined) {
-    if (pinned === undefined) {
-      return {};
-    }
-    throw new PhargusConfigError(source, undefined, 'file does not exist');
-  }
-  if (!info.isFile()) {
-    throw new PhargusConfigError(source, undefined, 'not a regular file');
+  if (handle === undefined) {
+    return {};
   }
   let raw: unknown;
   try {
-    raw = JSON.parse(await readFile(file, 'utf8')) as unknown;
+    if (!(await handle.stat()).isFile()) {
+      throw new PhargusConfigError(source, undefined, 'not a regular file');
+    }
+    raw = JSON.parse(await handle.readFile('utf8')) as unknown;
   } catch (error) {
+    if (error instanceof PhargusConfigError) {
+      throw error;
+    }
     const reason = error instanceof SyntaxError ? 'not valid JSON' : 'cannot be read';
     throw new PhargusConfigError(source, undefined, reason, { cause: error });
+  } finally {
+    await handle.close();
   }
   if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
     throw new PhargusConfigError(source, undefined, 'must contain a plain object');
