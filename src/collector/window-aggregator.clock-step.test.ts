@@ -3,25 +3,11 @@ import type { Transform } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createWindowAggregator, MAX_LATE_WINDOWS } from './window-aggregator.js';
 import type { AggregatedWindow } from './window.js';
+import { makeSample } from '../../test/support.js';
 
 const WINDOW_MS = 1000;
 const HOUR_MS = 3_600_000;
 const T = 1_700_000_000_000;
-
-function makeSample(timestamp: number, eventLoopMax = 20): Record<string, unknown> {
-  return {
-    timestamp,
-    eventLoop: { min: 1, max: eventLoopMax, mean: 10, p50: 9, p99: 18 },
-    memory: { heapUsed: 100, heapTotal: 200, rss: 1000, external: 0, arrayBuffers: 0 },
-    gc: {
-      count: 1,
-      totalPause: 3,
-      maxPause: 3,
-      kinds: { minor: 1, major: 0, incremental: 0, weakcb: 0 },
-    },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
-  };
-}
 
 function writeAndWait(stream: Transform, chunk: unknown): Promise<void> {
   return new Promise((resolve, reject) => {

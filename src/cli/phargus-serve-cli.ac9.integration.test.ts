@@ -1,177 +1,41 @@
 import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-} from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, posix, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join, posix } from 'node:path';
 import { gunzipSync } from 'node:zlib';
 import { afterAll, describe, expect, it } from 'vitest';
+import { cleanup, repoRoot, tempDir } from '../../test/support.js';
 
-const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
-const srcDir = join(repoRoot, 'src');
-const BIN = join(repoRoot, 'dist', 'esm', 'cli', 'bin.js');
-const CLI_SOURCE = join(srcDir, 'cli', 'bin.ts');
-const CORE_DIST = [
-  'dist/esm/agent/auto.js',
-  'dist/esm/collector/index.js',
-  'dist/esm/dashboard/index.js',
-].map((p) => join(repoRoot, p));
-
-const BUILD_TIMEOUT_MS = 170_000;
 const PACK_TIMEOUT_MS = 120_000;
-const LOCK_WAIT_MS = 170_000;
-const LOCK_STALE_MS = 300_000;
-const LOCK_POLL_MS = 250;
 const TEST_TIMEOUT_MS = 360_000;
-
-const lockDir = join(
-  tmpdir(),
-  `phargus-dist-build-${createHash('sha256').update(repoRoot).digest('hex').slice(0, 16)}.lock`,
-);
-
-const tempDirs: string[] = [];
-
-function errorCode(err: unknown): unknown {
-  return typeof err === 'object' && err !== null ? (err as { code?: unknown }).code : undefined;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((done) => {
-    setTimeout(done, ms);
-  });
-}
-
-function newestSourceMtimeMs(dir: string): number {
-  let newest = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      newest = Math.max(newest, newestSourceMtimeMs(full));
-    } else if (
-      entry.isFile() &&
-      entry.name.endsWith('.ts') &&
-      !entry.name.endsWith('.test.ts') &&
-      !entry.name.endsWith('.d.ts')
-    ) {
-      newest = Math.max(newest, statSync(full).mtimeMs);
-    }
-  }
-  return newest;
-}
-
-/** The dist files the CLI runs from; the bin is expected only once its source exists. */
-function requiredDistFiles(): string[] {
-  return existsSync(CLI_SOURCE) ? [...CORE_DIST, BIN] : CORE_DIST;
-}
-
-/** The oldest mtime of the required dist files, or undefined when any of them is missing. */
-function oldestDistMtimeMs(): number | undefined {
-  let oldest = Number.POSITIVE_INFINITY;
-  for (const file of requiredDistFiles()) {
-    try {
-      oldest = Math.min(oldest, statSync(file).mtimeMs);
-    } catch (err) {
-      if (errorCode(err) === 'ENOENT') return undefined;
-      throw err;
-    }
-  }
-  return oldest;
-}
-
-function distIsFresh(): boolean {
-  const oldestDist = oldestDistMtimeMs();
-  return oldestDist !== undefined && newestSourceMtimeMs(srcDir) <= oldestDist;
-}
-
-function lockIsStale(): boolean {
-  try {
-    return Date.now() - statSync(lockDir).mtimeMs > LOCK_STALE_MS;
-  } catch (err) {
-    if (errorCode(err) === 'ENOENT') return false;
-    throw err;
-  }
-}
-
-async function withBuildLock(fn: () => void): Promise<void> {
-  const deadline = Date.now() + LOCK_WAIT_MS;
-  for (;;) {
-    try {
-      mkdirSync(lockDir);
-      break;
-    } catch (err) {
-      if (errorCode(err) !== 'EEXIST') throw err;
-      if (lockIsStale()) {
-        rmSync(lockDir, { recursive: true, force: true });
-        continue;
-      }
-      if (Date.now() > deadline) {
-        throw new Error(`timed out waiting for the dist build lock at ${lockDir}`, {
-          cause: err,
-        });
-      }
-      await sleep(LOCK_POLL_MS);
-    }
-  }
-  try {
-    fn();
-  } finally {
-    rmSync(lockDir, { recursive: true, force: true });
-  }
-}
-
-function buildDist(): void {
-  const result = spawnSync(process.execPath, ['scripts/build.mjs'], {
-    cwd: repoRoot,
-    encoding: 'utf8',
-    timeout: BUILD_TIMEOUT_MS,
-  });
-  if (result.error) throw result.error;
-  if (result.status !== 0) {
-    throw new Error(
-      `node scripts/build.mjs failed (status ${String(result.status)}, signal ${String(result.signal)}):\n${result.stdout}\n${result.stderr}`,
-    );
-  }
-}
 
 /**
  * Packs the package into `destination` with `npm pack --ignore-scripts` and returns the tarball's
- * path. `prepack` would rebuild (and first delete) dist/, so the pack runs under the shared build
- * lock after a fresh build, never racing another test's build.
+ * path. `prepack` would rebuild (and first delete) dist/ while other tests run from it; the test
+ * run's global setup has already built it.
  */
 async function packFreshTarball(destination: string): Promise<string> {
-  await withBuildLock(() => {
-    if (!distIsFresh()) buildDist();
-    // Under `npm test`, npm_execpath is npm's own CLI script: running it with this Node avoids
-    // resolving an `npm` shim, which on Windows is npm.cmd and needs a shell.
-    const npmCli = process.env['npm_execpath'];
-    const [command, prefix] =
-      npmCli !== undefined && /\.c?js$/.test(npmCli)
-        ? [process.execPath, [npmCli]]
-        : ['npm', [] as string[]];
-    const result = spawnSync(
-      command,
-      [...prefix, 'pack', '--ignore-scripts', '--pack-destination', destination],
-      {
-        cwd: repoRoot,
-        encoding: 'utf8',
-        timeout: PACK_TIMEOUT_MS,
-      },
+  // Under `npm test`, npm_execpath is npm's own CLI script: running it with this Node avoids
+  // resolving an `npm` shim, which on Windows is npm.cmd and needs a shell.
+  const npmCli = process.env['npm_execpath'];
+  const [command, prefix] =
+    npmCli !== undefined && /\.c?js$/.test(npmCli)
+      ? [process.execPath, [npmCli]]
+      : ['npm', [] as string[]];
+  const result = spawnSync(
+    command,
+    [...prefix, 'pack', '--ignore-scripts', '--pack-destination', destination],
+    {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      timeout: PACK_TIMEOUT_MS,
+    },
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(
+      `npm pack failed (status ${String(result.status)}, signal ${String(result.signal)}):\n${result.stdout}\n${result.stderr}`,
     );
-    if (result.error) throw result.error;
-    if (result.status !== 0) {
-      throw new Error(
-        `npm pack failed (status ${String(result.status)}, signal ${String(result.signal)}):\n${result.stdout}\n${result.stderr}`,
-      );
-    }
-  });
+  }
   const tarballs = readdirSync(destination).filter((name) => name.endsWith('.tgz'));
   if (tarballs.length !== 1) {
     throw new Error(
@@ -244,18 +108,13 @@ function readTarball(file: string): Map<string, TarEntry> {
   return entries;
 }
 
-afterAll(() => {
-  for (const dir of tempDirs) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+afterAll(cleanup);
 
 describe('phargus CLI: the packed tarball ships the bin', () => {
   it(
     "AC-9: npm pack's manifest maps bin phargus to a file in the tarball whose first line is #!/usr/bin/env node and whose mode is executable",
     async () => {
-      const destination = mkdtempSync(join(tmpdir(), 'phargus-ac9-pack-'));
-      tempDirs.push(destination);
+      const destination = tempDir('phargus-ac9-pack-');
       const tarball = await packFreshTarball(destination);
       const entries = readTarball(tarball);
 

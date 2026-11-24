@@ -1,10 +1,10 @@
-import { spawn, spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { afterAll, describe, expect, it } from 'vitest';
+import { repoRoot, sleep } from '../../test/support.js';
 
 // With the agent's output on stdout and stdout piped to a reader that stops reading, does the app
 // keep running? It must, on every platform: the agent's lines wait in its bounded lanes, the oldest
@@ -15,14 +15,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 // The test prints what it observed, so the platform-smoke job's log is the evidence for
 // docs/LIMITS.md.
 
-const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
-const srcDir = join(repoRoot, 'src');
 const AGENT_ENTRY = join(repoRoot, 'dist', 'esm', 'agent', 'auto.js');
 
-const BUILD_TIMEOUT_MS = 170_000;
-const LOCK_WAIT_MS = 170_000;
-const LOCK_STALE_MS = 300_000;
-const LOCK_POLL_MS = 250;
 const STARTUP_TIMEOUT_MS = 15_000;
 /**
  * How long the app runs with nobody reading its stdout. Windows timers fire about every 15 ms, so
@@ -34,92 +28,6 @@ const BLOCKED_GAP_MS = 1_000;
 const REPORT_EVERY_MS = 100;
 /** How long the reader reads again after the stall, to collect the agent's later sample lines. */
 const RESUME_MS = 1_500;
-
-const lockDir = join(
-  tmpdir(),
-  `phargus-dist-build-${createHash('sha256').update(repoRoot).digest('hex').slice(0, 16)}.lock`,
-);
-
-function errorCode(err: unknown): unknown {
-  return typeof err === 'object' && err !== null ? (err as { code?: unknown }).code : undefined;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((done) => {
-    setTimeout(done, ms);
-  });
-}
-
-function newestSourceMtimeMs(dir: string): number {
-  let newest = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      newest = Math.max(newest, newestSourceMtimeMs(full));
-    } else if (
-      entry.isFile() &&
-      entry.name.endsWith('.ts') &&
-      !entry.name.endsWith('.test.ts') &&
-      !entry.name.endsWith('.d.ts')
-    ) {
-      newest = Math.max(newest, statSync(full).mtimeMs);
-    }
-  }
-  return newest;
-}
-
-function distIsFresh(): boolean {
-  try {
-    return newestSourceMtimeMs(srcDir) <= statSync(AGENT_ENTRY).mtimeMs;
-  } catch (err) {
-    if (errorCode(err) === 'ENOENT') return false;
-    throw err;
-  }
-}
-
-function lockIsStale(): boolean {
-  try {
-    return Date.now() - statSync(lockDir).mtimeMs > LOCK_STALE_MS;
-  } catch (err) {
-    if (errorCode(err) === 'ENOENT') return false;
-    throw err;
-  }
-}
-
-async function ensureFreshDist(): Promise<void> {
-  if (distIsFresh()) return;
-  const deadline = Date.now() + LOCK_WAIT_MS;
-  for (;;) {
-    try {
-      mkdirSync(lockDir);
-      break;
-    } catch (err) {
-      if (errorCode(err) !== 'EEXIST') throw err;
-      if (lockIsStale()) {
-        rmSync(lockDir, { recursive: true, force: true });
-        continue;
-      }
-      if (Date.now() > deadline) {
-        throw new Error(`timed out waiting for the dist build lock at ${lockDir}`, { cause: err });
-      }
-      await sleep(LOCK_POLL_MS);
-    }
-  }
-  try {
-    if (distIsFresh()) return;
-    const result = spawnSync(process.execPath, ['scripts/build.mjs'], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      timeout: BUILD_TIMEOUT_MS,
-    });
-    if (result.error) throw result.error;
-    if (result.status !== 0) {
-      throw new Error(`node scripts/build.mjs failed:\n${result.stdout}\n${result.stderr}`);
-    }
-  } finally {
-    rmSync(lockDir, { recursive: true, force: true });
-  }
-}
 
 /**
  * The app: a 10 ms timer counts event-loop turns, and every 100 ms one line on stderr reports the
@@ -144,10 +52,6 @@ afterAll(() => {
 });
 
 describe('agent output on stdout, reader stalled', () => {
-  beforeAll(async () => {
-    await ensureFreshDist();
-  }, 180_000);
-
   it('the app keeps running and the agent drops lines when nobody reads its stdout, on every platform', async () => {
     workDir = mkdtempSync(join(tmpdir(), 'phargus-stdout-stall-'));
     const appFile = join(workDir, 'app.mjs');

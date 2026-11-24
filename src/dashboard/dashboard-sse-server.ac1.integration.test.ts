@@ -1,6 +1,7 @@
 import { get, type ClientRequest, type IncomingMessage } from 'node:http';
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
+import { makeSample, waitFor } from '../../test/support.js';
 
 type AlertRuleInput = {
   id: string;
@@ -47,22 +48,6 @@ type DashboardModule = {
 
 type SseEvent = { event: string; data: string[] };
 
-/** A full AgentSample-shaped object at the given timestamp with the given event-loop max. */
-function makeSample(timestamp: number, eventLoopMax: number): Record<string, unknown> {
-  return {
-    timestamp,
-    eventLoop: { min: 1, max: eventLoopMax, mean: 10, p50: 9, p99: 18 },
-    memory: { heapUsed: 100, heapTotal: 200, rss: 1000, external: 0, arrayBuffers: 0 },
-    gc: {
-      count: 1,
-      totalPause: 3,
-      maxPause: 3,
-      kinds: { minor: 1, major: 0, incremental: 0, weakcb: 0 },
-    },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
-  };
-}
-
 /** Parses every complete SSE block of the text into events and comment lines. */
 function parseSse(raw: string): { events: SseEvent[]; comments: string[] } {
   const text = raw.replace(/\r\n/g, '\n');
@@ -87,17 +72,6 @@ function parseSse(raw: string): { events: SseEvent[]; comments: string[] } {
     }
   }
   return { events, comments };
-}
-
-/** Polls the predicate until it holds, or fails after the timeout. */
-async function waitFor(predicate: () => boolean, timeoutMs: number, what: string): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for ${what}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
 }
 
 const rules: AlertRuleInput[] = [

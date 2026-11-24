@@ -15,6 +15,7 @@ import { createSinkDispatcher } from './sink-dispatcher.js';
 import type { AggregatedWindow } from './window.js';
 import { createWindowStore } from './window-store.js';
 import { createWebhookSink } from './webhook-sink.js';
+import { makeSample } from '../../test/support.js';
 
 // Generous for a loaded CI runner, far below what the unbounded behaviour took (retries × timeout).
 const EPSILON_MS = 400;
@@ -81,21 +82,6 @@ function makeWindow(start: number): AggregatedWindow {
     gc: { count: 0, totalPause: 0, maxPause: 0 },
     backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
     dropped: { samples: 0, spans: 0 },
-  };
-}
-
-function makeSample(timestamp: number): Record<string, unknown> {
-  return {
-    timestamp,
-    eventLoop: { min: 1, max: 20, mean: 10, p50: 9, p99: 18 },
-    memory: { heapUsed: 100, heapTotal: 200, rss: 1000, external: 0, arrayBuffers: 0 },
-    gc: {
-      count: 1,
-      totalPause: 3,
-      maxPause: 3,
-      kinds: { minor: 1, major: 0, incremental: 0, weakcb: 0 },
-    },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
   };
 }
 

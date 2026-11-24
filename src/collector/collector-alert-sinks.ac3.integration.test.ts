@@ -2,6 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { Readable, Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
+import { makeSample } from '../../test/support.js';
 
 type AlertRuleInput = {
   id: string;
@@ -41,22 +42,6 @@ type CollectorModule = {
     onError?: (error: Error) => void;
   }) => AlertSinkUnderTest;
 };
-
-/** A full AgentSample-shaped object at the given timestamp with the given event-loop max. */
-function makeSample(timestamp: number, eventLoopMax: number): Record<string, unknown> {
-  return {
-    timestamp,
-    eventLoop: { min: 1, max: eventLoopMax, mean: 10, p50: 9, p99: 18 },
-    memory: { heapUsed: 100, heapTotal: 200, rss: 1000, external: 0, arrayBuffers: 0 },
-    gc: {
-      count: 1,
-      totalPause: 3,
-      maxPause: 3,
-      kinds: { minor: 1, major: 0, incremental: 0, weakcb: 0 },
-    },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
-  };
-}
 
 const rules: AlertRuleInput[] = [
   { id: 'loop-max', metric: 'eventLoop.max', comparison: '>', threshold: 100 },

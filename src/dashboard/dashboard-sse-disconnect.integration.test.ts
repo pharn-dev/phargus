@@ -4,36 +4,10 @@ import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createCollector } from '../collector/index.js';
 import { createDashboardServer, type DashboardServer } from './index.js';
+import { makeSample, waitFor } from '../../test/support.js';
 
 const WINDOW_MS = 1000;
 const BATCH = 40;
-
-/** A full AgentSample-shaped object at the given timestamp. */
-function makeSample(timestamp: number): Record<string, unknown> {
-  return {
-    timestamp,
-    eventLoop: { min: 1, max: 20, mean: 10, p50: 9, p99: 18 },
-    memory: { heapUsed: 100, heapTotal: 200, rss: 1000, external: 0, arrayBuffers: 0 },
-    gc: {
-      count: 1,
-      totalPause: 3,
-      maxPause: 3,
-      kinds: { minor: 1, major: 0, incremental: 0, weakcb: 0 },
-    },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
-  };
-}
-
-/** Polls the predicate until it holds, or fails after the timeout. */
-async function waitFor(predicate: () => boolean, timeoutMs: number, what: string): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for ${what}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
 
 function errnoError(code: string, message: string): NodeJS.ErrnoException {
   return Object.assign(new Error(message), { code });

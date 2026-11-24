@@ -8,6 +8,7 @@ import {
   type SpanRecord,
 } from '../collector/index.js';
 import { createDashboardServer, type DashboardServer } from './index.js';
+import { waitFor } from '../../test/support.js';
 
 const CAPACITY = 300;
 
@@ -71,16 +72,6 @@ function parseEvents(raw: string): { event: string; data: unknown }[] {
     }
   }
   return events;
-}
-
-async function waitFor(predicate: () => boolean, timeoutMs: number, what: string): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for ${what}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
 }
 
 describe('dashboard SSE initial replay', () => {

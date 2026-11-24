@@ -1,6 +1,7 @@
 import { request as httpRequest, type ClientRequest, type IncomingMessage } from 'node:http';
 import { Readable } from 'node:stream';
 import { afterAll, describe, expect, it } from 'vitest';
+import { waitFor } from '../../test/support.js';
 
 type SpanRecord = {
   type: 'span';
@@ -77,17 +78,6 @@ function parseSse(raw: string): SseEvent[] {
     }
   }
   return events;
-}
-
-/** Polls the predicate until it holds, or fails after the timeout. */
-async function waitFor(predicate: () => boolean, timeoutMs: number, what: string): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for ${what}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 10));
-  }
 }
 
 /** Opens a GET and resolves on its response headers; the body is collected as it arrives. */

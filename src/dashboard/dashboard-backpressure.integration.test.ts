@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { createCollector } from '../collector/index.js';
 import { APP_SCRIPT } from './ui/app-script.js';
 import { createDashboardServer } from './index.js';
+import { waitFor } from '../../test/support.js';
 
 /** The slice of happy-dom's API this test drives (typed locally: the module loads inside the test body). */
 type DomElement = {
@@ -74,16 +75,6 @@ function makeSample(
     },
     backpressure,
   };
-}
-
-async function waitFor(predicate: () => boolean, timeoutMs: number, what: string): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for ${what}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
 }
 
 /** The section led by the heading with exactly this text. */

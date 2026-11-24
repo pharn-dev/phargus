@@ -1,21 +1,7 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createCollector } from './index.js';
-
-function makeSample(timestamp: number, eventLoopMax: number): Record<string, unknown> {
-  return {
-    timestamp,
-    eventLoop: { min: 1, max: eventLoopMax, mean: 10, p50: 9, p99: 18 },
-    memory: { heapUsed: 100, heapTotal: 200, rss: 1000, external: 0, arrayBuffers: 0 },
-    gc: {
-      count: 1,
-      totalPause: 3,
-      maxPause: 3,
-      kinds: { minor: 1, major: 0, incremental: 0, weakcb: 0 },
-    },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
-  };
-}
+import { makeSample } from '../../test/support.js';
 
 describe('collector: alert state survives consume() runs', () => {
   it('a rule firing when one run ends does not fire again in the next, and resolves there', async () => {

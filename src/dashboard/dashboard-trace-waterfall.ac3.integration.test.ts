@@ -1,6 +1,7 @@
 import { request, type IncomingHttpHeaders } from 'node:http';
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
+import { waitFor } from '../../test/support.js';
 
 type SpanRecord = {
   type: 'span';
@@ -125,17 +126,6 @@ async function login(base: string, token: string): Promise<{ setCookie: string; 
 function header(headers: IncomingHttpHeaders, name: string): string {
   const value = headers[name];
   return Array.isArray(value) ? value.join(', ') : (value ?? '');
-}
-
-/** Polls the predicate until it holds, or fails after the timeout. */
-async function waitFor(predicate: () => boolean, timeoutMs: number, what: string): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for ${what}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
 }
 
 function newWindow(happyDom: HappyDomModule, url: string, runScripts: boolean): DomWindow {

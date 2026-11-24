@@ -5,21 +5,7 @@ import type { Alert } from './alert-evaluator.js';
 import type { AlertRule } from './alert-rules.js';
 import { createCollector } from './collector.js';
 import type { AggregatedWindow } from './window.js';
-
-function makeSample(timestamp: number, eventLoopMax: number): Record<string, unknown> {
-  return {
-    timestamp,
-    eventLoop: { min: 1, max: eventLoopMax, mean: 10, p50: 9, p99: 18 },
-    memory: { heapUsed: 100, heapTotal: 200, rss: 1000, external: 0, arrayBuffers: 0 },
-    gc: {
-      count: 1,
-      totalPause: 3,
-      maxPause: 3,
-      kinds: { minor: 1, major: 0, incremental: 0, weakcb: 0 },
-    },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
-  };
-}
+import { makeSample } from '../../test/support.js';
 
 const SPAN: SpanRecord = {
   type: 'span',
