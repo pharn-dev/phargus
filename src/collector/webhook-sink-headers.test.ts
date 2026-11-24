@@ -1,6 +1,5 @@
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createCollector, createWebhookSink, type Alert } from './index.js';
 
@@ -99,10 +98,9 @@ describe('webhook sink headers', () => {
   it('passes headers through a webhook sink given to createCollector', async () => {
     const server = await startServer(204);
     try {
-      const collector = createCollector({
+      const [sink] = createCollector({
         windowMs: 1000,
-        capacity: 4,
-        alerts: [{ id: 'loop-max', metric: 'eventLoop.max', comparison: '>', threshold: 100 }],
+        capacity: 1,
         sinks: [
           createWebhookSink({
             url: server.url,
@@ -110,19 +108,9 @@ describe('webhook sink headers', () => {
             headers: { authorization: SECRET },
           }),
         ],
-      });
-      await collector.consume(
-        Readable.from([
-          {
-            timestamp: 1000,
-            eventLoop: { min: 1, max: 500, mean: 10, p50: 9, p99: 18 },
-            memory: { heapUsed: 100, heapTotal: 200, rss: 1000, external: 0, arrayBuffers: 0 },
-            gc: { count: 0, totalPause: 0, maxPause: 0 },
-            backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
-          },
-        ]),
-      );
-      await collector.close();
+      }).sinks;
+      await sink?.send(alert);
+      await sink?.close();
       expect(server.received[0]?.['authorization']).toBe(SECRET);
     } finally {
       await server.stop();
