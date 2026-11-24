@@ -7,6 +7,8 @@ All notable changes to Phargus are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-24
+
 ### Added
 
 - A file output now has a size bound: `PHARGUS_OUTPUT_MAX_BYTES` (config key `outputMaxBytes`,
