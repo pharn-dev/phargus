@@ -394,8 +394,10 @@ flowchart LR
   agent -- "NDJSON" --> collector
 ```
 
-The agent never waits for the consumer: if the reader is slow, the agent drops the oldest queued
-lines and counts them, so a slow consumer cannot slow your app.
+On Linux and macOS the agent never waits for the consumer: if the reader is slow, the agent drops
+the oldest queued lines and counts them, so a slow consumer cannot slow your app. On Windows, Node
+writes to a stdout pipe synchronously, so a stalled reader of that pipe blocks the whole app once
+the pipe is full; use a file output there (see [`docs/LIMITS.md`](./docs/LIMITS.md)).
 
 Phargus is one npm package: the six modules are subpath exports, shipped as both ESM and CommonJS.
 `analyzer` runs its CPU-heavy work in Worker Threads. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for

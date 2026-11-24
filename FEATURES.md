@@ -79,7 +79,9 @@ Status legend:
 
 ## 4. Data pipeline & export
 
-- ✅ Agent exports data as an NDJSON stream with backpressure (stdout or a file; drop-oldest).
+- ✅ Agent exports data as an NDJSON stream with backpressure (stdout or a file; drop-oldest). On
+  Windows a stdout pipe is written synchronously, so a stalled reader blocks the app instead of
+  causing drops; use a file output there (`docs/LIMITS.md`).
 - ✅ Collector pipeline: raw samples → aggregated time windows → alerts (Transform streams via
   `stream/promises` `pipeline()`).
 - ✅ Integer-math aggregation (no float drift in counters).
