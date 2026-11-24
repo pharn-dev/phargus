@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { makeSample } from '../../test/support.js';
 
 /**
  * Test-controlled disk: appends the store makes to `targetPath` go through `gate()`, which holds
@@ -73,22 +74,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   const mocked = { ...actual, open, appendFile };
   return { ...mocked, default: mocked };
 });
-
-/** A full AgentSample-shaped object at the given timestamp. */
-function makeSample(timestamp: number): Record<string, unknown> {
-  return {
-    timestamp,
-    eventLoop: { min: 1, max: 20, mean: 10, p50: 9, p99: 18 },
-    memory: { heapUsed: 100, heapTotal: 200, rss: 1000, external: 0, arrayBuffers: 0 },
-    gc: {
-      count: 1,
-      totalPause: 3,
-      maxPause: 3,
-      kinds: { minor: 1, major: 0, incremental: 0, weakcb: 0 },
-    },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
-  };
-}
 
 /** Two samples in each of `count` consecutive 1000 ms windows starting at 0. */
 function samplesSpanning(count: number): Array<Record<string, unknown>> {

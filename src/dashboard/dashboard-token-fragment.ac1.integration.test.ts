@@ -1,6 +1,7 @@
 import { request, type IncomingHttpHeaders } from 'node:http';
 import { createServer, connect, type AddressInfo, type Server, type Socket } from 'node:net';
 import { describe, expect, it } from 'vitest';
+import { waitFor } from '../../test/support.js';
 
 // AC-1: the fragment login, run by a DOM window through a recording TCP proxy, sets a session
 // cookie that opens /events, and no request line the dashboard receives carries the token.
@@ -242,17 +243,6 @@ function scriptSources(html: string): string[] {
     }
   }
   return sources;
-}
-
-/** Polls the predicate until it holds, or fails after the timeout. */
-async function waitFor(predicate: () => boolean, timeoutMs: number, what: string): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for ${what}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
 }
 
 function isSessionPost(exchange: Exchange): boolean {

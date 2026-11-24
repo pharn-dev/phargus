@@ -1,6 +1,7 @@
 import { request, type IncomingHttpHeaders } from 'node:http';
 import { createServer, connect, type AddressInfo, type Server, type Socket } from 'node:net';
 import { describe, expect, it } from 'vitest';
+import { waitFor } from '../../test/support.js';
 
 // AC-2: a fragment login with the wrong token is answered 401 with no cookie, the login page says
 // "token rejected", and the window's address keeps neither the fragment nor the token.
@@ -245,17 +246,6 @@ function visibleText(document: DomDocument): string {
     }
   }
   return text;
-}
-
-/** Polls the predicate until it holds, or fails after the timeout. */
-async function waitFor(predicate: () => boolean, timeoutMs: number, what: string): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for ${what}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
 }
 
 function isSessionPost(exchange: Exchange): boolean {

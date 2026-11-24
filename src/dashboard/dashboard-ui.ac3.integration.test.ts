@@ -1,6 +1,7 @@
 import { request, type IncomingHttpHeaders } from 'node:http';
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
+import { waitFor } from '../../test/support.js';
 
 type AlertRuleInput = {
   id: string;
@@ -163,17 +164,6 @@ function makeSample(
     },
     backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
   };
-}
-
-/** Polls the predicate until it holds, or fails after the timeout. */
-async function waitFor(predicate: () => boolean, timeoutMs: number, what: string): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (!predicate()) {
-    if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for ${what}`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 20));
-  }
 }
 
 const HEADINGS = 'h1, h2, h3, h4, h5, h6';

@@ -1,154 +1,35 @@
-import { spawn, spawnSync, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
-import { request as httpRequest, type ClientRequest } from 'node:http';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+import { type ClientRequest, request as httpRequest } from 'node:http';
+import { join } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
+import {
+  BIN,
+  cleanup,
+  cliEnv as cleanEnv,
+  INPUT_ENDED_LINE,
+  repoRoot,
+  sleep,
+  STOP_TIMEOUT_MS,
+  tempDir,
+  track,
+  URL_LINE,
+  writeStdin as write,
+  type Proc,
+} from '../../test/support.js';
 
-const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
-const srcDir = join(repoRoot, 'src');
-const BIN = join(repoRoot, 'dist', 'esm', 'cli', 'bin.js');
 const AGENT_ENTRY = join(repoRoot, 'dist', 'esm', 'agent', 'auto.js');
-const REQUIRED_DIST = [
-  'dist/esm/agent/auto.js',
-  'dist/esm/collector/index.js',
-  'dist/esm/dashboard/index.js',
-  'dist/esm/cli/bin.js',
-].map((p) => join(repoRoot, p));
 
-const BUILD_TIMEOUT_MS = 170_000;
-const LOCK_WAIT_MS = 170_000;
-const LOCK_STALE_MS = 300_000;
-const LOCK_POLL_MS = 250;
 const WAIT_MS = 60_000;
-const STOP_TIMEOUT_MS = 15_000;
 const TEST_TIMEOUT_MS = 300_000;
 
-const URL_LINE = /http:\/\/127\.0\.0\.1:(\d+)/;
-const INPUT_ENDED_LINE = /input ended/;
 const COUNTS_LINE =
   /counts: decoder\.invalid=(\d+) decoder\.oversized=(\d+) decoder\.foreign=(\d+) collector\.ignored=(\d+) dashboard\.droppedEvents=(\d+) passthrough\.dropped=(\d+)/;
 
-const lockDir = join(
-  tmpdir(),
-  `phargus-dist-build-${createHash('sha256').update(repoRoot).digest('hex').slice(0, 16)}.lock`,
-);
-
-function errorCode(err: unknown): unknown {
-  return typeof err === 'object' && err !== null ? (err as { code?: unknown }).code : undefined;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((done) => {
-    setTimeout(done, ms);
-  });
-}
-
-function newestSourceMtimeMs(dir: string): number {
-  let newest = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      newest = Math.max(newest, newestSourceMtimeMs(full));
-    } else if (
-      entry.isFile() &&
-      entry.name.endsWith('.ts') &&
-      !entry.name.endsWith('.test.ts') &&
-      !entry.name.endsWith('.d.ts')
-    ) {
-      newest = Math.max(newest, statSync(full).mtimeMs);
-    }
-  }
-  return newest;
-}
-
-function distIsFresh(): boolean {
-  let oldest = Number.POSITIVE_INFINITY;
-  for (const file of REQUIRED_DIST) {
-    if (!existsSync(file)) return false;
-    oldest = Math.min(oldest, statSync(file).mtimeMs);
-  }
-  return newestSourceMtimeMs(srcDir) <= oldest;
-}
-
-function lockIsStale(): boolean {
-  try {
-    return Date.now() - statSync(lockDir).mtimeMs > LOCK_STALE_MS;
-  } catch (err) {
-    if (errorCode(err) === 'ENOENT') return false;
-    throw err;
-  }
-}
-
-/** Builds dist/ once under the cross-file lock the other CLI integration tests share. */
-async function ensureFreshDist(): Promise<void> {
-  if (distIsFresh()) return;
-  const deadline = Date.now() + LOCK_WAIT_MS;
-  for (;;) {
-    try {
-      mkdirSync(lockDir);
-      break;
-    } catch (err) {
-      if (errorCode(err) !== 'EEXIST') throw err;
-      if (lockIsStale()) {
-        rmSync(lockDir, { recursive: true, force: true });
-        continue;
-      }
-      if (Date.now() > deadline) {
-        throw new Error(`timed out waiting for the dist build lock at ${lockDir}`, { cause: err });
-      }
-      await sleep(LOCK_POLL_MS);
-    }
-  }
-  try {
-    if (distIsFresh()) return;
-    const result = spawnSync(process.execPath, ['scripts/build.mjs'], {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      timeout: BUILD_TIMEOUT_MS,
-    });
-    if (result.error) throw result.error;
-    if (result.status !== 0) {
-      throw new Error(`node scripts/build.mjs failed:\n${result.stdout}\n${result.stderr}`);
-    }
-  } finally {
-    rmSync(lockDir, { recursive: true, force: true });
-  }
-}
-
-/** The test's environment without any PHARGUS_* variable. */
-function cleanEnv(): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env };
-  for (const key of Object.keys(env)) {
-    if (key.startsWith('PHARGUS_')) delete env[key];
-  }
-  return env;
-}
-
-type ExitInfo = { code: number | null; signal: NodeJS.Signals | null; error?: Error };
-
-type Proc = {
-  child: ChildProcessWithoutNullStreams;
-  stdout: () => string;
-  stderr: () => string;
-  exitInfo: () => ExitInfo | undefined;
-  exited: Promise<ExitInfo>;
-};
-
 const procs: Proc[] = [];
 const connections: ClientRequest[] = [];
-const tempDirs: string[] = [];
 
 /**
  * Spawns a node process. `stdout: 'read'` collects its stdout, `'never-read'` leaves the pipe
@@ -161,40 +42,7 @@ function startProc(
   cwd: string = repoRoot,
 ): Proc {
   const child = spawn(process.execPath, [...args], { cwd, env, stdio: ['pipe', 'pipe', 'pipe'] });
-  let out = '';
-  let err = '';
-  let exitInfo: ExitInfo | undefined;
-  child.stdin.on('error', () => undefined);
-  child.stdout.on('error', () => undefined);
-  if (stdout === 'read') {
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => {
-      out += chunk;
-    });
-  } else if (stdout === 'closed') {
-    child.stdout.destroy();
-  }
-  child.stderr.setEncoding('utf8');
-  child.stderr.on('data', (chunk: string) => {
-    err += chunk;
-  });
-  const exited = new Promise<ExitInfo>((done) => {
-    child.once('error', (error) => {
-      exitInfo ??= { code: null, signal: null, error };
-      done(exitInfo);
-    });
-    child.once('close', (code, signal) => {
-      exitInfo ??= { code, signal };
-      done(exitInfo);
-    });
-  });
-  const proc: Proc = {
-    child,
-    stdout: () => out,
-    stderr: () => err,
-    exitInfo: () => exitInfo,
-    exited,
-  };
+  const proc = track(child, stdout);
   procs.push(proc);
   return proc;
 }
@@ -268,15 +116,6 @@ function firstWindow(port: number): Promise<void> {
   });
 }
 
-function write(proc: Proc, text: string): Promise<void> {
-  return new Promise((done, fail) => {
-    proc.child.stdin.write(text, (err) => {
-      if (err) fail(err);
-      else done();
-    });
-  });
-}
-
 async function stop(proc: Proc): Promise<void> {
   if (proc.exitInfo() !== undefined) return;
   proc.child.stdout.destroy();
@@ -294,7 +133,7 @@ async function stop(proc: Proc): Promise<void> {
 afterAll(async () => {
   for (const request of connections) request.destroy();
   for (const proc of procs) await stop(proc);
-  for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
+  await cleanup();
 }, 60_000);
 
 const BASE_MS = 1_700_000_000_000;
@@ -330,7 +169,6 @@ describe('phargus serve: passthrough of the app output', () => {
   it(
     "AC: with the README pipeline, each line the app writes to stdout appears on serve's stdout with the same text, and no agent line does",
     async () => {
-      await ensureFreshDist();
       const appLines = [
         'server listening on http://127.0.0.1:3000',
         JSON.stringify({ level: 30, msg: 'request completed', pid: 42 }),
@@ -350,8 +188,7 @@ describe('phargus serve: passthrough of the app output', () => {
         '}, 100);',
         'setInterval(() => undefined, 1000);',
       ].join('\n');
-      const appDir = mkdtempSync(join(tmpdir(), 'phargus-passthrough-app-'));
-      tempDirs.push(appDir);
+      const appDir = tempDir('phargus-passthrough-app-');
 
       const cli = startCli([]);
       const app = startProc(
@@ -380,7 +217,6 @@ describe('phargus serve: passthrough of the app output', () => {
   it(
     'AC: 1,000 alternating plain-text and JSON log lines come out in input order; an oversized line is not echoed and is counted',
     async () => {
-      await ensureFreshDist();
       const { input, logLines } = mixedInput();
       const long = `too long ${'x'.repeat(5000)}`;
 
@@ -408,10 +244,8 @@ describe('phargus serve: passthrough of the app output', () => {
   it(
     'AC: --no-passthrough prints nothing to stdout, and neither does a file input by default',
     async () => {
-      await ensureFreshDist();
       const { input } = mixedInput();
-      const dir = mkdtempSync(join(tmpdir(), 'phargus-passthrough-file-'));
-      tempDirs.push(dir);
+      const dir = tempDir('phargus-passthrough-file-');
       const capture = join(dir, 'capture.ndjson');
       writeFileSync(capture, input);
 
@@ -438,7 +272,6 @@ describe('phargus serve: passthrough of the app output', () => {
   it.skipIf(process.platform === 'win32')(
     'AC: with stdout piped to a reader that never reads, lines past 1 MiB pending are dropped and counted, and the dashboard keeps receiving windows',
     async () => {
-      await ensureFreshDist();
       const total = 4000;
       let input = '';
       for (let index = 0; index < total; index += 1) {
@@ -464,7 +297,6 @@ describe('phargus serve: passthrough of the app output', () => {
   it(
     'AC: with stdout closed, passthrough stops with one stderr line and the server keeps running',
     async () => {
-      await ensureFreshDist();
       const cli = startCli([], 'closed');
       const port = Number((await waitForStderr(cli, URL_LINE))[1]);
       for (let round = 0; round < 5; round += 1) {

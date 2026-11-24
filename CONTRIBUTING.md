@@ -127,6 +127,11 @@ open an issue first so we can align on approach before you write code.
 
 New behavior needs tests. Bug fixes should include a regression test.
 
+Integration tests take their scaffolding from `test/support.ts` (spawning the built CLI or any node
+process, raw HTTP and SSE helpers, temporary directories, the CLI's `counts:` line) and call
+`afterAll(cleanup)`. `npm test` builds `dist/` once, in a Vitest global setup
+(`test/global-setup.ts`), when it is missing or older than `src/`; a test never builds it itself.
+
 ## Conduct and security
 
 - This project follows the [Code of Conduct](./CODE_OF_CONDUCT.md). By participating you are

@@ -1,5 +1,6 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
+import { makeSample } from '../../test/support.js';
 
 type AlertRuleInput = {
   id: string;
@@ -37,22 +38,6 @@ type CollectorModule = {
     alerts?: readonly AlertRuleInput[];
   }) => CollectorUnderTest;
 };
-
-/** A full AgentSample-shaped object at the given timestamp with the given event-loop max. */
-function makeSample(timestamp: number, eventLoopMax: number): Record<string, unknown> {
-  return {
-    timestamp,
-    eventLoop: { min: 1, max: eventLoopMax, mean: 10, p50: 9, p99: 18 },
-    memory: { heapUsed: 100, heapTotal: 200, rss: 1000, external: 0, arrayBuffers: 0 },
-    gc: {
-      count: 1,
-      totalPause: 3,
-      maxPause: 3,
-      kinds: { minor: 1, major: 0, incremental: 0, weakcb: 0 },
-    },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
-  };
-}
 
 function makeSpan(n: number, path: string, statusCode: number): SpanRecord {
   return {

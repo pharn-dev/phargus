@@ -169,6 +169,7 @@ These aren't bolted on — each is load-bearing in the design:
 - Every Worker Thread or sandbox child file under `src/` lives in a `src/<module>/workers/`
   subdirectory (`src/analyzer/workers/`, `src/plugin-runner/workers/`). Never inline,
   `eval`-based workers.
+- A test-only worker lives in `src/<module>/fixtures/`, which the build excludes.
 - Stream pipelines always use `stream/promises` `pipeline()` — **never `.pipe()`**.
 - Error handling: every stream, every worker, every plugin execution is wrapped
   with explicit error handling. **No silent failures, no swallowed rejections.**

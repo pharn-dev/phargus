@@ -4,6 +4,7 @@ import type { Alert } from './alert-evaluator.js';
 import type { AlertSink } from './alert-sink.js';
 import { createCollector } from './collector.js';
 import { createStdoutSink } from './stdout-sink.js';
+import { makeSample } from '../../test/support.js';
 
 function makeAlert(observed: number, state: Alert['state'] = 'firing'): Alert {
   return {
@@ -15,22 +16,6 @@ function makeAlert(observed: number, state: Alert['state'] = 'firing'): Alert {
     windowStart: 1000,
     windowEnd: 2000,
     state,
-  };
-}
-
-/** A full AgentSample-shaped object at the given timestamp with the given event-loop max. */
-function makeSample(timestamp: number, eventLoopMax: number): Record<string, unknown> {
-  return {
-    timestamp,
-    eventLoop: { min: 1, max: eventLoopMax, mean: 10, p50: 9, p99: 18 },
-    memory: { heapUsed: 100, heapTotal: 200, rss: 1000, external: 0, arrayBuffers: 0 },
-    gc: {
-      count: 1,
-      totalPause: 3,
-      maxPause: 3,
-      kinds: { minor: 1, major: 0, incremental: 0, weakcb: 0 },
-    },
-    backpressure: { events: 0, totalStall: 0, maxStall: 0, hotspots: [] },
   };
 }
 

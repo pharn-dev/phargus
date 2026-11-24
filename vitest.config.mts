@@ -8,6 +8,8 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['src/**/*.test.ts', 'bench/**/*.test.mjs'],
+    // Builds dist/ once per run when it is older than src/ (integration tests spawn the build).
+    globalSetup: ['test/global-setup.ts'],
     ...(resultsFile ? { reporters: ['default', 'json'], outputFile: { json: resultsFile } } : {}),
   },
 });

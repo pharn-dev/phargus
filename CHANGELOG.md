@@ -107,6 +107,9 @@ All notable changes to Phargus are recorded here. The format follows
   The `globalThis` registries that let an ESM and a CJS copy share one set of wrappers, the
   identity-guarded restore and the peeling of dead wrapper layers are gone: only the copy that
   starts the agent patches, and the start-once flag is the agent's only `globalThis` entry.
+- Tests: the integration suites share one harness, `test/support.ts`, and `npm test` builds
+  `dist/` once per run in a Vitest global setup when it is older than `src/`. The cross-process
+  build lock each suite carried is gone. Test files, test names and assertions are unchanged.
 
 ### Removed
 
