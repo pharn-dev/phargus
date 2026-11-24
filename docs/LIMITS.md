@@ -1,7 +1,7 @@
 # Phargus — Limits
 
-What Phargus does **not** guarantee, stated plainly. The latest release is Phargus 0.2.0 (S0 to S7
-implemented). These are the design's inherent limits and the known gaps in what is built. For the
+What Phargus does **not** guarantee, stated plainly. Roadmap steps S0 to S7 are
+implemented. These are the design's inherent limits and the known gaps in what is built. For the
 security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 
 ## 1. Cost and overhead
@@ -9,15 +9,27 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 - **Overhead is measured, never zero.** `bench/overhead.mjs` compares agent-off with the agent
   loaded but disabled, the full agent, the agent with tracing off (`notrace`), tracing only and
   samplers only, on HTTP workloads
-  (`trivial`, `promise`, `cpu`, `stream`). A nightly workflow runs it against one soft budget, in
-  `bench/lib/budget.mjs`: the full agent may cost at most 25% more CPU per request than agent-off
-  on `trivial`. A run over the budget fails the nightly workflow (exit 2) only when it varied less
-  than 10% across at least two rounds; a noisier run never fails. The workflow is not a required
-  check, so an exceeded budget alerts and blocks no merge or release. Numbers depend on the
-  workload and the machine: run it on yours (see [`bench/README.md`](../bench/README.md)).
+  (`trivial`, `promise`, `cpu`, `stream`, `large`). A nightly workflow runs it against one soft
+  budget, in `bench/lib/budget.mjs`: the full agent may cost at most 25% more CPU per request than
+  agent-off on `trivial`. A run over the budget fails the nightly workflow (exit 2) only when it
+  varied less than 10% across at least two rounds; a noisier run never fails. The workflow is not a
+  required check, so an exceeded budget alerts and blocks no merge or release (see "Budget" in
+  [`bench/README.md`](../bench/README.md)). Numbers depend on the workload and the machine: run it
+  on yours.
 - **Tracing is where the per-request cost is.** Each traced request runs inside an
   `AsyncLocalStorage` context and keeps a small record until its response finishes. The samplers
-  and the backpressure probe add a fixed cost per interval and a few nanoseconds per stream write.
+  add a fixed cost per interval. The backpressure probe adds one comparison to a write that does not
+  stall; a stalled write pays for three one-time listeners and two timer reads, plus a stack capture for the
+  first 32 stalls of each sampling window (later ones are named by the stream's constructor).
+- **What a stalled response costs, measured.** On `large` (one 256 KiB `res.write()` per request,
+  so nearly every response stalls), the nightly benchmark (`gh workflow run nightly.yml`, which
+  runs `node bench/overhead.mjs` with its defaults: 3 rounds of 5 s) on a GitHub `ubuntu-latest`
+  runner (Node 22.18.0, 4 vCPU AMD EPYC 7763, 2026-11-24) measured 120.0 CPU µs per request for
+  `none`, 118.1 for `samplers` (the probe and samplers, no tracing) and 117.7 for `notrace`: the
+  probe is within noise (CPU CV up to 15% on this workload). `full` measured 138.5 (+15%) and
+  `pipe` 143.4 (+20%), about what `tracing` alone costs (133.4). Before the 32-capture cap, a
+  stalled response paid a stack capture each time, about 20 µs of CPU per request. To repeat it
+  locally: `node bench/overhead.mjs --workloads large --variants none,full,notrace,samplers`.
 - **What tracing costs, measured.** Full `bench/overhead.mjs` runs on Node 22.18.0 GitHub runners
   (4 vCPU, rps CV under 5% in 19 of 20 cells, 2026-10-18): `tracing` against `none` costs about
   10–13% more CPU per request and about 10% throughput when the server is CPU-bound (`cpu`,

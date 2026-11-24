@@ -1,6 +1,6 @@
 # Phargus — Threat Model
 
-> **Status: 0.2.0, the latest release on npm.** Roadmap steps S0 to S7 are implemented on `main`
+> **Status: published on npm.** Roadmap steps S0 to S7 are implemented on `main`
 > (see [`ROADMAP.md`](../ROADMAP.md)). This document is the security design the code is
 > held to. Each row is marked:
 >

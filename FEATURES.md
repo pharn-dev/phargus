@@ -35,7 +35,7 @@ Status legend:
 - 🟡 Works the same locally and in production. The agent does; the dashboard needs a collector
   process (`phargus serve`, or one you wire yourself as in `examples/express-app`), and the
   default output is the app's stdout.
-- ✅ Published to npm: `@pharn-dev/phargus@0.2.0` (`latest`; first release 0.1.0 on 2026-10-12). Changes on `main` since then are under `Unreleased` in `CHANGELOG.md`; build from source to get them before the next release.
+- ✅ Published to npm: `@pharn-dev/phargus` (first release 0.1.0 on 2026-10-12; `CHANGELOG.md` lists every release). Changes on `main` since the latest release are under `Unreleased` in `CHANGELOG.md`; build from source to get them before the next release.
 
 ## 2. Runtime metrics (the headline diagnostics)
 
