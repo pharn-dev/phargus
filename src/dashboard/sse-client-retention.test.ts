@@ -1,7 +1,6 @@
 import { EventEmitter } from 'node:events';
 import type { ServerResponse } from 'node:http';
 import { describe, expect, it } from 'vitest';
-import { createBoundedFifo } from './bounded-fifo.js';
 import { createSseClient } from './sse-client.js';
 
 /** A response whose socket never drains until the test says so. */
@@ -25,30 +24,6 @@ function stalledResponse(): { res: ServerResponse; written: string[]; unblock():
     },
   };
 }
-
-describe('bounded FIFO', () => {
-  it('keeps its backing array proportional to capacity when nobody ever shifts', () => {
-    const fifo = createBoundedFifo<string>(100);
-    let maxBacking = 0;
-    for (let i = 0; i < 100_000; i += 1) {
-      fifo.push(`event ${i}`);
-      maxBacking = Math.max(maxBacking, fifo.backingLength);
-    }
-    expect(fifo.size).toBe(100);
-    expect(maxBacking).toBeLessThanOrEqual(2 * 100 + 1);
-  });
-
-  it('is first-in first-out and reports each drop', () => {
-    const fifo = createBoundedFifo<number>(3);
-    expect([1, 2, 3, 4, 5].map((n) => fifo.push(n))).toEqual([false, false, false, true, true]);
-    expect([fifo.shift(), fifo.shift(), fifo.shift(), fifo.shift()]).toEqual([3, 4, 5, undefined]);
-    expect(fifo.backingLength).toBe(0);
-  });
-
-  it('rejects a non-positive capacity', () => {
-    expect(() => createBoundedFifo(0)).toThrow(RangeError);
-  });
-});
 
 describe('SSE client with a stalled reader', () => {
   it('drops the oldest chunks, then delivers exactly the newest ones in order on drain', () => {

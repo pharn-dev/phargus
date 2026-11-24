@@ -1,6 +1,15 @@
+import { createBoundedQueue } from '../agent/bounded-queue.js';
 import { createDropReporter } from './otlp-drop-reporter.js';
-import { createPendingItems, type PendingEntry } from './otlp-pending-items.js';
 import { postOtlpJson, type OtlpTarget } from './otlp-transport.js';
+
+/**
+ * One export call (a listener callback or an `export()` invocation). Every item of the call shares
+ * the same object, so a call whose items are partly or wholly dropped is counted as one dropped
+ * batch, once.
+ */
+type ExportCall = { dropped: boolean };
+
+type PendingEntry<T> = { readonly item: T; readonly call: ExportCall };
 
 export type OtlpBatchQueueOptions<T> = {
   /** Most items sent in one request. The effective size is `min(maxBatchSize, maxQueueSize)`. */
@@ -66,7 +75,7 @@ export function createOtlpBatchQueue<T>(options: OtlpBatchQueueOptions<T>): Otlp
   const { maxQueueSize, flushIntervalMs, encode, target, closeTimeoutMs, onError } = options;
   const batchSize = Math.min(options.maxBatchSize, maxQueueSize);
 
-  const pending = createPendingItems<T>(maxQueueSize);
+  const pending = createBoundedQueue<PendingEntry<T>>(maxQueueSize);
   let closed = false;
   let droppedBatches = 0;
   let failedBatches = 0;
@@ -271,7 +280,7 @@ export function createOtlpBatchQueue<T>(options: OtlpBatchQueueOptions<T>): Otlp
   }
 
   function dropPending(): void {
-    const entries = pending.clear();
+    const entries = pending.take(pending.size);
     due = 0;
     if (entries.length === 0) return;
     countDropped(entries);

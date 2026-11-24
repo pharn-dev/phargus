@@ -1,5 +1,5 @@
 import type { ServerResponse } from 'node:http';
-import { createBoundedFifo } from './bounded-fifo.js';
+import { createBoundedQueue } from '../agent/bounded-queue.js';
 import { HEARTBEAT } from './sse-format.js';
 
 export type SseClientOptions = {
@@ -24,7 +24,7 @@ export type SseClient = {
 export function createSseClient(res: ServerResponse, options: SseClientOptions): SseClient {
   // Bounded in memory, not just in count: dropped chunks are released even if the client never
   // drains (a stalled reader would otherwise pin every event ever sent to it).
-  const queue = createBoundedFifo<string>(options.maxBufferedEvents);
+  const queue = createBoundedQueue<string>(options.maxBufferedEvents);
   let blocked = false;
   let ended = false;
   let dropped = 0;
@@ -66,7 +66,7 @@ export function createSseClient(res: ServerResponse, options: SseClientOptions):
         }
         return;
       }
-      if (queue.push(chunk)) {
+      if (queue.push(chunk) !== undefined) {
         dropped += 1;
         options.onDrop();
       }
