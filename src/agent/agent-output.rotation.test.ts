@@ -136,16 +136,14 @@ describe('agent output file size bound', () => {
     );
   });
 
-  it('AC-5: stdout is returned as is, whatever the bound, unless the agent writes it itself', () => {
-    const own = writesStdoutItself(process.platform, isMainThread, () => fstatSync(1).mode);
-    for (const bound of [0, MIB]) {
-      const destination = openAgentOutput('stdout', bound);
-      if (own) {
-        // Windows with stdout a pipe: the agent's own writer (agent-output.stdout.test.ts).
-        expect(destination).not.toBe(process.stdout);
-      } else {
-        expect(destination).toBe(process.stdout);
-      }
+  it('AC-5: stdout is returned as is, whatever the bound', () => {
+    // On Windows with stdout a pipe the agent writes it itself (agent-output.stdout.test.ts).
+    if (writesStdoutItself(process.platform, isMainThread, () => fstatSync(1).mode)) {
+      expect(openAgentOutput('stdout', 0)).not.toBe(process.stdout);
+      expect(openAgentOutput('stdout', MIB)).not.toBe(process.stdout);
+      return;
     }
+    expect(openAgentOutput('stdout', 0)).toBe(process.stdout);
+    expect(openAgentOutput('stdout', MIB)).toBe(process.stdout);
   });
 });

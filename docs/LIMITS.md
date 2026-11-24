@@ -283,8 +283,10 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   untouched and still block on a full pipe there: that is Node's behaviour, with or without the
   agent. `stdout-stalled-reader.integration.test.ts` checks this on every platform: with nobody
   reading for 5 s, the app's 100 ms timer must keep firing and the agent's later sample lines must
-  report drops. On macOS (Node 24) the longest gap between the app's reports was 104 ms, with
-  about 64 KiB queued in `process.stdout` and 1519 sample lines dropped.
+  report drops. On the Windows smoke job (Node 22.18) the longest gap between the app's reports
+  was 117 ms and the agent dropped 246 sample lines; before this change the app stopped there for
+  over 3 s. On macOS (Node 24) the longest gap was 104 ms, with about 64 KiB queued in
+  `process.stdout` and 1519 sample lines dropped.
 - **Windows does not apply POSIX directory modes.** A directory made read-only with `chmod` stays
   writable on Windows, so the test that a heap snapshot into a non-writable directory is refused is
   skipped there.
