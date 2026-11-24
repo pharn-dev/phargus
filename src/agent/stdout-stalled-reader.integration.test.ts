@@ -230,7 +230,9 @@ describe('agent output on stdout, reader stalled', () => {
       await sleep(RESUME_MS);
       let droppedSamples = 0;
       let sampleLines = 0;
-      for (const line of stdoutText.split('\n')) {
+      // Only newline-terminated lines: the agent is still writing, so the text can end mid-record.
+      const complete = stdoutText.slice(0, stdoutText.lastIndexOf('\n') + 1);
+      for (const line of complete.split('\n')) {
         if (!line.startsWith('{')) continue;
         const record = JSON.parse(line) as { dropped?: { samples?: unknown } };
         const samples = record.dropped?.samples;
