@@ -13,7 +13,8 @@ analyzer and the plugin runner also start threads or processes.
 node --permission \
   --allow-fs-read=<app dir> \
   --allow-fs-read=<path to node_modules/phargus> \
-  --allow-fs-write=<NDJSON output file or its directory> \
+  --allow-fs-write=<NDJSON output file and <file>.1, or their directory> \
+  --allow-fs-read=<NDJSON output file> \
   --allow-fs-write=<heap snapshot dir> \
   --require @pharn-dev/phargus/agent app.js
 ```
@@ -24,9 +25,14 @@ node --permission \
 | `--allow-fs-read=<node_modules/phargus>` | Loading the agent itself                                                               |
 | `--allow-fs-read=<PHARGUS_CONFIG file>`  | Reading the config file that `PHARGUS_CONFIG` pins                                     |
 | `--allow-fs-write=<output path>`         | The NDJSON export to a file (`output` other than `'stdout'` or `'none'`)               |
+| `--allow-fs-write=<output path>.1`       | Renaming a full output file to `<file>.1` (unless `outputMaxBytes` is `0`)             |
+| `--allow-fs-read=<output path>`          | The same rename: Node checks read access on the file it moves                          |
 | `--allow-fs-write=<snapshot dir>`        | `takeHeapSnapshot({ dir })`, which also needs `--allow-fs-read=<snapshot dir>`         |
 
-`output: 'stdout'` needs no write grant. Leave out the write grants for features you do not use.
+`output: 'stdout'` needs no write grant. With the default size bound, a file output missing either
+rotation grant disables the agent at start, before any file is opened; one
+`--allow-fs-write=<directory>` covers both write paths. Leave out the write grants for features you
+do not use.
 
 With `PHARGUS_CONFIG` set, the agent reads only that file for its config. A `.js` config is
 executed with only a read grant, so prefer a pinned `.json` file, or a directory only the operator
@@ -91,8 +97,8 @@ the temp file keeps the mode it was created with, and the rewrite is not flushed
 the rename.
 
 Only the agent, plugin-runner and window persistence grants are exercised by tests that run under
-`--permission` (`permission-model.ac2/ac3`, `plugin-runner-caps.integration.test.ts` and
-`collector-persistence-permission.integration.test.ts`). The analyzer, dashboard and other
+`--permission` (`permission-model.ac2/ac3`, `agent-output-rotation.integration.test.ts`,
+`plugin-runner-caps.integration.test.ts` and `collector-persistence-permission.integration.test.ts`). The analyzer, dashboard and other
 collector rows follow from the files and threads each module uses.
 
 ## When a grant is missing
