@@ -2,13 +2,10 @@ import { Transform, type Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { SpanRecord } from '../agent/index.js';
 import { createRecordGuard, type IgnoredRecordHandler } from './record-guard.js';
-import { createSpanRouter } from './span-router.js';
-import { createAlertEvaluator, createAlertEvaluatorState, type Alert } from './alert-evaluator.js';
+import { createAlertEvaluatorState, evaluateAlerts, type Alert } from './alert-evaluator.js';
 import { validateAlertRules, type AlertRule } from './alert-rules.js';
 import type { AlertSink, SinkErrorHandler } from './alert-sink.js';
-import { createSubscriberSet, type CollectorListener } from './collector-subscribers.js';
 import { createSinkDispatcher } from './sink-dispatcher.js';
-import { createSinks, type SinkInput } from './sink-config.js';
 import { createRingBuffer, type RingBuffer } from './ring-buffer.js';
 import type { AggregatedWindow } from './window.js';
 import { createWindowAggregator } from './window-aggregator.js';
@@ -22,7 +19,7 @@ export type CollectorOptions = {
   capacity: number;
   spanCapacity?: number;
   alerts?: readonly AlertRule[];
-  sinks?: readonly SinkInput[];
+  sinks?: readonly AlertSink[];
   onSinkError?: SinkErrorHandler;
   persist?: PersistOptions;
   /**
@@ -64,11 +61,33 @@ export type Collector = {
   close(): Promise<void>;
 };
 
+/** A live observer of the collector's recorded windows, alerts and spans. */
+export type CollectorListener = {
+  window?(window: AggregatedWindow): void;
+  alert?(alert: Alert): void;
+  span?(span: SpanRecord): void;
+};
+
+/** A sink is an object with `send` and `close`; a configuration object is told its factory. */
+function checkSink(sink: unknown, index: number): AlertSink {
+  const { send, close, type } = (sink ?? {}) as Record<string, unknown>;
+  if (typeof send === 'function' && typeof close === 'function') {
+    return sink as AlertSink;
+  }
+  const factory =
+    typeof type === 'string' && ['stdout', 'file', 'webhook'].includes(type)
+      ? `create${type.charAt(0).toUpperCase()}${type.slice(1)}Sink`
+      : 'createStdoutSink, createFileSink or createWebhookSink';
+  throw new TypeError(`sinks[${String(index)}] is not an alert sink: build it with ${factory}`);
+}
+
 export function createCollector(options: CollectorOptions): Collector {
   const { windowMs, capacity } = options;
-  const rules = options.alerts ?? [];
-  // Validate eagerly; both factories throw RangeError on bad input.
-  createWindowAggregator({ windowMs });
+  if (!Number.isSafeInteger(windowMs) || windowMs <= 0) {
+    throw new RangeError('windowMs must be a positive safe integer');
+  }
+  // Validated once here; every consume() reuses the resolved rules.
+  const rules = validateAlertRules(options.alerts ?? []);
   const { onIgnored } = options;
   if (onIgnored !== undefined && typeof onIgnored !== 'function') {
     throw new TypeError('onIgnored must be a function');
@@ -77,10 +96,12 @@ export function createCollector(options: CollectorOptions): Collector {
   const windows = createRingBuffer<AggregatedWindow>(capacity);
   const alerts = createRingBuffer<Alert>(capacity);
   const spans = createRingBuffer<SpanRecord>(options.spanCapacity ?? DEFAULT_SPAN_CAPACITY);
-  validateAlertRules(rules);
   // One alert state for every consume(): a rule firing at the end of one run stays firing.
   const alertState = createAlertEvaluatorState(rules.length);
-  const sinks = createSinks(options.sinks ?? [], options.onSinkError);
+  if (options.sinks !== undefined && !Array.isArray(options.sinks)) {
+    throw new TypeError('sinks must be an array');
+  }
+  const sinks = (options.sinks ?? []).map(checkSink);
   const dispatcher = createSinkDispatcher(sinks, options.onSinkError);
   const store =
     options.persist === undefined ? undefined : createWindowStore({ ...options.persist, capacity });
@@ -136,7 +157,22 @@ export function createCollector(options: CollectorOptions): Collector {
     );
     return restoring;
   };
-  const subscribers = createSubscriberSet();
+  const listeners = new Set<CollectorListener>();
+  /** Calls `event` on every listener; a listener that throws is reported and the rest still run. */
+  const emit = <E extends keyof CollectorListener>(
+    event: E,
+    value: Parameters<Required<CollectorListener>[E]>[0],
+  ): void => {
+    for (const listener of [...listeners]) {
+      try {
+        (listener[event] as ((v: typeof value) => void) | undefined)?.call(listener, value);
+      } catch (error) {
+        process.emitWarning(
+          `collector listener threw: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+  };
 
   return {
     windows,
@@ -148,17 +184,22 @@ export function createCollector(options: CollectorOptions): Collector {
       return ignored;
     },
     subscribe(listener: CollectorListener): () => void {
-      return subscribers.add(listener);
+      listeners.add(listener);
+      return (): void => {
+        listeners.delete(listener);
+      };
     },
     async consume(source: Readable | AsyncIterable<unknown>): Promise<void> {
-      const guard = createRecordGuard((record, reason) => {
-        ignored = ignored >= Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : ignored + 1;
-        onIgnored?.(record, reason);
-      });
-      const spanRouter = createSpanRouter((span) => {
-        spans.push(span);
-        subscribers.emitSpan(span);
-      });
+      const guard = createRecordGuard(
+        (record, reason) => {
+          ignored = ignored >= Number.MAX_SAFE_INTEGER ? Number.MAX_SAFE_INTEGER : ignored + 1;
+          onIgnored?.(record, reason);
+        },
+        (span) => {
+          spans.push(span);
+          emit('span', span);
+        },
+      );
       const aggregator = createWindowAggregator({ windowMs });
       const recordWindows = new Transform({
         objectMode: true,
@@ -167,7 +208,7 @@ export function createCollector(options: CollectorOptions): Collector {
             windows.push(window);
             // Hands the window to the persistence queue without waiting for the disk.
             queue?.push(window);
-            subscribers.emitWindow(window);
+            emit('window', window);
             callback(null, window);
           } catch (error) {
             callback(error as Error);
@@ -179,14 +220,13 @@ export function createCollector(options: CollectorOptions): Collector {
         await pipeline(
           source,
           guard,
-          spanRouter,
           aggregator,
           recordWindows,
-          createAlertEvaluator(rules, alertState),
+          evaluateAlerts(rules, alertState),
           async function (emitted: AsyncIterable<unknown>) {
             for await (const alert of emitted) {
               alerts.push(alert as Alert);
-              subscribers.emitAlert(alert as Alert);
+              emit('alert', alert as Alert);
               dispatcher.deliver(alert as Alert);
             }
           },

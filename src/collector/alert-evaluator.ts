@@ -5,6 +5,7 @@ import {
   type AlertComparison,
   type AlertMetric,
   type AlertRule,
+  type ResolvedAlertRule,
 } from './alert-rules.js';
 import type { AggregatedWindow } from './window.js';
 
@@ -46,7 +47,14 @@ export function createAlertEvaluator(
   sharedState?: AlertEvaluatorState,
 ): Transform {
   const resolved = validateAlertRules(rules);
-  const evaluatorState = sharedState ?? createAlertEvaluatorState(resolved.length);
+  return evaluateAlerts(resolved, sharedState ?? createAlertEvaluatorState(resolved.length));
+}
+
+/** `createAlertEvaluator` over rules `validateAlertRules` already resolved. */
+export function evaluateAlerts(
+  resolved: readonly ResolvedAlertRule[],
+  evaluatorState: AlertEvaluatorState,
+): Transform {
   const states = evaluatorState.rules;
   if (states.length !== resolved.length) {
     throw new RangeError(

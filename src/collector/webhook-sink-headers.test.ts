@@ -1,7 +1,7 @@
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
-import { createSinks, createWebhookSink, type Alert } from './index.js';
+import { createWebhookSink, type Alert } from './index.js';
 
 const SECRET = 'Bearer s3cr3t-token-value';
 
@@ -95,20 +95,6 @@ describe('webhook sink headers', () => {
     }
   });
 
-  it('passes headers through a webhook sink config given to createSinks', async () => {
-    const server = await startServer(204);
-    try {
-      const [sink] = createSinks([
-        { type: 'webhook', url: server.url, timeoutMs: 2000, headers: { authorization: SECRET } },
-      ]);
-      await sink?.send(alert);
-      await sink?.close();
-      expect(server.received[0]?.['authorization']).toBe(SECRET);
-    } finally {
-      await server.stop();
-    }
-  });
-
   it('keeps header values out of delivery failure errors', async () => {
     const errors: Error[] = [];
     const onError = (error: Error): void => {
@@ -180,10 +166,6 @@ describe('webhook sink headers', () => {
       expect(direct).toBeInstanceOf(TypeError);
       expect((direct as Error).message).toMatch(message);
       expect(errorText(direct)).not.toContain('s3cr3t');
-
-      const viaConfig = thrownBy(() => createSinks([{ type: 'webhook', ...options }]));
-      expect((viaConfig as Error).message).toMatch(message);
-      expect(errorText(viaConfig)).not.toContain('s3cr3t');
     }
   });
 });

@@ -97,7 +97,7 @@ describe('stdout alert sink', () => {
       windowMs: 1000,
       capacity: 10,
       alerts: [{ id: 'loop-max', metric: 'eventLoop.max', comparison: '>', threshold: 100 }],
-      sinks: [{ type: 'stdout', stream }],
+      sinks: [createStdoutSink({ stream })],
     });
     const source = Readable.from([
       makeSample(100, 50),
