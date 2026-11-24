@@ -69,7 +69,7 @@ with an alert rule.
    from a `PerformanceObserver`, and the backpressure probe, which wraps `write` on the
    `Writable`, `Duplex` and `http.OutgoingMessage` prototypes and records where writes return
    `false` and how long until `drain`. User code is never edited.
-2. **Transport out of the agent.** Each tick drains the span buffer (1024 spans) into the span
+2. **Transport out of the agent.** Each tick drains the span buffer (`spanBuffer`, default 1024 spans) into the span
    lane, then queues one sample line in the sample lane. Both lanes are bounded by `queueBound`
    and drop their oldest line when full; sample lines are always written before span lines, so
    spans cannot evict samples. One `stream/promises` `pipeline()` writes to stdout or a file

@@ -7,7 +7,8 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 ## 1. Cost and overhead
 
 - **Overhead is measured, never zero.** `bench/overhead.mjs` compares agent-off with the agent
-  loaded but disabled, the full agent, tracing only and samplers only, on HTTP workloads
+  loaded but disabled, the full agent, the agent with tracing off (`notrace`), tracing only and
+  samplers only, on HTTP workloads
   (`trivial`, `promise`, `cpu`, `stream`). A nightly workflow runs it; the results are
   informational and nothing fails on a regression. Numbers depend on the workload and the machine:
   run it on yours (see [`bench/README.md`](../bench/README.md)).
@@ -22,6 +23,20 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   20–50% more RSS (buffered spans are now kept as bytes, so they no longer churn V8's old
   generation). Most of the remaining CPU cost on Node 22 is `AsyncLocalStorage` (next item). No
   overhead budget is defined yet; run the benchmark on your own workload.
+- **Tracing can be switched off on its own.** `PHARGUS_SPAN_BUFFER=0` keeps the samplers and the
+  backpressure probe and patches nothing for tracing: no `emit` wrap, no diagnostics-channel
+  subscription, no `AsyncLocalStorage` context. On `bench/overhead.mjs` (Node 24.13, an 8-core
+  Apple M2 laptop shared with other work, so rps varied by 30–48% between rounds and only CPU per
+  request is worth reading; median of 5 rounds, 2026-11-24), the full agent cost 18% more CPU per
+  request on `trivial` and 30% on `promise`, and the agent with `PHARGUS_SPAN_BUFFER=0` was within
+  noise of agent-off (−5% and +4%).
+- **Each tick serializes the interval's spans in one burst.** With at least `spanBuffer` requests
+  per interval, every tick drains a full span buffer and turns each span into a JSON line on the
+  event loop. Measured on the same laptop (Node 24.13, median of 200 drains, draining and
+  `JSON.stringify` only, before the write): about 0.1 ms for 64 spans, 2–3 ms for the default
+  1024, and 16 ms for 4096, with single ticks up to tens of milliseconds when a GC lands in them.
+  A smaller `PHARGUS_SPAN_BUFFER` shortens that burst in proportion and drops (and counts) the
+  spans above it.
 - **Memory: a few MiB at steady state.** The span buffer preallocates about 280 KiB for its 1024
   spans. With tracing on, heap after GC is unchanged and RSS after a minute of load matches the
   agent-off process within run-to-run noise. In short benchmark cells RSS can still read up to
@@ -63,8 +78,10 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   and `consume()` carry on. When compaction keeps failing, nothing more is appended, so the file
   stays within `maxBytes`.
 - **Data is dropped, not queued without limit.** The agent's sample and span output lanes each
-  hold `queueBound` lines (default 1024) and drop the oldest; the span buffer holds 1024 spans
-  between ticks. Above roughly 1000 requests per sampling interval, spans are dropped. Every sample
+  hold `queueBound` lines (default 1024) and drop the oldest; the span buffer holds `spanBuffer`
+  spans between ticks (`PHARGUS_SPAN_BUFFER`, default 1024; `0` records none). Above that many
+  requests per sampling interval, spans are dropped: at most `spanBuffer` span lines are written
+  per interval. Every sample
   line carries cumulative `dropped: { samples, spans }` counters; each collector window keeps those
   of its last sample as `dropped`, the dashboard header shows them when either is above 0, and
   `phargus serve` prints them on its `counts:` line (`agent.droppedSamples`, `agent.droppedSpans`).

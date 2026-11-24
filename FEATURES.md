@@ -20,10 +20,15 @@ Status legend:
 - ✅ Zero external dependencies in the agent (Node core only; enforced by ESLint).
 - ✅ Dual package: ESM + CJS, six subpath exports.
 - ✅ Config via env vars (`PHARGUS_OUTPUT`, `PHARGUS_OUTPUT_MAX_BYTES`, `PHARGUS_INTERVAL_MS`,
-  `PHARGUS_QUEUE_BOUND`, `PHARGUS_ENABLED`) + `phargus.config.{js,json}`, or one explicit file pinned with `PHARGUS_CONFIG`. Unknown `PHARGUS_*` variables warn and are ignored (the CLI's `PHARGUS_TOKEN` and `PHARGUS_DEBUG` are ignored silently).
+  `PHARGUS_QUEUE_BOUND`, `PHARGUS_SPAN_BUFFER`, `PHARGUS_ENABLED`) + `phargus.config.{js,json}`, or one explicit file pinned with `PHARGUS_CONFIG`. Unknown `PHARGUS_*` variables warn and are ignored (the CLI's `PHARGUS_TOKEN` and `PHARGUS_DEBUG` are ignored silently).
 - ✅ A file output has a size bound (`PHARGUS_OUTPUT_MAX_BYTES`, default 64 MiB, `0` = none): at
   the bound it is renamed to `<file>.1` and a new `0600` file is started, so at most twice the
   bound is on disk.
+- ✅ Tracing can be reduced or switched off without switching the samplers off:
+  `PHARGUS_SPAN_BUFFER` (config key `spanBuffer`, 0 to 65536, default 1024) is the number of spans
+  kept per sampling interval, and `0` turns HTTP tracing off (no `emit` wrap, no
+  diagnostics-channel subscription, no `AsyncLocalStorage`; `currentTraceId()` is `undefined`).
+  The variable is read before anything is patched. Measured costs: `docs/LIMITS.md` §1.
 - ✅ CLI: `phargus serve` reads the agent's NDJSON from stdin or a file and serves the dashboard,
   so `node --import @pharn-dev/phargus/agent app.mjs | npx phargus serve` is the whole setup.
   Loopback by default; a non-loopback `--host` requires a token. ESM-only, not an `exports` subpath.

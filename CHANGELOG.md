@@ -16,6 +16,12 @@ All notable changes to Phargus are recorded here. The format follows
   only; a failed rename disables the agent with one `[phargus] agent disabled: ...` line. Under
   `--permission` a file output now also needs `--allow-fs-write=<file>.1` and
   `--allow-fs-read=<file>` (see `docs/PERMISSIONS.md`).
+- `PHARGUS_SPAN_BUFFER` (config key `spanBuffer`, 0 to 65536, default 1024) sets how many spans the
+  agent keeps per sampling interval; the rest are counted in `dropped.spans`. `0` turns HTTP
+  tracing off and keeps the samplers and the backpressure probe: nothing is patched or subscribed,
+  no span line is written, and `currentTraceId()` returns `undefined`. The variable is read before
+  anything is patched, like `PHARGUS_ENABLED`; an invalid value disables the agent with a message
+  naming it. `bench/overhead.mjs` has a `notrace` variant (the agent with `PHARGUS_SPAN_BUFFER=0`).
 - `phargus serve --alert '<metric><op><threshold>[:<windows>]'` raises collector alerts from the
   command line, for example `--alert 'eventLoop.p99>50ms:3'` or `--alert 'memory.rssLast>=512MiB'`.
   The flag is repeatable, the rule id is its text, and the threshold takes `ms`/`s` for time

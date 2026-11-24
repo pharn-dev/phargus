@@ -298,11 +298,12 @@ Choose where the agent writes with `PHARGUS_OUTPUT`:
 | `PHARGUS_OUTPUT_MAX_BYTES` | `67108864` | size bound of a file output (64 MiB): at the bound it is renamed to `<file>.1`; `0` = no bound |
 | `PHARGUS_INTERVAL_MS`      | `1000`     | sampling interval                                                                              |
 | `PHARGUS_QUEUE_BOUND`      | `1024`     | lines held per output queue before the oldest are dropped                                      |
+| `PHARGUS_SPAN_BUFFER`      | `1024`     | spans kept per interval, 0 to 65536; `0` turns request tracing off, samplers stay on           |
 | `PHARGUS_ENABLED`          | `true`     | `false` or `0` turns the agent off: nothing is patched and no config file is read              |
 | `PHARGUS_CONFIG`           | none       | path to the one config file to load, `.json` or `.js`; skips the working-directory lookup      |
 
-The same keys (`output`, `outputMaxBytes`, `intervalMs`, `queueBound`, `enabled`) can go in
-`phargus.config.json` or `phargus.config.js` in the working directory. An unknown `PHARGUS_*`
+The same keys (`output`, `outputMaxBytes`, `intervalMs`, `queueBound`, `spanBuffer`, `enabled`)
+can go in `phargus.config.json` or `phargus.config.js` in the working directory. An unknown `PHARGUS_*`
 variable prints one warning on stderr and is ignored; `PHARGUS_TOKEN` and `PHARGUS_DEBUG`, which belong to `phargus serve`, are
 ignored without a warning. When `PHARGUS_CONFIG` is set, `phargus.config.json` and
 `phargus.config.js` in the working directory are not read, and a problem with the pinned file
@@ -317,6 +318,14 @@ bound, the agent renames it to `<file>.1` (replacing an older `.1`) and continue
 created with mode `0600`, so at most twice the bound is on disk. Rotation happens between lines,
 so no line is split. If the rename fails, the agent is disabled with one
 `[phargus] agent disabled: ...` line.
+
+`PHARGUS_SPAN_BUFFER=0` keeps the samplers and the backpressure probe and drops request tracing,
+its per-request CPU cost included: nothing wraps `http.Server`, no span line is written and
+`currentTraceId()` returns `undefined`. Like `PHARGUS_ENABLED`, the variable is read before
+anything is patched; `spanBuffer: 0` in a config file switches tracing off once the file is read.
+Any other value caps the span lines written per interval; the rest are counted in the sample
+line's `dropped.spans`. A smaller buffer also shortens the burst each tick spends serializing
+spans under load (see [`docs/LIMITS.md`](./docs/LIMITS.md) §1).
 
 ---
 

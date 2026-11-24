@@ -4,7 +4,13 @@ import { isMainThread } from 'node:worker_threads';
 import { openAgentOutput } from './agent-output.js';
 import { readConfigEnv } from './config-env.js';
 import { loadAgentConfig } from './config.js';
-import { enable as enableTracing, disable as disableTracing, drainSpans } from './http-tracing.js';
+import {
+  DEFAULT_SPAN_BUFFER_SIZE,
+  enable as enableTracing,
+  disable as disableTracing,
+  drainSpans,
+  setSpanBufferSize,
+} from './http-tracing.js';
 import { createNdjsonExporter } from './ndjson-exporter.js';
 import { createSpanExport } from './span-export.js';
 import { createSamplerController } from './sampler-controller.js';
@@ -94,6 +100,13 @@ async function start(): Promise<void> {
     disableTracing();
     return;
   }
+  // 0 (here only from the config file: in the environment it never enabled tracing) switches
+  // tracing off; the samplers still run.
+  if (config.spanBuffer === 0) {
+    disableTracing();
+  } else {
+    setSpanBufferSize(config.spanBuffer);
+  }
   const destination = openAgentOutput(config.output, config.outputMaxBytes);
   const output = createAgentExport(destination, { queueBound: config.queueBound }, drainSpans);
   let disable = (err: unknown): void => {
@@ -165,7 +178,10 @@ export function startAgentOnce(): void {
     }
     // Trace from the first tick: requests that arrive while the config loads still get spans.
     // The buffer is bounded, and tracing is switched off again if the agent ends up disabled.
-    enableTracing();
+    // PHARGUS_SPAN_BUFFER=0 means no tracing at all: nothing is patched or subscribed.
+    if (fromEnv.spanBuffer !== 0) {
+      enableTracing({ spanBufferSize: fromEnv.spanBuffer ?? DEFAULT_SPAN_BUFFER_SIZE });
+    }
     start().catch(failStart);
   } catch (err) {
     failStart(err);

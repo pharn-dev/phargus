@@ -29,6 +29,8 @@ const FINISH_CHANNEL = 'http.server.response.finish';
 
 let enabled = false;
 let buffer: SpanBuffer = createSpanBuffer(DEFAULT_SPAN_BUFFER_SIZE);
+/** Drops of a buffer replaced by `setSpanBufferSize()`, reported by the next `drainSpans()`. */
+let carriedDrops = 0;
 const inflight = new WeakMap<object, Inflight>();
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -324,9 +326,8 @@ export function enable(options: HttpTracingOptions = {}): void {
   if (enabled) {
     return;
   }
-  const { spanBufferSize } = options;
-  if (spanBufferSize !== undefined && spanBufferSize !== buffer.capacity) {
-    buffer = createSpanBuffer(spanBufferSize);
+  if (options.spanBufferSize !== undefined) {
+    setSpanBufferSize(options.spanBufferSize);
   }
   emitRegistry.contributors.add(contribute);
   installEmits();
@@ -350,7 +351,27 @@ export function disable(): void {
   enabled = false;
 }
 
+/**
+ * Keep at most `size` spans until the next drain. Spans already buffered move to the new buffer;
+ * when it is smaller, the oldest are dropped and counted, like any other overflow.
+ */
+export function setSpanBufferSize(size: number): void {
+  if (size === buffer.capacity) {
+    return;
+  }
+  const next = createSpanBuffer(size);
+  const previous = buffer.drain();
+  for (const span of previous.spans) {
+    next.push(span);
+  }
+  carriedDrops += previous.dropped;
+  buffer = next;
+}
+
 /** Return buffered spans (oldest first) and the number dropped since the previous drain. */
 export function drainSpans(): SpanDrain {
-  return buffer.drain();
+  const drained = buffer.drain();
+  drained.dropped += carriedDrops;
+  carriedDrops = 0;
+  return drained;
 }
