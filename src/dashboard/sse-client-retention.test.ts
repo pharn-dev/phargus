@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import type { ServerResponse } from 'node:http';
 import { describe, expect, it } from 'vitest';
+import { createBoundedQueue } from '../agent/bounded-queue.js';
 import { createSseClient } from './sse-client.js';
 
 /** A response whose socket never drains until the test says so. */
@@ -24,6 +25,21 @@ function stalledResponse(): { res: ServerResponse; written: string[]; unblock():
     },
   };
 }
+
+describe('bounded FIFO', () => {
+  it('keeps its backing array proportional to capacity when nobody ever shifts', () => {
+    // The SSE client's queue: a ring whose slots never outnumber `capacity`.
+    const fifo = createBoundedQueue<string>(100);
+    let maxSize = 0;
+    for (let i = 0; i < 100_000; i += 1) {
+      fifo.push(`event ${i}`);
+      maxSize = Math.max(maxSize, fifo.size);
+    }
+    expect(fifo.size).toBe(100);
+    expect(maxSize).toBeLessThanOrEqual(100);
+    expect(fifo.snapshot()[0]).toBe('event 99900');
+  });
+});
 
 describe('SSE client with a stalled reader', () => {
   it('drops the oldest chunks, then delivers exactly the newest ones in order on drain', () => {

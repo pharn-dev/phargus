@@ -21,7 +21,7 @@ describe('createBoundedQueue', () => {
     expect(queue.size).toBe(0);
   });
 
-  it('keeps its backing array proportional to capacity when nobody ever shifts', () => {
+  it('keeps only the newest items in order when nobody ever shifts', () => {
     const queue = createBoundedQueue<number>(100);
     for (let i = 0; i < 100_000; i += 1) {
       queue.push(i);
