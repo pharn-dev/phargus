@@ -92,6 +92,11 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- The backpressure probe names each stall by its own call site instead of caching the first
+  stall's site per stream, so stalls from different code on one keep-alive socket, shared log
+  stream or database connection are separate hotspots. A sampling window makes at most 32 stack
+  captures; later stalls in the window are named by the stream's constructor (for example
+  `ServerResponse`), so a server whose responses stall no longer pays a stack capture per request.
 - The dashboard waterfall rebuilds at most once per animation frame instead of once per span event,
   so a page load that replays 1,024 spans builds it once; an aborted span keeps its "aborted" marker
   when later spans arrive; the stream reader no longer builds a promise chain that grows for as long
