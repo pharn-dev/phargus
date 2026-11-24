@@ -20,20 +20,20 @@ Like `scripts/*.mjs`, these files are plain ESM JavaScript: `npm run lint` cover
 ## Overhead benchmark
 
 ```bash
-node bench/overhead.mjs                       # full run, about 10 minutes
-node bench/overhead.mjs --duration 3 --rounds 1 --warmup 1   # quick look, about 1.5 minutes
+node bench/overhead.mjs                       # full run, about 13 minutes
+node bench/overhead.mjs --duration 3 --rounds 1 --warmup 1   # quick look, about 2.5 minutes
 ```
 
-| Flag            | Default                                   | Meaning                                                      |
-| --------------- | ----------------------------------------- | ------------------------------------------------------------ |
-| `--duration`    | `5`                                       | measured seconds per cell                                    |
-| `--warmup`      | `1.5`                                     | seconds of load before measuring                             |
-| `--connections` | `32`                                      | concurrent keep-alive connections                            |
-| `--rounds`      | `3`                                       | interleaved rounds; every number is the median across rounds |
-| `--workloads`   | `trivial,promise,cpu,stream`              | comma list                                                   |
-| `--variants`    | `none,idle,full,notrace,tracing,samplers` | comma list                                                   |
-| `--out`         | a file in the OS temp directory           | where the JSON result goes                                   |
-| `--node-arg`    | none                                      | extra Node flag for every target, repeatable                 |
+| Flag            | Default                                        | Meaning                                                      |
+| --------------- | ---------------------------------------------- | ------------------------------------------------------------ |
+| `--duration`    | `5`                                            | measured seconds per cell                                    |
+| `--warmup`      | `1.5`                                          | seconds of load before measuring                             |
+| `--connections` | `32`                                           | concurrent keep-alive connections                            |
+| `--rounds`      | `3`                                            | interleaved rounds; every number is the median across rounds |
+| `--workloads`   | `trivial,promise,cpu,stream,large`             | comma list                                                   |
+| `--variants`    | `none,idle,full,notrace,pipe,tracing,samplers` | comma list                                                   |
+| `--out`         | a file in the OS temp directory                | where the JSON result goes                                   |
+| `--node-arg`    | none                                           | extra Node flag for every target, repeatable                 |
 
 **How it works.** For each cell (workload × variant × round) a fresh target process starts an
 HTTP server on loopback. The harness drives it closed-loop: `--connections` keep-alive sockets,
@@ -50,23 +50,38 @@ order rotates from round to round, so slow drift on the host does not always hit
 | `promise` | a chain of 20 `await`s, then respond (AsyncLocalStorage propagation cost)         |
 | `cpu`     | 20 000 integer operations, then respond                                           |
 | `stream`  | 4 KiB through a `Transform` into the response with `stream/promises` `pipeline()` |
+| `large`   | one `res.write()` of 256 KiB, then `res.end()`                                    |
+
+`large` is the workload where `write()` returns false: 256 KiB is more than the response and
+socket buffers take at once, so the backpressure probe takes its stall path (a stall, then a
+drain) on every request. The `bp events` column shows it; in the other workloads it stays at 0.
 
 **Variants**
 
-| Variant    | What is loaded                                                                                                   |
-| ---------- | ---------------------------------------------------------------------------------------------------------------- |
-| `none`     | nothing: the baseline                                                                                            |
-| `idle`     | `--import @pharn-dev/phargus/agent` with `PHARGUS_ENABLED=false`: installed, switched off by config              |
-| `full`     | `--import @pharn-dev/phargus/agent` with its defaults: tracing and every sampler, NDJSON to stdout (`/dev/null`) |
-| `notrace`  | `--import @pharn-dev/phargus/agent` with `PHARGUS_SPAN_BUFFER=0`: every sampler, no HTTP tracing                 |
-| `tracing`  | library API only: HTTP tracing on, spans flushed once a second to `/dev/null`; no samplers                       |
-| `samplers` | library API only: samplers and the backpressure probe at 1 s, to `/dev/null`; tracing off                        |
+| Variant    | What is loaded                                                                                              |
+| ---------- | ----------------------------------------------------------------------------------------------------------- |
+| `none`     | nothing: the baseline                                                                                       |
+| `idle`     | `--import @pharn-dev/phargus/agent` with `PHARGUS_ENABLED=false`: installed, switched off by config         |
+| `full`     | `--import @pharn-dev/phargus/agent` with its defaults: tracing and every sampler, NDJSON to stdout (a file) |
+| `notrace`  | `--import @pharn-dev/phargus/agent` with `PHARGUS_SPAN_BUFFER=0`: every sampler, no HTTP tracing            |
+| `pipe`     | as `full`, but stdout is a pipe read by a reader process (the documented `\| phargus serve` topology)       |
+| `tracing`  | library API only: HTTP tracing on, spans flushed once a second to stdout (a file); no samplers              |
+| `samplers` | library API only: samplers and the backpressure probe at 1 s, to stdout (a file); tracing off               |
+
+The target's stdout is a file in the cell's temporary directory for every variant but `pipe`. For
+`pipe` the harness forks a reader process (`lib/pipe-reader.mjs`) and hands its stdin to the
+target as stdout, so the agent's per-tick write burst goes into a pipe that another process
+drains, as it does under `node --import @pharn-dev/phargus/agent app.js | phargus serve`. The
+reader runs on its own event loop, so the harness's load generator does not slow it down.
 
 **What is measured.** On the load generator: requests per second and the p50/p99 latency, from
 the HDR histogram in `node:perf_hooks`. In the target, for the measured window only: CPU time
 (`process.cpuUsage`, reported per request and as % of one core), event-loop utilisation
 (`performance.eventLoopUtilization`), RSS at the end, and GC count and total pause
-(`PerformanceObserver` on `gc` entries).
+(`PerformanceObserver` on `gc` entries). From the target's stdout, for the whole cell (warm-up
+included), once the target has exited: `out KiB`, the bytes the agent wrote (for `pipe`, the bytes
+the reader consumed), and `bp events`, the backpressure events summed over the agent's sample
+lines.
 
 **Reading the tables.** Each workload gets one table on stdout (Markdown, so it pastes into a PR
 or a job summary as is). Every value is the median across rounds; `±` after rps is the coefficient
@@ -93,12 +108,32 @@ is 1–2 % for `trivial`, `promise` and `cpu`; on shared CI runners expect **CV 
 more on p99. `stream` is the noisiest workload. A loaded laptop (other builds, a browser) makes
 every number unreliable; the JSON records the load average at the start so you can tell.
 
-**Exit code.** 0 when every cell ran; 1 when the harness broke (a target crashed, a request
-failed, the agent reported itself disabled on stderr). The numbers never fail the run.
+**Exit code.** 0 when every cell ran and no budget was exceeded; 1 when the harness broke (a
+target crashed, a request failed, the agent reported itself disabled on stderr, its output could
+not be counted); 2 when a budget was exceeded in a low-variance run (see below).
+
+## Budget
+
+The benchmark has one budget, in `bench/lib/budget.mjs`:
+
+| Workload  | Compared      | Metric     | Budget           |
+| --------- | ------------- | ---------- | ---------------- |
+| `trivial` | `full`/`none` | CPU µs/req | at most **+25%** |
+
+The nightly runs on GitHub runners have measured this delta at about +5% (Node 22.18, November
+2026), so +25% leaves room for runner noise and catches a regression that multiplies the
+per-request cost, not one of a few percent.
+
+A budget is judged only when the run can be trusted: at least two rounds, and a coefficient of
+variation of the budgeted metric under **10%** in both cells (`none` and `full`). Over the budget
+in such a run is `exceeded`, and the run exits 2. Over the budget in a noisier run, or with one
+round, is `noisy` and does not fail. A run that did not include both cells reports the budget as
+`skipped`. The verdicts are printed under the tables and kept under `budgets` in the JSON.
 
 **JSON.** One file per run: run metadata (commit, Node version, platform, CPU, load average,
 settings), `summary[workload][variant][metric]` with `median`, `min`, `max`, `cv` and `n` plus
-`deltaVsNone`, and every raw cell under `cells`.
+`deltaVsNone`, the budget verdicts under `budgets`, and every raw cell under `cells` (the agent
+output counts under `output`).
 
 ## Soak test
 
@@ -149,8 +184,10 @@ of each kind. `--out` also writes everything as JSON.
 `.github/workflows/nightly.yml` runs both daily (and on demand via `workflow_dispatch`) on the
 Node floor from `.nvmrc`, as two non-required jobs:
 
-- **Nightly benchmark** — informational. Tables in the job summary, JSON uploaded as the
-  `overhead-benchmark` artifact (kept 90 days) for comparing runs over time.
+- **Nightly benchmark** — a soft check. Tables in the job summary, JSON uploaded as the
+  `overhead-benchmark` artifact (kept 90 days) for comparing runs over time. It fails when the
+  budget above is exceeded in a low-variance run (exit 2) or the harness broke (exit 1). The
+  workflow is not a required check, so a failure alerts without blocking a merge.
 - **Nightly soak** — fails the workflow on a leak (exit 1 above).
 
 The benchmark does not run on pull requests: shared-runner noise (CV 3–8 %) is larger than most
@@ -158,7 +195,7 @@ real regressions, so it would block PRs on noise. If a PR touches a hot path (th
 the write wrapper, the samplers, the exporter), run it locally before and after the change and
 put both tables in the PR.
 
-A release gate is a later decision. When there is one, it is meant to be run as:
+A hard release gate is a later decision. When there is one, it is meant to be run as:
 
 ```bash
 node bench/overhead.mjs --rounds 5 --workloads trivial,promise --variants none,full --out release.json

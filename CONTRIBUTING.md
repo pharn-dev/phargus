@@ -73,9 +73,10 @@ The ruleset also requires two checks from the Socket Security GitHub App, `Socke
 Report` and `Socket Security: Pull Request Alerts`. No workflow in this repo produces them; if Socket
 renames a check, the ruleset must be edited.
 
-A `nightly` workflow, not a PR check, runs `node bench/overhead.mjs` (agent-on versus agent-off;
-informational, tables in the job summary) and `node bench/soak.mjs` (fails on heap growth or leaked
-workers and child processes). See `bench/README.md`.
+A `nightly` workflow, not a PR check, runs `node bench/overhead.mjs` (agent-on versus agent-off,
+tables in the job summary; fails when its overhead budget is exceeded in a low-variance run) and
+`node bench/soak.mjs` (fails on heap growth or leaked workers and child processes). Neither blocks
+a merge. See `bench/README.md`.
 
 ## Threat model and limits
 

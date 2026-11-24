@@ -7,7 +7,7 @@ const resultsFile = process.env['PHARN_TEST_RESULTS'];
 export default defineConfig({
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'bench/**/*.test.mjs'],
     ...(resultsFile ? { reporters: ['default', 'json'], outputFile: { json: resultsFile } } : {}),
   },
 });

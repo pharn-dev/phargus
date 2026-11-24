@@ -1,13 +1,12 @@
 // Benchmark target: one HTTP server running one workload, under one agent variant. Forked by
 // bench/overhead.mjs; measures itself between the parent's 'start' and 'stop' requests.
 //
-// Variants that preload the agent (`idle`, `full`) get `--import @pharn-dev/phargus/agent` from the parent.
-// `tracing` and `samplers` load the library API (no auto-start) here, from BENCH_AGENT_INDEX. The
-// `tracing` variant also loads the HTTP tracing and span export files built next to that index,
-// because the public entry no longer re-exports them.
-import { createWriteStream } from 'node:fs';
+// Variants that preload the agent (`idle`, `full`, `notrace`, `pipe`) get
+// `--import @pharn-dev/phargus/agent` from the parent. `tracing` and `samplers` load the library API
+// (no auto-start) here, from BENCH_AGENT_INDEX. The `tracing` variant also loads the HTTP tracing
+// and span export files built next to that index, because the public entry no longer re-exports
+// them.
 import http from 'node:http';
-import { devNull } from 'node:os';
 import { performance, PerformanceObserver } from 'node:perf_hooks';
 import { describe } from './common.mjs';
 import { die, send, serve } from './ipc.mjs';
@@ -17,9 +16,12 @@ const SAMPLE_INTERVAL_MS = 1000;
 const workload = process.env.BENCH_WORKLOAD ?? '';
 const variant = process.env.BENCH_VARIANT ?? '';
 
-/** NDJSON to /dev/null through the agent's own exporter, as the auto-started agent would do. */
-function devNullExporter(agent) {
-  const exporter = agent.createNdjsonExporter(createWriteStream(devNull));
+/**
+ * NDJSON to stdout through the agent's own exporter, as the auto-started agent would do. The
+ * harness points stdout at a file and counts what was written after the cell.
+ */
+function stdoutExporter(agent) {
+  const exporter = agent.createNdjsonExporter(process.stdout);
   exporter.done.then(undefined, (err) => die(new Error(`exporter failed: ${describe(err)}`)));
   return exporter;
 }
@@ -29,7 +31,7 @@ async function setUpVariant() {
   const indexUrl = process.env.BENCH_AGENT_INDEX;
   if (indexUrl === undefined) throw new Error('BENCH_AGENT_INDEX is not set');
   const agent = await import(indexUrl);
-  const exporter = devNullExporter(agent);
+  const exporter = stdoutExporter(agent);
   if (variant === 'tracing') {
     // HTTP tracing only: spans drained once per interval, like the auto-started agent does.
     const tracing = await import(new URL('./http-tracing.js', indexUrl).href);

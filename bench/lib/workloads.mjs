@@ -3,12 +3,13 @@
 import { Readable, Transform, Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 
-export const WORKLOADS = ['trivial', 'promise', 'cpu', 'stream'];
+export const WORKLOADS = ['trivial', 'promise', 'cpu', 'stream', 'large'];
 
 const PROMISE_STEPS = 20;
 const CPU_ITERATIONS = 20_000;
 const STREAM_CHUNKS = 4;
 const CHUNK = Buffer.alloc(1024, 0x61);
+const LARGE_BODY = Buffer.alloc(256 * 1024, 0x61);
 
 async function step(n) {
   return n + 1;
@@ -51,6 +52,16 @@ async function stream(_req, res) {
 }
 
 /**
+ * One 256 KiB write, more than the response and socket buffers take at once, so write() returns
+ * false and the agent's backpressure probe takes its stall path on the response.
+ */
+function large(_req, res) {
+  res.setHeader('content-type', 'application/octet-stream');
+  res.write(LARGE_BODY);
+  res.end();
+}
+
+/**
  * A Writable that stalls: 4 KiB into a 1 KiB highWaterMark sink that completes each write on the
  * next turn, so write() returns false and the agent's backpressure probe sees a stall and a drain.
  */
@@ -65,7 +76,7 @@ async function stall(_req, res) {
   res.end('stalled');
 }
 
-const HANDLERS = { trivial, promise, cpu, stream, stall };
+const HANDLERS = { trivial, promise, cpu, stream, large, stall };
 
 /**
  * Wrap a workload as an http request listener. A failure answers 500 (or destroys a response

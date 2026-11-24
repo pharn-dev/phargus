@@ -7,7 +7,8 @@ const STDERR_LIMIT = 64 * 1024;
 /**
  * Fork `file` with an IPC channel.
  * @param {string} file absolute path of the child script
- * @param {{ execArgv?: string[], env: NodeJS.ProcessEnv, cwd: string, stdin?: 'ignore' | 'pipe', stdout?: 'ignore' | 'pipe' }} options
+ * @param {{ execArgv?: string[], env: NodeJS.ProcessEnv, cwd: string, stdin?: import('node:child_process').IOType | import('node:stream').Stream | number, stdout?: import('node:child_process').IOType | import('node:stream').Stream | number }} options
+ *   `stdin`/`stdout` take what `fork`'s `stdio` takes: 'ignore', 'pipe', an fd, or a stream to share.
  */
 export function forkChild(file, options) {
   const child = fork(file, [], {
