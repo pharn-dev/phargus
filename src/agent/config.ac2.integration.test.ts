@@ -1,21 +1,9 @@
+import { existsSync } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-
-type AgentConfigUnderTest = Readonly<{
-  intervalMs: number;
-  output: string;
-  queueBound: number;
-  enabled: boolean;
-}>;
-
-type ConfigModuleUnderTest = {
-  loadAgentConfig(
-    cwd: string,
-    env: Readonly<Record<string, string | undefined>>,
-  ): Promise<AgentConfigUnderTest>;
-};
+import { defaultAgentConfig, loadAgentConfig, PhargusConfigError } from './config.js';
 
 const dirs: string[] = [];
 
@@ -29,43 +17,60 @@ afterEach(async () => {
   await Promise.all(dirs.splice(0).map((d) => rm(d, { recursive: true, force: true })));
 });
 
-describe('agent config — AC-2', () => {
-  it('AC-2: a CommonJS phargus.config.js (module.exports) and an ESM phargus.config.js (export default) each supply their interval, queue bound and output', async () => {
-    const { loadAgentConfig } = {
-      ...(await import('./config.js')),
-      ...(await import('./config-schema.js')),
-    } as unknown as ConfigModuleUnderTest;
+const MARKER = 'config-loaded.txt';
 
-    const cjsDir = await makeTempDir();
-    const cjsOutput = path.join(cjsDir, 'cjs-out.ndjson');
-    await writeFile(
-      path.join(cjsDir, 'package.json'),
-      JSON.stringify({ type: 'commonjs' }),
-      'utf8',
+/** A CommonJS config file that leaves a marker file next to itself when it is executed. */
+async function writeMarkerConfig(dir: string, name: string): Promise<void> {
+  await writeFile(path.join(dir, 'package.json'), JSON.stringify({ type: 'commonjs' }), 'utf8');
+  await writeFile(
+    path.join(dir, name),
+    [
+      `require('node:fs').writeFileSync(require('node:path').join(__dirname, ${JSON.stringify(MARKER)}), 'loaded');`,
+      'module.exports = { intervalMs: 321 };',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
+
+describe('agent config — only JSON is read (CORE-362)', () => {
+  it('a phargus.config.js in the working directory is not executed and gives exactly one warning naming phargus.config.json', async () => {
+    const cwd = await makeTempDir();
+    await writeMarkerConfig(cwd, 'phargus.config.js');
+    const warnings: string[] = [];
+
+    const config = await loadAgentConfig(cwd, {}, { onWarning: (m) => warnings.push(m) });
+
+    expect(existsSync(path.join(cwd, MARKER)), 'phargus.config.js was executed').toBe(false);
+    expect(config).toEqual(defaultAgentConfig);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain('phargus.config.js');
+    expect(warnings[0]).toContain('phargus.config.json');
+  });
+
+  it('next to a phargus.config.js, phargus.config.json is read and the .js file is only warned about', async () => {
+    const cwd = await makeTempDir();
+    await writeMarkerConfig(cwd, 'phargus.config.js');
+    await writeFile(path.join(cwd, 'phargus.config.json'), JSON.stringify({ queueBound: 77 }));
+    const warnings: string[] = [];
+
+    const config = await loadAgentConfig(cwd, {}, { onWarning: (m) => warnings.push(m) });
+
+    expect(existsSync(path.join(cwd, MARKER))).toBe(false);
+    expect(config).toEqual({ ...defaultAgentConfig, queueBound: 77 });
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('PHARGUS_CONFIG=settings.js rejects with the unsupported-extension error and does not execute the file', async () => {
+    const cwd = await makeTempDir();
+    await writeMarkerConfig(cwd, 'settings.js');
+
+    const load = loadAgentConfig(cwd, { PHARGUS_CONFIG: 'settings.js' }, { onWarning: () => {} });
+
+    await expect(load).rejects.toBeInstanceOf(PhargusConfigError);
+    await expect(load).rejects.toThrow(
+      /^phargus config: PHARGUS_CONFIG \(.*settings\.js\): unsupported extension "\.js"; use \.json$/,
     );
-    await writeFile(
-      path.join(cjsDir, 'phargus.config.js'),
-      `module.exports = { intervalMs: 321, queueBound: 77, output: ${JSON.stringify(cjsOutput)} };\n`,
-      'utf8',
-    );
-
-    const esmDir = await makeTempDir();
-    const esmOutput = path.join(esmDir, 'esm-out.ndjson');
-    await writeFile(path.join(esmDir, 'package.json'), JSON.stringify({ type: 'module' }), 'utf8');
-    await writeFile(
-      path.join(esmDir, 'phargus.config.js'),
-      `export default { intervalMs: 654, queueBound: 88, output: ${JSON.stringify(esmOutput)} };\n`,
-      'utf8',
-    );
-
-    const cjsConfig = await loadAgentConfig(cjsDir, {});
-    expect(cjsConfig.intervalMs).toBe(321);
-    expect(cjsConfig.queueBound).toBe(77);
-    expect(cjsConfig.output).toBe(cjsOutput);
-
-    const esmConfig = await loadAgentConfig(esmDir, {});
-    expect(esmConfig.intervalMs).toBe(654);
-    expect(esmConfig.queueBound).toBe(88);
-    expect(esmConfig.output).toBe(esmOutput);
+    expect(existsSync(path.join(cwd, MARKER))).toBe(false);
   });
 });

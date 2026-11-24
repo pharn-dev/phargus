@@ -113,6 +113,12 @@ All notable changes to Phargus are recorded here. The format follows
   `runWithTrace`, `takeHeapSnapshot`, `sampleAllocations`, `sampleHeapSpaces`, `createDeoptParser`,
   `ANONYMOUS_FUNCTION`, `DEPENDENT_CODE_KIND`, `PhargusPermissionError` and `SPAN_RECORD_TYPE`, and
   the output-format types. To check a permission grant, use Node's `process.permission.has()`.
+- **Breaking:** the agent no longer reads `phargus.config.js`, and `PHARGUS_CONFIG` accepts a
+  `.json` path only. Move the settings to `phargus.config.json` (same keys). A config file is now
+  parsed, never executed: a `phargus.config.js` in the working directory prints one warning naming
+  `phargus.config.json`, and `PHARGUS_CONFIG=settings.js` disables the agent with the
+  "unsupported extension" message. The unknown-variable warning lists the valid `PHARGUS_*` names
+  instead of guessing one ("did you mean").
 
 ### Fixed
 

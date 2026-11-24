@@ -2,8 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { defaultAgentConfig } from './config-schema.js';
-import { loadAgentConfig } from './config.js';
+import { defaultAgentConfig, loadAgentConfig } from './config.js';
 
 const dirs: string[] = [];
 
