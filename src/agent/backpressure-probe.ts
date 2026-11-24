@@ -1,8 +1,8 @@
 /// <reference types="node" />
 import { OutgoingMessage } from 'node:http';
 import { Duplex, Writable } from 'node:stream';
+import { fileURLToPath } from 'node:url';
 import { roundToNonNegativeInt } from './int.js';
-import { siteFromStack } from './stack-site.js';
 
 /** One call site that stalled. Stall times are integer nanoseconds. */
 export type BackpressureHotspot = {
@@ -103,6 +103,39 @@ function report(kind: string, error: unknown): void {
     `backpressure probe ${kind} failed: ${message} (further ${kind} failures are not reported)`,
     'PhargusBackpressureWarning',
   );
+}
+
+const FRAME = /^\s*at (?:.*? \()?(.+?):(\d+):\d+\)?\s*$/;
+
+/**
+ * Return `file:line` for the first stack frame that is not Node-internal, native, anonymous or in
+ * `skipFiles`. The first line of the stack (the message) is ignored. Returns undefined when no frame remains.
+ */
+function siteFromStack(stack: string, skipFiles: ReadonlySet<string>): string | undefined {
+  const lines = stack.split('\n');
+  for (let i = 1; i < lines.length; i += 1) {
+    const match = FRAME.exec(lines[i] ?? '');
+    if (match === null) {
+      continue;
+    }
+    let file = match[1] ?? '';
+    const line = match[2] ?? '';
+    if (file.startsWith('node:') || file.startsWith('internal/')) {
+      continue;
+    }
+    if (file.startsWith('file://')) {
+      try {
+        file = fileURLToPath(file);
+      } catch {
+        // A malformed file URL is kept as written; it still names a site.
+      }
+    }
+    if (file === 'native' || file === '<anonymous>' || skipFiles.has(file)) {
+      continue;
+    }
+    return `${file}:${line}`;
+  }
+  return undefined;
 }
 
 /** This module's own file as it appears in stacks, found once at load (works under ESM and CJS). */
