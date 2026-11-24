@@ -21,8 +21,7 @@ changes go out together:
 
 2. **Update `CHANGELOG.md`.** Move the `Unreleased` entries under a new `## [X.Y.Z] - YYYY-MM-DD`
    heading (the release date) and leave a fresh, empty `## [Unreleased]` section above it. The section
-   under that heading becomes the GitHub Release notes, verbatim. Update README, roadmap and security
-   status when the release changes them.
+   under that heading becomes the GitHub Release notes, verbatim.
 3. **Merge the PR** once CI is green. `npm test` includes `src/release/`, which runs
    `scripts/check-release-consistency.mjs`: it fails the PR when `package-lock.json` does not carry the
    same version or `CHANGELOG.md` has no non-empty section for it, so a half-done bump is caught before
@@ -142,12 +141,10 @@ exist on the registry yet.
    npm publish ./pharn-dev-phargus-0.1.0.tgz --access public --ignore-scripts --provenance=false
    ```
 
-   This one-time manual publish has no CI provenance. If publication fails, leave the status as
-   pending; update documentation to confirm availability only after verification.
+   This one-time manual publish has no CI provenance.
 
 5. Tag the merged commit `vX.Y.Z` and publish a GitHub Release with the changelog notes by hand
    (`release` was skipped), then verify the registry version and installation as described below.
-   Update any remaining pending publication status in a documentation PR.
 
 ## Enable Trusted Publishing for subsequent releases
 
