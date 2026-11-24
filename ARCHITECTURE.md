@@ -137,8 +137,15 @@ an `exports` subpath, and the agent never imports it.
 - The agent's presence must add negligible overhead to the monitored process. This is measured,
   not assumed: `bench/overhead.mjs` runs agent-on versus agent-off on HTTP workloads, and
   `bench/soak.mjs` runs every module under load and fails on heap growth or leaked workers and
-  child processes. A nightly workflow (`.github/workflows/nightly.yml`) runs both. The benchmark is
-  informational; no overhead threshold gates a merge or a release yet.
+  child processes. A nightly workflow (`.github/workflows/nightly.yml`) runs both. The benchmark
+  covers the paths where the cost is: a 256 KiB response whose `write()` returns false (the
+  backpressure probe's stall path), and agent output into a pipe that another process reads, as
+  well as into a file.
+- The benchmark is a soft check, not a gate. `bench/README.md` records a budget (`full` against
+  `none` on `trivial`: CPU µs per request at most +25%), and the nightly benchmark fails when a run
+  exceeds it with a coefficient of variation under 10% in both cells. A noisier run never fails.
+  The nightly workflow is not a required check, so a failure alerts without blocking a merge or a
+  release; no overhead threshold gates either.
 - Backpressure is honored end to end: the agent drops and counts instead of waiting, the
   collector's persistence queue drops its oldest windows instead of slowing the pipeline, and the
   dashboard drops per client instead of buffering without limit.

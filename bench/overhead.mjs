@@ -2,13 +2,14 @@
 // Agent-on versus agent-off HTTP benchmark. Node core only; run `npm run build` first.
 //
 //   node bench/overhead.mjs [--duration 5] [--warmup 1.5] [--connections 32] [--rounds 3]
-//                           [--workloads trivial,promise,cpu,stream]
-//                           [--variants none,idle,full,notrace,tracing,samplers]
+//                           [--workloads trivial,promise,cpu,stream,large]
+//                           [--variants none,idle,full,notrace,pipe,tracing,samplers]
 //                           [--out results.json] [--node-arg=--some-flag ...]
 //
 // Every cell (workload x variant x round) gets a fresh target process; variants are interleaved
 // within each round and the order rotates between rounds. See bench/README.md.
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createReadStream } from 'node:fs';
+import { mkdir, mkdtemp, open, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,11 +25,14 @@ import {
   sleep,
 } from './lib/common.mjs';
 import { createLoad } from './lib/load.mjs';
+import { countNdjson } from './lib/ndjson-count.mjs';
+import { judgeBudgets, MAX_CV } from './lib/budget.mjs';
 import { delta, fmtNumber, fmtPct, spread, table, withDelta } from './lib/stats.mjs';
 import { WORKLOADS } from './lib/workloads.mjs';
 
 const TARGET = fileURLToPath(new URL('./lib/bench-target.mjs', import.meta.url));
-const VARIANTS = ['none', 'idle', 'full', 'notrace', 'tracing', 'samplers'];
+const PIPE_READER = fileURLToPath(new URL('./lib/pipe-reader.mjs', import.meta.url));
+const VARIANTS = ['none', 'idle', 'full', 'notrace', 'pipe', 'tracing', 'samplers'];
 const PATHS = 50;
 const READY_TIMEOUT_MS = 20_000;
 const REPLY_TIMEOUT_MS = 10_000;
@@ -93,7 +97,10 @@ function variantSpec(variant, { agentUrl, indexUrl }) {
       // Loaded, then switched off by config: the cost of having the agent installed but disabled.
       return { execArgv: ['--import', agentUrl], env: { PHARGUS_ENABLED: 'false' } };
     case 'full':
-      // The agent's defaults: tracing plus every sampler, NDJSON to stdout (here /dev/null).
+      // The agent's defaults: tracing plus every sampler, NDJSON to stdout (here a file).
+      return { execArgv: ['--import', agentUrl], env: {} };
+    case 'pipe':
+      // As `full`, but stdout is a pipe that a reader process consumes (see runCell).
       return { execArgv: ['--import', agentUrl], env: {} };
     case 'notrace':
       // The agent with PHARGUS_SPAN_BUFFER=0: every sampler, no HTTP tracing.
@@ -106,15 +113,48 @@ function variantSpec(variant, { agentUrl, indexUrl }) {
   }
 }
 
+/** Mark `cell` failed with `message`, keeping an earlier error. */
+function failCell(cell, message) {
+  cell.ok = false;
+  cell.error = cell.error === undefined ? message : `${cell.error}; ${message}`;
+}
+
+/** Ask a forked harness process to exit; SIGKILL it if it does not. */
+async function stopChild(child, name, cell) {
+  // A child that already died has no channel; kill() below covers a child that will not exit.
+  if (child.child.connected) {
+    await child.send({ type: 'exit' }).catch((err) => {
+      failCell(cell, `${name} exit request failed: ${describe(err)}`);
+    });
+  }
+  if ((await child.waitExit(EXIT_TIMEOUT_MS)) === undefined) await child.kill();
+}
+
 async function runCell(opts, agent, workload, variant, round) {
   const spec = variantSpec(variant, agent);
   const cwd = await mkdtemp(path.join(os.tmpdir(), 'phargus-bench-'));
+  const cell = { round, workload, variant, ok: false };
+  // The target's stdout (the agent's NDJSON): a pipe into a reader process for `pipe`, a file in
+  // the cell's directory otherwise. Either way it is counted once the target has exited.
+  const outFile = path.join(cwd, 'agent.ndjson');
+  let reader;
+  let stdout;
+  if (variant === 'pipe') {
+    reader = forkChild(PIPE_READER, { env: cleanEnv({}), cwd, stdin: 'pipe' });
+    stdout = reader.child.stdin;
+  } else {
+    stdout = await open(outFile, 'wx', 0o600);
+  }
   const target = forkChild(TARGET, {
     execArgv: [...opts.nodeArgs, ...spec.execArgv],
     env: cleanEnv({ ...spec.env, BENCH_WORKLOAD: workload, BENCH_VARIANT: variant }),
     cwd,
+    stdout: reader === undefined ? stdout.fd : stdout,
   });
-  const cell = { round, workload, variant, ok: false };
+  // The target holds its own copy now. Closing ours lets the reader see the end of its stdin
+  // when the target exits.
+  if (reader === undefined) await stdout.close();
+  else stdout.destroy();
   let load;
   try {
     const { port } = await target.request(null, 'ready', READY_TIMEOUT_MS);
@@ -153,19 +193,26 @@ async function runCell(opts, agent, workload, variant, round) {
   } finally {
     if (load !== undefined) {
       await load.stop().catch((err) => {
-        cell.ok = false;
-        cell.error = `${cell.error ?? ''}; load.stop failed: ${describe(err)}`;
+        failCell(cell, `load.stop failed: ${describe(err)}`);
       });
     }
     if (target.stderr().trim() !== '') cell.stderr = target.stderr().trim();
-    // A target that already died has no channel; kill() below covers a target that will not exit.
-    if (target.child.connected) {
-      await target.send({ type: 'exit' }).catch((err) => {
-        cell.ok = false;
-        cell.error = `${cell.error ?? ''}; exit request failed: ${describe(err)}`;
-      });
+    await stopChild(target, 'target', cell);
+    try {
+      if (reader === undefined) {
+        cell.output = await countNdjson(createReadStream(outFile));
+      } else {
+        const { bytes, lines, bpEvents } = await reader.request(
+          { type: 'counts' },
+          'counts',
+          REPLY_TIMEOUT_MS,
+        );
+        cell.output = { bytes, lines, bpEvents };
+      }
+    } catch (err) {
+      failCell(cell, `counting the agent output failed: ${describe(err)}`);
     }
-    if ((await target.waitExit(EXIT_TIMEOUT_MS)) === undefined) await target.kill();
+    if (reader !== undefined) await stopChild(reader, 'pipe reader', cell);
     await rm(cwd, { recursive: true, force: true });
   }
   return cell;
@@ -184,6 +231,8 @@ function metricsOf(cell) {
     rssMiB: server.rssBytes / (1024 * 1024),
     gcCount: server.gcCount,
     gcPauseMs: server.gcPauseUs / 1000,
+    outKiB: cell.output.bytes / 1024,
+    bpEvents: cell.output.bpEvents,
   };
 }
 
@@ -219,7 +268,7 @@ function render(summary, opts) {
     for (const variant of opts.variants) {
       const e = summary[workload][variant];
       if (e === undefined) {
-        rows.push([variant, 'FAILED', '', '', '', '', '', '', '', '']);
+        rows.push([variant, 'FAILED', '', '', '', '', '', '', '', '', '', '']);
         continue;
       }
       const d = variant === 'none' ? {} : e.deltaVsNone;
@@ -235,6 +284,8 @@ function render(summary, opts) {
         withDelta(fmtNumber(e.rssMiB.median), d.rssMiB ?? undefined),
         fmtNumber(e.gcCount.median),
         fmtNumber(e.gcPauseMs.median, 1),
+        fmtNumber(e.outKiB.median),
+        fmtNumber(e.bpEvents.median),
       ]);
     }
     out.push(
@@ -251,12 +302,26 @@ function render(summary, opts) {
             'RSS MiB',
             'GC n',
             'GC ms',
+            'out KiB',
+            'bp events',
           ],
           rows,
         ),
     );
   }
   return out.join('\n');
+}
+
+function renderBudgets(budgets) {
+  const lines = budgets.map((b) => {
+    const name = `${b.workload} ${b.variant} vs none, ${b.metric}`;
+    if (b.status === 'skipped') return `- ${name}: skipped (cells not run)`;
+    return (
+      `- ${name}: ${fmtPct(b.delta)} (budget ${fmtPct(b.maxDelta)}; ` +
+      `CV ${fmtPct(b.cv, { signed: false })} over ${b.rounds} round(s)): **${b.status}**`
+    );
+  });
+  return `Budgets (judged only at CV under ${fmtPct(MAX_CV, { signed: false })} and 2+ rounds):\n${lines.join('\n')}`;
 }
 
 async function main() {
@@ -288,6 +353,7 @@ async function main() {
     }
   }
   const summary = summarize(cells, opts);
+  const budgets = judgeBudgets(summary);
   const result = {
     schema: 1,
     tool: 'phargus bench/overhead.mjs',
@@ -308,6 +374,7 @@ async function main() {
       nodeArgs: opts.nodeArgs,
     },
     summary,
+    budgets,
     cells,
   };
   // Exclusive create, owner-only: never follow or overwrite an existing file or symlink.
@@ -318,12 +385,15 @@ async function main() {
       `${opts.connections} connections, ${opts.durationMs / 1000} s measured after ${opts.warmupMs / 1000} s warm-up, ` +
       `median of ${opts.rounds} round(s); ± is the rps coefficient of variation; deltas are versus "none".\n` +
       render(summary, opts) +
-      `\n\nJSON: ${opts.out}\n`,
+      `\n\n${renderBudgets(budgets)}\n\nJSON: ${opts.out}\n`,
   );
   const failed = cells.filter((c) => !c.ok);
   if (failed.length > 0) {
     process.stderr.write(`[bench] ${failed.length} cell(s) failed; see "error" in the JSON.\n`);
     process.exitCode = 1;
+  } else if (budgets.some((b) => b.status === 'exceeded')) {
+    process.stderr.write('[bench] an overhead budget was exceeded in a low-variance run.\n');
+    process.exitCode = 2;
   }
 }
 

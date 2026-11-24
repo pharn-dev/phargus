@@ -3,8 +3,10 @@ name: nightly
 # Not a required check. Runs the agent-on vs agent-off benchmark and the soak test from bench/
 # (see bench/README.md) on the Node floor from .nvmrc.
 #
-# - The benchmark is informational: its numbers never fail the run (only a broken harness does).
-#   The tables go to the job summary and the JSON is kept as an artifact for trend comparison.
+# - The benchmark is a soft check: it fails the run when the overhead budget in bench/README.md is
+#   exceeded in a low-variance run (exit 2), or when the harness broke (exit 1). A noisy run never
+#   fails. The tables go to the job summary and the JSON is kept as an artifact for trend
+#   comparison.
 # - The soak fails the run on a regression: heap-after-GC growth over the limit, a leaked worker
 #   thread or child process, dashboard clients left behind, failed requests, or a process that
 #   does not exit on its own.
@@ -41,7 +43,7 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
-      - name: Benchmark (informational)
+      - name: Benchmark (fails on an exceeded budget)
         shell: bash
         run: |
           mkdir -p bench-results
