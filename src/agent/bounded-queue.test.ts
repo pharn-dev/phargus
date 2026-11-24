@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createBoundedQueue } from './bounded-queue.js';
 
 describe('createBoundedQueue', () => {
-  it('is first-in first-out and returns each evicted item', () => {
+  it('is first-in first-out and reports each drop', () => {
     const queue = createBoundedQueue<number>(3);
     expect([1, 2, 3, 4, 5].map((n) => queue.push(n))).toEqual([
       undefined,
@@ -21,7 +21,7 @@ describe('createBoundedQueue', () => {
     expect(queue.size).toBe(0);
   });
 
-  it('keeps only the newest items in order when nobody ever shifts', () => {
+  it('keeps its backing array proportional to capacity when nobody ever shifts', () => {
     const queue = createBoundedQueue<number>(100);
     for (let i = 0; i < 100_000; i += 1) {
       queue.push(i);
@@ -76,7 +76,7 @@ describe('createBoundedQueue', () => {
     expect(queue.take(1000)).toEqual(Array.from({ length: 1000 }, (_, k) => k));
   });
 
-  it('rejects a capacity that is not a positive safe integer', () => {
+  it('rejects a non-positive capacity', () => {
     for (const capacity of [0, -1, 1.5, Number.NaN, Number.MAX_SAFE_INTEGER + 1]) {
       expect(() => createBoundedQueue(capacity)).toThrow(RangeError);
     }
