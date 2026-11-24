@@ -1,7 +1,7 @@
 # Phargus — Limits
 
-What Phargus does **not** guarantee, stated plainly. The latest release is Phargus 0.2.0 (S0 to S7
-implemented). These are the design's inherent limits and the known gaps in what is built. For the
+What Phargus does **not** guarantee, stated plainly. Roadmap steps S0 to S7 are
+implemented. These are the design's inherent limits and the known gaps in what is built. For the
 security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 
 ## 1. Cost and overhead
