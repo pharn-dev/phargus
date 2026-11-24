@@ -85,7 +85,7 @@ import { pathToFileURL } from 'node:url';
 const [srcDir, dir] = process.argv.slice(2);
 const load = (name) => import(pathToFileURL(join(srcDir, name)).href);
 const { symbolizeStackFrames } = await load('stack-symbolization.ts');
-const { MalformedSourceMapError } = await load('source-map-error.ts');
+const { MalformedSourceMapError } = await load('stack-symbolization.ts');
 const names = ['forged.js', 'inline.js', 'sectioned.js', 'app.js'];
 const frames = names.map((name) => ({ url: pathToFileURL(join(dir, name)).href, line: 1, column: 1 }));
 const result = await symbolizeStackFrames(frames, { roots: [dir] });

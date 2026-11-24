@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { MessagePort } from 'node:worker_threads';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { TaskReply } from './worker-protocol.js';
+import type { TaskReply } from './worker-pool.js';
 
 const ports = vi.hoisted(() => ({
   host: undefined as MessagePort | undefined,

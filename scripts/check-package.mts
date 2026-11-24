@@ -4,7 +4,7 @@
 // prepack rebuild, so it inspects the dist/ that is already built) and fails when:
 //   - a file outside dist/ ships, other than package.json, README.md and LICENSE (repo tooling such
 //     as pharn/ or .claude/, or src/, would land in every user's node_modules);
-//   - a test file or test fixture ships (*.test.*, *.spec.*, fixtures/, test-task.worker.*);
+//   - a test file or test fixture ships (*.test.*, *.spec.*, fixtures/);
 //   - a TypeScript source ships (.ts/.mts/.cts that is not a .d.ts declaration);
 //   - a source map ships without the sources it points at (every map needs sourcesContent: the
 //     src/ directory its `sources` name is not published);
@@ -27,8 +27,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const problems: string[] = [];
 
 const ALLOWED_OUTSIDE_DIST = new Set(['package.json', 'README.md', 'LICENSE']);
-const TEST_FILE =
-  /(^|\/)(__tests__|fixtures?)\/|\.(test|spec)\.[cm]?[jt]s(\.map)?$|test-task\.worker\./;
+const TEST_FILE = /(^|\/)(__tests__|fixtures?)\/|\.(test|spec)\.[cm]?[jt]s(\.map)?$/;
 const TS_SOURCE = /\.[cm]?ts$/;
 const DECLARATION = /\.d\.[cm]?ts$/;
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/;

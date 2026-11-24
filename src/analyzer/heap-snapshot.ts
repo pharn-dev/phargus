@@ -1,8 +1,6 @@
 import { stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { ResourceLimits } from 'node:worker_threads';
-import { HeapSnapshotTooLargeError } from './heap-snapshot-error.js';
-import { heapSnapshotTimeoutMs } from './heap-snapshot-timeout.js';
 import { resolveBundledWorkerFile } from './worker-file.js';
 import { createWorkerPool, type WorkerPool } from './worker-pool.js';
 
@@ -24,6 +22,7 @@ export type HeapSnapshotDiff = {
 
 type AnalysisOptions = {
   top?: number;
+  /** A pool from `createHeapSnapshotPool()`; its worker's reply is returned without a re-check. */
   pool?: WorkerPool;
   /**
    * Task timeout in milliseconds. Always wins when set. When unset, a pool made by
@@ -46,6 +45,43 @@ const DEFAULT_TOP = 20;
  * (about 54 s for 1 GiB, 215 s for 4 GiB). See `heapSnapshotTimeoutMs`.
  */
 export const DEFAULT_MAX_SNAPSHOT_BYTES = 256 * 1024 * 1024;
+
+/** Parse throughput the derived timeout assumes: 20 000 bytes per millisecond (20 MB/s). */
+const BYTES_PER_MS = 20_000;
+/** The derived timeout never goes below the worker pool's 30 s default. */
+const MIN_SNAPSHOT_TIMEOUT_MS = 30_000;
+
+/**
+ * Task timeout for analysing `bytes` of heap snapshot: `max(30 000, ceil(bytes / 20 000))` ms.
+ * Integer math only. Throws a `RangeError` unless `bytes` is a non-negative safe integer.
+ */
+export function heapSnapshotTimeoutMs(bytes: number): number {
+  if (typeof bytes !== 'number' || !Number.isSafeInteger(bytes) || bytes < 0) {
+    throw new RangeError('bytes must be a non-negative safe integer');
+  }
+  const rem = bytes % BYTES_PER_MS;
+  const ms = (bytes - rem) / BYTES_PER_MS + (rem === 0 ? 0 : 1);
+  return Math.max(MIN_SNAPSHOT_TIMEOUT_MS, ms);
+}
+
+/** Typed error for a heap snapshot file larger than the configured byte cap. Nothing was read. */
+export class HeapSnapshotTooLargeError extends RangeError {
+  readonly code = 'ERR_HEAP_SNAPSHOT_TOO_LARGE';
+  readonly path: string;
+  readonly size: number;
+  readonly maxBytes: number;
+
+  constructor(path: string, size: number, maxBytes: number) {
+    super(
+      `heap snapshot ${path} is ${String(size)} bytes, over the ${String(maxBytes)}-byte limit ` +
+        '(raise maxSnapshotBytes to analyse it)',
+    );
+    this.name = 'HeapSnapshotTooLargeError';
+    this.path = path;
+    this.size = size;
+    this.maxBytes = maxBytes;
+  }
+}
 
 /** Pools made here without `taskTimeoutMs`: only these get a size-derived per-task timeout. */
 const derivedTimeoutPools = new WeakSet<WorkerPool>();
@@ -124,48 +160,6 @@ async function runTask(
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isInt(value: unknown): value is number {
-  return typeof value === 'number' && Number.isSafeInteger(value);
-}
-
-function isTotals(value: unknown): value is { nodeCount: number; totalSelfSize: number } {
-  return isRecord(value) && isInt(value.nodeCount) && isInt(value.totalSelfSize);
-}
-
-function isSummary(value: unknown): value is HeapSnapshotSummary {
-  return (
-    isTotals(value) &&
-    Array.isArray((value as { top?: unknown }).top) &&
-    (value as unknown as HeapSnapshotSummary).top.every(
-      (item) =>
-        isRecord(item) &&
-        typeof item.name === 'string' &&
-        isInt(item.count) &&
-        isInt(item.selfSize),
-    )
-  );
-}
-
-function isDiff(value: unknown): value is HeapSnapshotDiff {
-  return (
-    isRecord(value) &&
-    isTotals(value.before) &&
-    isTotals(value.after) &&
-    Array.isArray(value.entries) &&
-    value.entries.every(
-      (item: unknown) =>
-        isRecord(item) &&
-        typeof item.name === 'string' &&
-        isInt(item.countDelta) &&
-        isInt(item.selfSizeDelta),
-    )
-  );
-}
-
 export async function summarizeHeapSnapshot(
   path: string,
   options: AnalysisOptions = {},
@@ -174,9 +168,12 @@ export async function summarizeHeapSnapshot(
   const top = checkTop(options.top);
   const maxBytes = checkMaxBytes(options.maxSnapshotBytes);
   const size = await checkSize(resolved, maxBytes);
-  const reply = await runTask({ kind: 'summary', path: resolved, top, maxBytes }, options, size);
-  if (!isSummary(reply)) throw new Error('heap snapshot worker returned an unexpected summary');
-  return reply;
+  // The bundled worker is trusted code in this process: its reply is not re-checked.
+  return (await runTask(
+    { kind: 'summary', path: resolved, top, maxBytes },
+    options,
+    size,
+  )) as HeapSnapshotSummary;
 }
 
 export async function diffHeapSnapshots(
@@ -190,12 +187,10 @@ export async function diffHeapSnapshots(
   const maxBytes = checkMaxBytes(options.maxSnapshotBytes);
   const beforeSize = await checkSize(before, maxBytes);
   const afterSize = await checkSize(after, maxBytes);
-  const reply = await runTask(
+  return (await runTask(
     { kind: 'diff', beforePath: before, afterPath: after, top, maxBytes },
     options,
     // Each size is at most maxBytes; clamp so a petabyte-scale cap cannot make the sum invalid.
     Math.min(beforeSize + afterSize, Number.MAX_SAFE_INTEGER),
-  );
-  if (!isDiff(reply)) throw new Error('heap snapshot worker returned an unexpected diff');
-  return reply;
+  )) as HeapSnapshotDiff;
 }

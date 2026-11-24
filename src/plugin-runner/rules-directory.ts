@@ -1,6 +1,6 @@
 import { open, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { RuleDescriptor } from './rule-descriptor.js';
+import type { RuleDescriptor } from './rule-result.js';
 import { RuleErrorCode } from './rule-result.js';
 
 export type RuleLoadFailure = {

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type * as V8 from 'node:v8';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { TaskReply, TaskRequest } from './worker-protocol.js';
+import type { TaskReply, TaskRequest } from './worker-pool.js';
 
 const worker = vi.hoisted(() => ({
   handler: undefined as ((request: TaskRequest) => void) | undefined,

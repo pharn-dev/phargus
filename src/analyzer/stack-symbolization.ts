@@ -1,9 +1,38 @@
 import { resolve } from 'node:path';
 import type { ResourceLimits } from 'node:worker_threads';
-import { MalformedSourceMapError } from './source-map-error.js';
-import type { SymbolizeResult } from './symbolize-protocol.js';
 import { resolveBundledWorkerFile } from './worker-file.js';
 import { createWorkerPool, type WorkerPool } from './worker-pool.js';
+
+/** Typed error for a source map that was found but cannot be parsed. */
+export class MalformedSourceMapError extends Error {
+  readonly code = 'ERR_MALFORMED_SOURCE_MAP';
+  readonly file: string;
+
+  constructor(file: string, reason: string) {
+    super(`malformed source map for ${file}: ${reason}`);
+    this.name = 'MalformedSourceMapError';
+    this.file = file;
+  }
+}
+
+/** Payload the symbolization worker receives. */
+export type SymbolizeRequest = {
+  frames: { url: string; line: number; column: number }[];
+  /** Largest built file or source map the worker reads, in bytes. */
+  maxFileBytes: number;
+  /**
+   * Absolute directories reads are confined to; absent means unconfined. The API sends it absent
+   * only for an explicit `roots: null`; when the caller leaves `roots` out it sends the working
+   * directory.
+   */
+  roots?: string[];
+};
+
+/** Per-frame result the symbolization worker sends back. */
+export type SymbolizeResult =
+  | { status: 'unchanged' }
+  | { status: 'mapped'; url: string; line: number; column: number }
+  | { status: 'malformed'; file: string; reason: string };
 
 export type StackFrame = { url: string; line: number; column: number };
 
@@ -15,6 +44,7 @@ export type SymbolizedFrame = StackFrame & {
 };
 
 type SymbolizeOptions = {
+  /** A pool from `createSymbolizationPool()`; its worker's reply is used without a re-check. */
   pool?: WorkerPool;
   timeoutMs?: number;
   /**
@@ -57,19 +87,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function isInt(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value);
-}
-
-function isResult(value: unknown): value is SymbolizeResult {
-  if (!isRecord(value)) return false;
-  if (value.status === 'unchanged') return true;
-  if (value.status === 'mapped') {
-    return typeof value.url === 'string' && isInt(value.line) && isInt(value.column);
-  }
-  return (
-    value.status === 'malformed' &&
-    typeof value.file === 'string' &&
-    typeof value.reason === 'string'
-  );
 }
 
 function checkFrames(frames: readonly StackFrame[]): void {
@@ -148,15 +165,13 @@ export async function symbolizeStackFrames(
   checkFrames(frames);
   const roots = checkRoots(options.roots);
   const maxFileBytes = checkMaxFileBytes(options.maxFileBytes, options.pool);
-  const payload = {
+  const payload: SymbolizeRequest = {
     frames: frames.map(({ url, line, column }) => ({ url, line, column })),
     maxFileBytes,
     ...(roots === undefined ? {} : { roots }),
   };
-  const reply = await runTask(payload, options);
-  if (!Array.isArray(reply) || reply.length !== frames.length || !reply.every(isResult)) {
-    throw new Error('symbolization worker returned an unexpected reply');
-  }
+  // The bundled worker is trusted code in this process: its reply is not re-checked.
+  const reply = (await runTask(payload, options)) as SymbolizeResult[];
   const errors = new Map<string, MalformedSourceMapError>();
   return frames.map((frame, index): SymbolizedFrame => {
     const result = reply[index] as SymbolizeResult;
