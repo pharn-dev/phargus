@@ -1,4 +1,4 @@
-import type { RuleDescriptor } from './rule-descriptor.js';
+import type { RuleDescriptor } from './rule-result.js';
 import { assertParamsObject, readIntegerParam } from './rule-parameter-error.js';
 
 /** Ids of the built-in rules. The `phargus/` prefix cannot come from a rules-directory file name. */

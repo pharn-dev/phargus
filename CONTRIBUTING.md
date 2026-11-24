@@ -97,7 +97,8 @@ names and configuration are documented in `README.md`.
   dependency to the agent will not be merged. Use Node core.
 - TypeScript strict mode. No `any` without a comment explaining why.
 - Streams use `stream/promises` `pipeline()`, never `.pipe()`.
-- Worker Thread files live in `*/src/workers/`; no inline `eval`-based workers.
+- Worker Thread files live in `*/src/workers/`; no inline `eval`-based workers. A worker used only
+  by tests lives in a `fixtures/` directory, which the build excludes.
 - `async_hooks` is imported only in `src/agent/context.ts`.
 - Every stream / worker / plugin execution has explicit error handling. No silent
   failures.

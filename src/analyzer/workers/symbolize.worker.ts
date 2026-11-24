@@ -10,8 +10,8 @@ import { isAbsolute, relative, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { getHeapStatistics } from 'node:v8';
 import { parentPort } from 'node:worker_threads';
-import type { SerializedError, TaskReply, TaskRequest } from '../worker-protocol.js';
-import type { SymbolizeResult } from '../symbolize-protocol.js';
+import type { SerializedError, TaskReply, TaskRequest } from '../worker-pool.js';
+import type { SymbolizeResult } from '../stack-symbolization.js';
 
 type Frame = { url: string; line: number; column: number };
 

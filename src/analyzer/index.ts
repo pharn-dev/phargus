@@ -11,17 +11,17 @@ export {
   createHeapSnapshotPool,
   DEFAULT_MAX_SNAPSHOT_BYTES,
   diffHeapSnapshots,
+  heapSnapshotTimeoutMs,
+  HeapSnapshotTooLargeError,
   summarizeHeapSnapshot,
 } from './heap-snapshot.js';
-export { heapSnapshotTimeoutMs } from './heap-snapshot-timeout.js';
-export { HeapSnapshotTooLargeError } from './heap-snapshot-error.js';
 export {
   createSymbolizationPool,
   DEFAULT_MAX_SOURCE_FILE_BYTES,
+  MalformedSourceMapError,
   symbolizeStackFrames,
 } from './stack-symbolization.js';
 export type { OriginalPosition, StackFrame, SymbolizedFrame } from './stack-symbolization.js';
-export { MalformedSourceMapError } from './source-map-error.js';
 export type {
   HeapSnapshotDiff,
   HeapSnapshotDiffEntry,

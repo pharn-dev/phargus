@@ -32,7 +32,7 @@ describe('analyzer worker pool', () => {
 
     try {
       const mod = (await import('./index.js')) as unknown as PoolModule;
-      const workerFile = new URL('./workers/test-task.worker.ts', import.meta.url);
+      const workerFile = new URL('./fixtures/test-task.worker.ts', import.meta.url);
       const pool = mod.createWorkerPool({ size: 1, workerFile });
       expect(pool.size).toBe(1);
       expect(pool.closed).toBe(false);

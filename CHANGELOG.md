@@ -86,6 +86,10 @@ All notable changes to Phargus are recorded here. The format follows
   collector's ring buffers and persistence queue, the dashboard's SSE client and the OTLP batch
   queue, replacing four separate implementations. It grows to its capacity on demand, so a large
   bound costs nothing until used. `createRingBuffer` keeps its type and behaviour.
+- `summarizeHeapSnapshot`, `diffHeapSnapshots` and `symbolizeStackFrames` no longer re-check the
+  shape of their worker's reply; the inputs are still checked before any worker runs. The `pool`
+  option is meant for a pool from `createHeapSnapshotPool()` or `createSymbolizationPool()`: a pool
+  running some other worker now gets that worker's reply back as is.
 
 ### Removed
 

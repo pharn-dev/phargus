@@ -16,6 +16,9 @@ export const RuleErrorCode = Object.freeze({
 
 export type RuleErrorCodeValue = (typeof RuleErrorCode)[keyof typeof RuleErrorCode];
 
+/** A rule ready to hand to a plugin runner: a stable id and the rule's source text. */
+export type RuleDescriptor = { readonly id: string; readonly source: string };
+
 /** One finding a rule reported; it identifies its window by that window's `start`. */
 export type RuleFinding = { windowStart: number; message: string };
 
@@ -26,26 +29,4 @@ export type RuleRunResult =
 
 export function ruleFailure(code: RuleErrorCodeValue, message: string): RuleRunResult {
   return { ok: false, error: { code, message } };
-}
-
-/** Returns the validated findings, or a string reason when the value is not a findings array. */
-export function parseFindings(value: unknown): RuleFinding[] | string {
-  if (!Array.isArray(value)) {
-    return 'the rule must return an array of findings';
-  }
-  const findings: RuleFinding[] = [];
-  for (const item of value as unknown[]) {
-    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
-      return 'every finding must be an object';
-    }
-    const { windowStart, message } = item as Record<string, unknown>;
-    if (typeof windowStart !== 'number' || !Number.isSafeInteger(windowStart)) {
-      return 'every finding needs an integer windowStart';
-    }
-    if (typeof message !== 'string') {
-      return 'every finding needs a string message';
-    }
-    findings.push({ windowStart, message });
-  }
-  return findings;
 }

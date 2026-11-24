@@ -2,7 +2,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
-import type { TaskReply } from './worker-protocol.js';
+import type { TaskReply } from './worker-pool.js';
 
 // Runs the heap-snapshot worker's message handler in this thread (a fake parentPort), so the diff
 // ordering is checked on small hand-written snapshots without spawning a worker.

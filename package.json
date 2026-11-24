@@ -95,8 +95,7 @@
     "./package.json": "./package.json"
   },
   "files": [
-    "dist",
-    "!dist/**/test-task.worker.*"
+    "dist"
   ],
   "publishConfig": {
     "access": "public",
