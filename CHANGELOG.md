@@ -92,6 +92,11 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- On Windows, with output on stdout and stdout a pipe, a stalled reader no longer stops the app. Node
+  writes a stdout pipe synchronously there, so the agent now writes that pipe itself with
+  asynchronous `fs.write` (libuv's thread pool) instead of through `process.stdout`; its bounded
+  lanes drop and count lines as on Linux and macOS. While the reader is stalled, one thread-pool
+  thread waits on the pipe (see `docs/LIMITS.md`).
 - `phargus --help` (and `--version`) now win over a bad flag: `phargus --bogus --help` prints the
   usage and exits 0 instead of exiting 2.
 - `phargus serve <directory>` fails before the dashboard binds, with

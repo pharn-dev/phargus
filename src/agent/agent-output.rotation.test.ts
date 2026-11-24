@@ -134,8 +134,12 @@ describe('agent output file size bound', () => {
     );
   });
 
-  it('AC-5: stdout is returned as is, whatever the bound', () => {
-    expect(openAgentOutput('stdout', 0)).toBe(process.stdout);
-    expect(openAgentOutput('stdout', MIB)).toBe(process.stdout);
-  });
+  // On Windows a stdout pipe gets the agent's own writer (agent-output.stdout.test.ts).
+  it.skipIf(process.platform === 'win32')(
+    'AC-5: stdout is returned as is, whatever the bound',
+    () => {
+      expect(openAgentOutput('stdout', 0)).toBe(process.stdout);
+      expect(openAgentOutput('stdout', MIB)).toBe(process.stdout);
+    },
+  );
 });
