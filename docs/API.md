@@ -11,8 +11,8 @@ type lists are not runtime exports and are checked by reading the declaration fi
 
 ## `@pharn-dev/phargus/agent`
 
-Importing this subpath starts the agent (it reads `PHARGUS_*` variables and writes NDJSON to the
-configured output), whichever of the functions below you import. The functions work next to the
+Importing this subpath starts the agent (it reads `PHARGUS_*` variables and `phargus.config.json`,
+never a `.js` config, and writes NDJSON to the configured output), whichever of the functions below you import. The functions work next to the
 running agent: the trace context, on-demand heap and allocation diagnostics, and the deopt parser.
 To call them with the agent off, set `PHARGUS_ENABLED=false` (or `PHARGUS_OUTPUT=none`) before the
 import: then nothing is patched and no config file is read. A worker thread never starts the agent.

@@ -31,6 +31,24 @@ describe('agent config — unknown PHARGUS_* variables (F-09)', () => {
     expect(config).toEqual({ ...defaultAgentConfig, intervalMs: 250 });
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('PHARGUS_FOO');
+    expect(warnings[0]).not.toContain('did you mean');
+  });
+
+  it('lists the valid variable names, not a guess, for a likely typo', async () => {
+    const cwd = await makeTempDir();
+    const warnings: string[] = [];
+    await loadAgentConfig(
+      cwd,
+      { PHARGUS_OUTPT: 'none', PHARGUS_INTERVAL: '5' },
+      { onWarning: (message) => warnings.push(message) },
+    );
+    expect(warnings).toEqual([
+      'ignoring unknown environment variable PHARGUS_OUTPT; valid names: ' + VALID_NAMES,
+      'ignoring unknown environment variable PHARGUS_INTERVAL; valid names: ' + VALID_NAMES,
+    ]);
+    expect(warnings.join()).not.toContain('did you mean');
+    expect(VALID_NAMES).toContain('PHARGUS_OUTPUT');
+    expect(VALID_NAMES).toContain('PHARGUS_INTERVAL_MS');
   });
 
   it('PHARGUS_INTERVL_MS=5 gives one warning that lists the valid variable names', async () => {
@@ -72,6 +90,21 @@ describe('agent config — unknown PHARGUS_* variables (F-09)', () => {
     );
     expect(config).toEqual({ ...defaultAgentConfig, intervalMs: 250 });
     expect(warnings).toEqual([]);
+  });
+
+  it('lists PHARGUS_CONFIG among the valid names for a likely typo of it', async () => {
+    const cwd = await makeTempDir();
+    const warnings: string[] = [];
+    await loadAgentConfig(
+      cwd,
+      { PHARGUS_CONFG: 'pinned.json' },
+      { onWarning: (message) => warnings.push(message) },
+    );
+    expect(warnings).toEqual([
+      'ignoring unknown environment variable PHARGUS_CONFG; valid names: ' + VALID_NAMES,
+    ]);
+    expect(warnings.join()).not.toContain('did you mean');
+    expect(VALID_NAMES).toContain('PHARGUS_CONFIG');
   });
 
   it('still fails on an invalid value for a known variable', async () => {
