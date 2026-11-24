@@ -35,8 +35,9 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   it never turns them on. Node 22's `--experimental-async-context-frame` flag switches to the
   implementation Node 24 uses by default. Compare on your workload with
   `node bench/overhead.mjs --workloads promise --node-arg=--experimental-async-context-frame`.
-- **The default output shares your stdout.** With no configuration the agent writes about 2 KB per
-  sample (one per second) plus one line per traced request to the process's stdout, interleaved
+- **The default output shares your stdout.** With no configuration the agent writes about 450 bytes
+  per sample (one per second; V8 heap space statistics are not on the line, call
+  `sampleHeapSpaces()` for them) plus one line per traced request to the process's stdout, interleaved
   with your own output. Set `PHARGUS_OUTPUT` to a file path, or to `none`, if that matters. The
   collector tolerates that output: `createNdjsonDecoder` and the collector skip and count lines and
   records that are not agent data. What remains: an app line that has the agent's sample keys, or

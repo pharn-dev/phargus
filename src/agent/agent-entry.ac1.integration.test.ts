@@ -169,6 +169,13 @@ function expectSampleLine(line: string): void {
     expect(parsed, `sample has a ${part} part`).toHaveProperty(part);
     expect(parsed[part], `sample ${part} part is present`).not.toBeUndefined();
   }
+  // CORE-273: the line carries only what something reads, so no heap spaces and, with no
+  // backpressure hotspots, well under a kilobyte.
+  expect(parsed, `no heapSpaces in ${line}`).not.toHaveProperty('heapSpaces');
+  const { hotspots } = parsed['backpressure'] as { hotspots: unknown[] };
+  if (hotspots.length === 0) {
+    expect(Buffer.byteLength(line, 'utf8'), `sample line size: ${line}`).toBeLessThan(700);
+  }
 }
 
 function expectNdjsonFile(file: string): void {

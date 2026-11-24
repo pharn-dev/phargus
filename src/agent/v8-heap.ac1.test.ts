@@ -41,7 +41,7 @@ describe('agent V8 heap spaces — AC-1', () => {
     expectHeapSpaces(spaces, 'sampleHeapSpaces()');
   });
 
-  it("AC-1: the sampler controller's sample carries a heapSpaces part beside eventLoop, memory, gc and backpressure", async () => {
+  it("the sampler controller's sample carries eventLoop, memory, gc and backpressure, and no heapSpaces (CORE-273)", async () => {
     const { createSamplerController } = await import('./index.js');
 
     const samples: unknown[] = [];
@@ -69,10 +69,11 @@ describe('agent V8 heap spaces — AC-1', () => {
 
     expect(samples.length).toBeGreaterThanOrEqual(1);
     const sample = samples[0] as Record<string, unknown>;
-    for (const part of ['eventLoop', 'memory', 'gc', 'backpressure', 'heapSpaces']) {
+    for (const part of ['eventLoop', 'memory', 'gc', 'backpressure']) {
       expect(sample, `sample has a ${part} part`).toHaveProperty(part);
       expect(sample[part], `sample ${part} part is present`).not.toBeUndefined();
     }
-    expectHeapSpaces(sample['heapSpaces'], 'sample.heapSpaces');
+    // Nothing reads heap spaces from the sample line; sampleHeapSpaces() is the way to get them.
+    expect(sample).not.toHaveProperty('heapSpaces');
   });
 });

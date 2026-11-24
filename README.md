@@ -111,8 +111,8 @@ require('@pharn-dev/phargus/agent');
 import '@pharn-dev/phargus/agent';
 ```
 
-By default the agent writes one sample line per second (about 2 KB) to **your process's stdout**,
-plus one line per traced request. That is all the agent does on its own: it starts no server.
+By default the agent writes one sample line per second (about 450 bytes) to **your process's
+stdout**, plus one line per traced request. That is all the agent does on its own: it starts no server.
 `phargus serve` (below), or a collector you wire yourself, turns that stream into the dashboard.
 
 ### The live dashboard
@@ -317,7 +317,7 @@ request tracing is switched on until then.
 
 | Capability          | What it covers                                                                                                                                                                                                                                                                                                                | Import                             |
 | ------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| **Runtime samples** | Event loop delay beyond the 10 ms timer interval (min, max, mean, p50, p99; an idle loop reads close to 0); memory (`heapUsed`, `heapTotal`, `rss`, `external`, `arrayBuffers`); V8 heap space statistics; GC count, total and max pause and counts by kind                                                                   | `@pharn-dev/phargus/agent`         |
+| **Runtime samples** | Event loop delay beyond the 10 ms timer interval (min, max, mean, p50, p99; an idle loop reads close to 0); memory (`heapUsed`, `heapTotal`, `rss`, `external`, `arrayBuffers`); GC count, total and max pause and counts by kind (V8 heap space statistics: `sampleHeapSpaces()`, not on the line)                           | `@pharn-dev/phargus/agent`         |
 | **Backpressure**    | How often and how long writes stalled, grouped by the call site that wrote. Covers `Writable` subclasses, `fs.WriteStream`, `Duplex`, `Transform`, `PassThrough`, `net.Socket`, `tls.TLSSocket`, `http.ServerResponse` and `http.ClientRequest`                                                                               | `@pharn-dev/phargus/agent`         |
 | **Request tracing** | Each request to a `node:http` or `node:https` server gets a trace id, carried by `AsyncLocalStorage` with no code change; an inbound `traceparent` sets its trace id and parent span id. Spans record method, the first 256 characters of the requested path (no query), status and duration. `currentTraceId()` reads the id | `@pharn-dev/phargus/agent`         |
 | **Loss accounting** | Output queues are bounded and drop the oldest lines; every sample line carries cumulative `dropped: { samples, spans }` counters                                                                                                                                                                                              | `@pharn-dev/phargus/agent`         |
