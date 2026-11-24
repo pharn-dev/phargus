@@ -6,6 +6,8 @@ export type AgentConfig = Readonly<{
   outputMaxBytes: number;
   queueBound: number;
   enabled: boolean;
+  /** Spans kept per sampling interval; 0 switches HTTP tracing off. */
+  spanBuffer: number;
 }>;
 
 export type AgentConfigKey = keyof AgentConfig;
@@ -16,6 +18,7 @@ export const defaultAgentConfig: AgentConfig = Object.freeze({
   outputMaxBytes: 67_108_864,
   queueBound: 1024,
   enabled: true,
+  spanBuffer: 1024,
 });
 
 export const CONFIG_KEYS: readonly AgentConfigKey[] = [
@@ -24,10 +27,12 @@ export const CONFIG_KEYS: readonly AgentConfigKey[] = [
   'outputMaxBytes',
   'queueBound',
   'enabled',
+  'spanBuffer',
 ];
 
 const INTERVAL_MS_MAX = 3_600_000;
 const QUEUE_BOUND_MAX = 1_000_000;
+const SPAN_BUFFER_MAX = 65_536;
 
 /** A config problem that names its source (file or variable) and, when known, the key. */
 export class PhargusConfigError extends Error {
@@ -83,6 +88,9 @@ export function validateConfigValue(source: string, key: AgentConfigKey, value: 
       return;
     case 'outputMaxBytes':
       validateInteger(source, key, value, 0, Number.MAX_SAFE_INTEGER);
+      return;
+    case 'spanBuffer':
+      validateInteger(source, key, value, 0, SPAN_BUFFER_MAX);
       return;
     case 'enabled':
       if (typeof value !== 'boolean') {

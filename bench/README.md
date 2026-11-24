@@ -20,20 +20,20 @@ Like `scripts/*.mjs`, these files are plain ESM JavaScript: `npm run lint` cover
 ## Overhead benchmark
 
 ```bash
-node bench/overhead.mjs                       # full run, about 8 minutes
+node bench/overhead.mjs                       # full run, about 10 minutes
 node bench/overhead.mjs --duration 3 --rounds 1 --warmup 1   # quick look, about 1.5 minutes
 ```
 
-| Flag            | Default                           | Meaning                                                      |
-| --------------- | --------------------------------- | ------------------------------------------------------------ |
-| `--duration`    | `5`                               | measured seconds per cell                                    |
-| `--warmup`      | `1.5`                             | seconds of load before measuring                             |
-| `--connections` | `32`                              | concurrent keep-alive connections                            |
-| `--rounds`      | `3`                               | interleaved rounds; every number is the median across rounds |
-| `--workloads`   | `trivial,promise,cpu,stream`      | comma list                                                   |
-| `--variants`    | `none,idle,full,tracing,samplers` | comma list                                                   |
-| `--out`         | a file in the OS temp directory   | where the JSON result goes                                   |
-| `--node-arg`    | none                              | extra Node flag for every target, repeatable                 |
+| Flag            | Default                                   | Meaning                                                      |
+| --------------- | ----------------------------------------- | ------------------------------------------------------------ |
+| `--duration`    | `5`                                       | measured seconds per cell                                    |
+| `--warmup`      | `1.5`                                     | seconds of load before measuring                             |
+| `--connections` | `32`                                      | concurrent keep-alive connections                            |
+| `--rounds`      | `3`                                       | interleaved rounds; every number is the median across rounds |
+| `--workloads`   | `trivial,promise,cpu,stream`              | comma list                                                   |
+| `--variants`    | `none,idle,full,notrace,tracing,samplers` | comma list                                                   |
+| `--out`         | a file in the OS temp directory           | where the JSON result goes                                   |
+| `--node-arg`    | none                                      | extra Node flag for every target, repeatable                 |
 
 **How it works.** For each cell (workload × variant × round) a fresh target process starts an
 HTTP server on loopback. The harness drives it closed-loop: `--connections` keep-alive sockets,
@@ -58,6 +58,7 @@ order rotates from round to round, so slow drift on the host does not always hit
 | `none`     | nothing: the baseline                                                                                            |
 | `idle`     | `--import @pharn-dev/phargus/agent` with `PHARGUS_ENABLED=false`: installed, switched off by config              |
 | `full`     | `--import @pharn-dev/phargus/agent` with its defaults: tracing and every sampler, NDJSON to stdout (`/dev/null`) |
+| `notrace`  | `--import @pharn-dev/phargus/agent` with `PHARGUS_SPAN_BUFFER=0`: every sampler, no HTTP tracing                 |
 | `tracing`  | library API only: HTTP tracing on, spans flushed once a second to `/dev/null`; no samplers                       |
 | `samplers` | library API only: samplers and the backpressure probe at 1 s, to `/dev/null`; tracing off                        |
 

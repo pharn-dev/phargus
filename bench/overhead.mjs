@@ -3,7 +3,7 @@
 //
 //   node bench/overhead.mjs [--duration 5] [--warmup 1.5] [--connections 32] [--rounds 3]
 //                           [--workloads trivial,promise,cpu,stream]
-//                           [--variants none,idle,full,tracing,samplers]
+//                           [--variants none,idle,full,notrace,tracing,samplers]
 //                           [--out results.json] [--node-arg=--some-flag ...]
 //
 // Every cell (workload x variant x round) gets a fresh target process; variants are interleaved
@@ -28,7 +28,7 @@ import { delta, fmtNumber, fmtPct, spread, table, withDelta } from './lib/stats.
 import { WORKLOADS } from './lib/workloads.mjs';
 
 const TARGET = fileURLToPath(new URL('./lib/bench-target.mjs', import.meta.url));
-const VARIANTS = ['none', 'idle', 'full', 'tracing', 'samplers'];
+const VARIANTS = ['none', 'idle', 'full', 'notrace', 'tracing', 'samplers'];
 const PATHS = 50;
 const READY_TIMEOUT_MS = 20_000;
 const REPLY_TIMEOUT_MS = 10_000;
@@ -95,6 +95,9 @@ function variantSpec(variant, { agentUrl, indexUrl }) {
     case 'full':
       // The agent's defaults: tracing plus every sampler, NDJSON to stdout (here /dev/null).
       return { execArgv: ['--import', agentUrl], env: {} };
+    case 'notrace':
+      // The agent with PHARGUS_SPAN_BUFFER=0: every sampler, no HTTP tracing.
+      return { execArgv: ['--import', agentUrl], env: { PHARGUS_SPAN_BUFFER: '0' } };
     case 'tracing':
     case 'samplers':
       return { execArgv: [], env: { BENCH_AGENT_INDEX: indexUrl } };

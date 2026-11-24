@@ -8,6 +8,7 @@ const VARIABLES: Readonly<Record<string, AgentConfigKey>> = {
   PHARGUS_OUTPUT_MAX_BYTES: 'outputMaxBytes',
   PHARGUS_QUEUE_BOUND: 'queueBound',
   PHARGUS_ENABLED: 'enabled',
+  PHARGUS_SPAN_BUFFER: 'spanBuffer',
 };
 
 /**
@@ -28,6 +29,7 @@ function parse(name: string, key: AgentConfigKey, text: string): unknown {
     case 'intervalMs':
     case 'queueBound':
     case 'outputMaxBytes':
+    case 'spanBuffer':
       if (!/^[0-9]+$/.test(text)) {
         throw new PhargusConfigError(
           name,
