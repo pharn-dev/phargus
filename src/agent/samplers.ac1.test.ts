@@ -9,7 +9,7 @@ function expectNonNegativeInt(value: unknown): void {
 
 describe('agent samplers — AC-1', () => {
   it('AC-1: the controller from the agent entrypoint emits one integer sample per interval', async () => {
-    const { createSamplerController } = await import('./index.js');
+    const { createSamplerController } = await import('./sampler-controller.js');
 
     const samples: AgentSample[] = [];
     let resolveFirst: () => void = () => undefined;

@@ -8,7 +8,8 @@ import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 // AC-1: the built package's six subpaths load through `import` and `require`, none of them exposes a
-// removed wiring internal at runtime or in its declarations, and the supported names stay.
+// removed wiring internal at runtime or in its declarations, and the supported names stay. The agent's
+// runtime exports are exactly AGENT_RUNTIME (CORE-363).
 const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const srcDir = join(repoRoot, 'src');
 
@@ -30,6 +31,22 @@ const REMOVED_RUNTIME = [
   'createSpanRouter',
   'parseWindowLine',
   'serializeWindow',
+  // CORE-363: the agent's wiring, configuration and permission internals.
+  'createSamplerController',
+  'createNdjsonExporter',
+  'createEventLoopSampler',
+  'createGcSampler',
+  'createBackpressureProbe',
+  'loadAgentConfig',
+  'defaultAgentConfig',
+  'PhargusConfigError',
+  'assertPermission',
+  'checkPermission',
+  'isPermissionModelEnabled',
+  'sampleMemory',
+  'DEFAULT_ALLOCATION_SAMPLING_INTERVAL',
+  'DEFAULT_ALLOCATION_SAMPLING_DURATION_MS',
+  'DEFAULT_ALLOCATION_SITE_LIMIT',
 ];
 const REMOVED_TYPES = [
   'SpanExport',
@@ -40,16 +57,48 @@ const REMOVED_TYPES = [
   'CollectorPlaceholder',
   'DashboardPlaceholder',
   'PluginRunnerPlaceholder',
+  // CORE-363: the types of the removed agent functions.
+  'SamplerController',
+  'NdjsonExporter',
+  'NdjsonExporterOptions',
+  'EventLoopSampler',
+  'EventLoopSamplerOptions',
+  'GcSampler',
+  'BackpressureProbe',
+  'BackpressureProbeOptions',
+  'LoadAgentConfigOptions',
+  'AgentConfig',
+  'PermissionCheck',
+  'PermissionScope',
 ];
-const KEPT_AGENT_RUNTIME = [
+// The agent's runtime exports, exactly (sorted, code-unit order).
+const AGENT_RUNTIME = [
+  'ANONYMOUS_FUNCTION',
+  'DEPENDENT_CODE_KIND',
+  'PhargusPermissionError',
   'SPAN_RECORD_TYPE',
+  'createDeoptParser',
   'currentTraceId',
   'runWithTrace',
-  'createNdjsonExporter',
-  'createSamplerController',
+  'sampleAllocations',
+  'sampleHeapSpaces',
+  'takeHeapSnapshot',
 ];
 const KEPT_COLLECTOR_RUNTIME = ['createCollector', 'createWindowStore', 'createNdjsonDecoder'];
-const KEPT_AGENT_TYPES = ['SpanRecord', 'AgentSampleLine', 'AgentLossCounters', 'TraceSpan'];
+const KEPT_AGENT_TYPES = [
+  'SpanRecord',
+  'AgentSampleLine',
+  'AgentLossCounters',
+  'TraceSpan',
+  'AgentSample',
+  'EventLoopSample',
+  'GcSample',
+  'MemorySample',
+  'BackpressureSample',
+  'BackpressureHotspot',
+  'HeapSpaceSample',
+  'HeapSpaceEntry',
+];
 
 const BUILD_TIMEOUT_MS = 170_000;
 const LOCK_WAIT_MS = 170_000;
@@ -309,10 +358,9 @@ describe('the public API surface of the built package', () => {
         const collector = probe.collector;
         if (!agent.ok || !collector.ok)
           throw new Error(`${format} agent or collector did not load`);
-        expect(
-          KEPT_AGENT_RUNTIME.filter((name) => !agent.keys.includes(name)),
-          `${format} @pharn-dev/phargus/agent lost`,
-        ).toEqual([]);
+        expect(agent.keys, `${format} @pharn-dev/phargus/agent runtime exports`).toEqual(
+          AGENT_RUNTIME,
+        );
         expect(
           KEPT_COLLECTOR_RUNTIME.filter((name) => !collector.keys.includes(name)),
           `${format} @pharn-dev/phargus/collector lost`,

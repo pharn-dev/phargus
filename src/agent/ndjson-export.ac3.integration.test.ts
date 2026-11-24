@@ -24,7 +24,8 @@ async function waitFor(condition: () => boolean, timeoutMs: number): Promise<voi
 
 describe('agent NDJSON export — AC-3', () => {
   it('AC-3: controller samples reach the destination as NDJSON until it errors; done rejects with that error and nothing is written afterwards', async () => {
-    const { createNdjsonExporter, createSamplerController } = await import('./index.js');
+    const { createNdjsonExporter } = await import('./ndjson-exporter.js');
+    const { createSamplerController } = await import('./sampler-controller.js');
 
     const intervalMs = 20;
     const boom = new Error('destination failed');

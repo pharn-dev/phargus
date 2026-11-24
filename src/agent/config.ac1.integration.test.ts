@@ -33,7 +33,7 @@ afterEach(async () => {
 describe('agent config — AC-1', () => {
   it('AC-1: env overrides the JSON file interval, the file output is kept, PHARGUS_ENABLED "0" disables, queue bound is the default, and the config is frozen', async () => {
     const { loadAgentConfig, defaultAgentConfig } =
-      (await import('./index.js')) as unknown as ConfigModuleUnderTest;
+      (await import('./config.js')) as unknown as ConfigModuleUnderTest;
 
     const dir = await makeTempDir();
     const outputPath = path.join(dir, 'out', 'phargus.ndjson');

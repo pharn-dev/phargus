@@ -38,8 +38,8 @@ async function messageOfFailure(
 }
 
 describe('agent config — AC-3', () => {
-  it('AC-3: every invalid source fails with an error naming the source and the key, and two config files fail naming both', async () => {
-    const { loadAgentConfig } = (await import('./index.js')) as unknown as ConfigModuleUnderTest;
+  it('AC-3: every invalid source fails with an error naming the source and the key', async () => {
+    const { loadAgentConfig } = (await import('./config.js')) as unknown as ConfigModuleUnderTest;
 
     // 1. phargus.config.json that is not valid JSON
     const invalidJsonDir = await makeTempDir();
@@ -88,26 +88,5 @@ describe('agent config — AC-3', () => {
     });
     expect(badEnabledMessage).toContain('PHARGUS_ENABLED');
     expect(badEnabledMessage).toContain('enabled');
-
-    // 6. both phargus.config.json and phargus.config.js present
-    const bothDir = await makeTempDir();
-    await writeFile(
-      path.join(bothDir, 'package.json'),
-      JSON.stringify({ type: 'commonjs' }),
-      'utf8',
-    );
-    await writeFile(
-      path.join(bothDir, 'phargus.config.json'),
-      JSON.stringify({ intervalMs: 100 }),
-      'utf8',
-    );
-    await writeFile(
-      path.join(bothDir, 'phargus.config.js'),
-      'module.exports = { intervalMs: 200 };\n',
-      'utf8',
-    );
-    const bothMessage = await messageOfFailure(loadAgentConfig, bothDir, {});
-    expect(bothMessage).toContain('phargus.config.json');
-    expect(bothMessage).toContain('phargus.config.js');
   });
 });

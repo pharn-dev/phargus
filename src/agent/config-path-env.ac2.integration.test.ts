@@ -14,6 +14,7 @@ type ConfigModuleUnderTest = {
   loadAgentConfig(
     cwd: string,
     env: Readonly<Record<string, string | undefined>>,
+    options?: { onWarning?: (message: string) => void },
   ): Promise<AgentConfigUnderTest>;
   defaultAgentConfig: AgentConfigUnderTest;
 };
@@ -31,12 +32,11 @@ afterEach(async () => {
 });
 
 describe('agent config path env — AC-2', () => {
-  it('AC-2: PHARGUS_CONFIG pins a .js file and resolves even though the cwd holds both phargus.config.json and phargus.config.js', async () => {
+  it('AC-2: PHARGUS_CONFIG pins a .json file and resolves even though the cwd holds both phargus.config.json and phargus.config.js, which is then not even warned about', async () => {
     const { loadAgentConfig, defaultAgentConfig } =
-      (await import('./index.js')) as unknown as ConfigModuleUnderTest;
+      (await import('./config.js')) as unknown as ConfigModuleUnderTest;
 
     const cwd = await makeTempDir();
-    await writeFile(path.join(cwd, 'package.json'), JSON.stringify({ type: 'commonjs' }), 'utf8');
     await writeFile(
       path.join(cwd, 'phargus.config.json'),
       JSON.stringify({ intervalMs: 111 }),
@@ -49,19 +49,20 @@ describe('agent config path env — AC-2', () => {
     );
     await mkdir(path.join(cwd, 'pinned'));
     await writeFile(
-      path.join(cwd, 'pinned', 'package.json'),
-      JSON.stringify({ type: 'commonjs' }),
-      'utf8',
-    );
-    await writeFile(
-      path.join(cwd, 'pinned', 'custom.js'),
-      'module.exports = { queueBound: 4321 };\n',
+      path.join(cwd, 'pinned', 'custom.json'),
+      JSON.stringify({ queueBound: 4321 }),
       'utf8',
     );
 
-    const config = await loadAgentConfig(cwd, { PHARGUS_CONFIG: 'pinned/custom.js' });
+    const warnings: string[] = [];
+    const config = await loadAgentConfig(
+      cwd,
+      { PHARGUS_CONFIG: 'pinned/custom.json' },
+      { onWarning: (message) => warnings.push(message) },
+    );
 
     expect(config.queueBound).toBe(4321);
     expect({ ...config }).toEqual({ ...defaultAgentConfig, queueBound: 4321 });
+    expect(warnings).toEqual([]);
   });
 });

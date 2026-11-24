@@ -19,7 +19,7 @@ const repoRoot = resolve(agentDir, '..', '..');
 const tscPath = join(repoRoot, 'node_modules', 'typescript', 'bin', 'tsc');
 
 const INTERVAL_MS = 50;
-const EXPORTS = ['loadAgentConfig', 'createSamplerController', 'createNdjsonExporter'];
+const EXPORTS = ['currentTraceId', 'runWithTrace', 'takeHeapSnapshot'];
 
 function agentSources(): string[] {
   return readdirSync(agentDir)

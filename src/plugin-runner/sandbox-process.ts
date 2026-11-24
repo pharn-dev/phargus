@@ -1,6 +1,26 @@
 import { fork, type ChildProcess } from 'node:child_process';
 import { RuleErrorCode, ruleFailure, type RuleFinding, type RuleRunResult } from './rule-result.js';
-import type { RunRequest } from './sandbox-protocol.js';
+
+/** Host to child: run one rule source over the JSON-encoded windows. */
+export type RunRequest = {
+  type: 'run';
+  id: number;
+  source: string;
+  windowsJson: string;
+  timeoutMs: number;
+  memoryLimitMb: number;
+  isolatedVmModule: string;
+  /** Most findings the rule may return; more is PHARGUS_RULE_INVALID_RESULT. */
+  maxFindings: number;
+  /** Most bytes of JSON the rule's result may serialize to; more is PHARGUS_RULE_INVALID_RESULT. */
+  maxResultBytes: number;
+};
+
+/** Child to host: the outcome of the request with the same id. */
+export type RunReply = { type: 'result'; id: number; result: RuleRunResult };
+
+/** Child to host, once, after the child has loaded isolated-vm: a run sent now is timed from here. */
+export type ReadyMessage = { type: 'ready' };
 
 export type SandboxRequest = Omit<RunRequest, 'type' | 'id'>;
 

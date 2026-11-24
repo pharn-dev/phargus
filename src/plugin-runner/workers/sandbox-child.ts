@@ -1,7 +1,7 @@
 // Sandbox child process entry. Runs one user rule per fresh isolated-vm isolate.
 // Erasable TypeScript syntax only (and `import type` only): this file runs from
 // source under Node's type stripping as well as from the compiled builds.
-import type { ReadyMessage, RunReply, RunRequest } from '../sandbox-protocol.js';
+import type { ReadyMessage, RunReply, RunRequest } from '../sandbox-process.js';
 import type { RuleFinding, RuleRunResult } from '../rule-result.js';
 
 type IvmScript = { run(context: unknown, options: { timeout: number }): Promise<unknown> };

@@ -1,7 +1,7 @@
 // Test fixture worker: echo, crash, hang, exhaust its heap or report its limits on demand.
 // Node core only; erasable TypeScript only.
 import { parentPort, resourceLimits } from 'node:worker_threads';
-import type { TaskReply, TaskRequest } from '../worker-protocol.js';
+import type { TaskReply, TaskRequest } from '../worker-pool.js';
 
 if (parentPort === null) throw new Error('test-task worker must run in a worker thread');
 const port = parentPort;

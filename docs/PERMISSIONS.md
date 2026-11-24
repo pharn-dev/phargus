@@ -19,15 +19,15 @@ node --permission \
   --require @pharn-dev/phargus/agent app.js
 ```
 
-| Grant                                    | Needed for                                                                             |
-| ---------------------------------------- | -------------------------------------------------------------------------------------- |
-| `--allow-fs-read=<app dir>`              | Loading your app, and reading `phargus.config.json` / `phargus.config.js` from the cwd |
-| `--allow-fs-read=<node_modules/phargus>` | Loading the agent itself                                                               |
-| `--allow-fs-read=<PHARGUS_CONFIG file>`  | Reading the config file that `PHARGUS_CONFIG` pins                                     |
-| `--allow-fs-write=<output path>`         | The NDJSON export to a file (`output` other than `'stdout'` or `'none'`)               |
-| `--allow-fs-write=<output path>.1`       | Renaming a full output file to `<file>.1` (unless `outputMaxBytes` is `0`)             |
-| `--allow-fs-read=<output path>`          | The same rename: Node checks read access on the file it moves                          |
-| `--allow-fs-write=<snapshot dir>`        | `takeHeapSnapshot({ dir })`, which also needs `--allow-fs-read=<snapshot dir>`         |
+| Grant                                    | Needed for                                                                     |
+| ---------------------------------------- | ------------------------------------------------------------------------------ |
+| `--allow-fs-read=<app dir>`              | Loading your app, and reading `phargus.config.json` from the cwd               |
+| `--allow-fs-read=<node_modules/phargus>` | Loading the agent itself                                                       |
+| `--allow-fs-read=<PHARGUS_CONFIG file>`  | Reading the config file that `PHARGUS_CONFIG` pins                             |
+| `--allow-fs-write=<output path>`         | The NDJSON export to a file (`output` other than `'stdout'` or `'none'`)       |
+| `--allow-fs-write=<output path>.1`       | Renaming a full output file to `<file>.1` (unless `outputMaxBytes` is `0`)     |
+| `--allow-fs-read=<output path>`          | The same rename: Node checks read access on the file it moves                  |
+| `--allow-fs-write=<snapshot dir>`        | `takeHeapSnapshot({ dir })`, which also needs `--allow-fs-read=<snapshot dir>` |
 
 `output: 'stdout'` needs no write grant. With the default size bound, a file output missing either
 rotation grant disables the agent at start, before any file is opened; one
@@ -119,5 +119,5 @@ host:
   `resource` properties name the denied scope and the absolute path, and its message names the flag
   that would grant it. No file is written.
 
-Use `isPermissionModelEnabled()` and `checkPermission(scope, path)` from `@pharn-dev/phargus/agent` to check a
-grant yourself. When the permission model is off, every check is allowed.
+To check a grant yourself, use Node's own `process.permission.has(scope, path)`. When the permission
+model is off, `process.permission` is undefined and nothing is denied.

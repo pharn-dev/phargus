@@ -1,3 +1,5 @@
+import { createBoundedQueue } from '../agent/bounded-queue.js';
+
 export type RingBuffer<T> = {
   readonly capacity: number;
   push(item: T): void;
@@ -6,34 +8,13 @@ export type RingBuffer<T> = {
   size(): number;
 };
 
+/** A drop-oldest buffer of the last `capacity` items. Throws `RangeError` for a bad capacity. */
 export function createRingBuffer<T>(capacity: number): RingBuffer<T> {
-  if (!Number.isSafeInteger(capacity) || capacity <= 0) {
-    throw new RangeError('capacity must be a positive safe integer');
-  }
-  const slots: Array<T | undefined> = new Array<T | undefined>(capacity).fill(undefined);
-  let head = 0; // index of the oldest item
-  let size = 0;
-
+  const queue = createBoundedQueue<T>(capacity);
   return {
     capacity,
-    push(item: T): void {
-      if (size < capacity) {
-        slots[(head + size) % capacity] = item;
-        size += 1;
-        return;
-      }
-      slots[head] = item;
-      head = (head + 1) % capacity;
-    },
-    snapshot(): T[] {
-      const out: T[] = [];
-      for (let i = 0; i < size; i += 1) {
-        out.push(slots[(head + i) % capacity] as T);
-      }
-      return out;
-    },
-    size(): number {
-      return size;
-    },
+    push: (item) => void queue.push(item),
+    snapshot: () => queue.snapshot(),
+    size: () => queue.size,
   };
 }

@@ -69,7 +69,7 @@ function createStallableWritable(): {
 
 describe('agent NDJSON export — AC-2', () => {
   it('AC-2: a stalled destination drops the oldest records beyond the bound, counts them, and later receives the newest N in order', async () => {
-    const { createNdjsonExporter } = await import('./index.js');
+    const { createNdjsonExporter } = await import('./ndjson-exporter.js');
 
     const N = 3;
     const total = 12;

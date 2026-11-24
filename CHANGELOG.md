@@ -82,6 +82,14 @@ All notable changes to Phargus are recorded here. The format follows
   sees, skips samples from other processes as the new `IgnoredReason` `other-process` (counted in
   `collector.ignored`, passed to `onIgnored`), and emits one process warning saying how many
   other processes it skipped. Samples without a `pid` and all spans are kept as before.
+- One bounded drop-oldest queue (`src/agent/bounded-queue.ts`) now serves the agent exporter, the
+  collector's ring buffers and persistence queue, the dashboard's SSE client and the OTLP batch
+  queue, replacing four separate implementations. It grows to its capacity on demand, so a large
+  bound costs nothing until used. `createRingBuffer` keeps its type and behaviour.
+- `summarizeHeapSnapshot`, `diffHeapSnapshots` and `symbolizeStackFrames` no longer re-check the
+  shape of their worker's reply; the inputs are still checked before any worker runs. The `pool`
+  option is meant for a pool from `createHeapSnapshotPool()` or `createSymbolizationPool()`: a pool
+  running some other worker now gets that worker's reply back as is.
 
 ### Removed
 
@@ -89,6 +97,28 @@ All notable changes to Phargus are recorded here. The format follows
   `PHARGUS_DEP_TOKEN_QUERY` warning. A `?token=` query is no longer a credential: `GET /?token=…`
   answers `401` and sets no cookie. Open `/login#token=<token>` in a browser, or send
   `Authorization: Bearer <token>`.
+- **Breaking:** `@pharn-dev/phargus/agent` no longer exports the agent's own wiring, configuration
+  and permission internals. Importing the subpath starts the agent, so these were never safe to use
+  next to it (a second controller doubles the observers; `createNdjsonExporter(process.stdout).stop()`
+  ends the app's stdout). Removed runtime exports: `createSamplerController`,
+  `createNdjsonExporter`, `createEventLoopSampler`, `createGcSampler`, `createBackpressureProbe`,
+  `loadAgentConfig`, `defaultAgentConfig`, `PhargusConfigError`, `assertPermission`,
+  `checkPermission`, `isPermissionModelEnabled`, `sampleMemory`,
+  `DEFAULT_ALLOCATION_SAMPLING_INTERVAL`, `DEFAULT_ALLOCATION_SAMPLING_DURATION_MS` and
+  `DEFAULT_ALLOCATION_SITE_LIMIT` (the `sampleAllocations` defaults, 32768 bytes, 1000 ms and 20
+  sites, are in `docs/API.md`). Their types go with them: `SamplerController`, `NdjsonExporter`,
+  `NdjsonExporterOptions`, `EventLoopSampler`, `EventLoopSamplerOptions`, `GcSampler`,
+  `BackpressureProbe`, `BackpressureProbeOptions`, `LoadAgentConfigOptions`, `AgentConfig`,
+  `PermissionCheck` and `PermissionScope`. The agent keeps ten runtime exports: `currentTraceId`,
+  `runWithTrace`, `takeHeapSnapshot`, `sampleAllocations`, `sampleHeapSpaces`, `createDeoptParser`,
+  `ANONYMOUS_FUNCTION`, `DEPENDENT_CODE_KIND`, `PhargusPermissionError` and `SPAN_RECORD_TYPE`, and
+  the output-format types. To check a permission grant, use Node's `process.permission.has()`.
+- **Breaking:** the agent no longer reads `phargus.config.js`, and `PHARGUS_CONFIG` accepts a
+  `.json` path only. Move the settings to `phargus.config.json` (same keys). A config file is now
+  parsed, never executed: a `phargus.config.js` in the working directory prints one warning naming
+  `phargus.config.json`, and `PHARGUS_CONFIG=settings.js` disables the agent with the
+  "unsupported extension" message. The unknown-variable warning lists the valid `PHARGUS_*` names
+  instead of guessing one ("did you mean").
 
 ### Fixed
 

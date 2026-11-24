@@ -130,7 +130,11 @@ function caseDir(): string {
 
 const MARKER = 'config-loaded.txt';
 
-/** A phargus.config.js that leaves a marker file next to itself when it is executed. */
+/**
+ * A phargus.config.js that leaves a marker file next to itself when it is executed. The agent never
+ * executes it; it warns about it when it looks in the working directory, so an empty stderr shows
+ * that no config lookup ran.
+ */
 function writeMarkerConfig(dir: string): void {
   writeFileSync(
     join(dir, 'phargus.config.js'),
@@ -182,7 +186,7 @@ describe('phargus/agent entry — off in the environment means off', () => {
       const label = Object.entries(env)
         .map(([name, value]) => `${name}=${value}`)
         .join(' ');
-      it(`${preload} phargus/agent with ${label} leaves http.Server.prototype.emit unpatched and does not execute phargus.config.js`, () => {
+      it(`${preload} phargus/agent with ${label} leaves http.Server.prototype.emit unpatched and does not look for a config file`, () => {
         const dir = caseDir();
         writeMarkerConfig(dir);
         const child = runPatchApp(dir, preload, env);
@@ -193,12 +197,14 @@ describe('phargus/agent entry — off in the environment means off', () => {
       }, 300_000);
     }
 
-    it(`${preload} phargus/agent with only a config file saying enabled: false still executes it (control)`, () => {
+    it(`${preload} phargus/agent with the agent on does not execute phargus.config.js and warns once naming phargus.config.json (control)`, () => {
       const dir = caseDir();
       writeMarkerConfig(dir);
       const child = runPatchApp(dir, preload, {});
       expectCleanRun(child);
-      expect(existsSync(join(dir, MARKER)), 'phargus.config.js was executed').toBe(true);
+      expect(existsSync(join(dir, MARKER)), 'phargus.config.js was executed').toBe(false);
+      expect(child.stderr).toContain('[phargus] warning: phargus.config.js is no longer read');
+      expect(child.stderr.match(/phargus\.config\.json/g), child.stderr).toHaveLength(1);
     }, 300_000);
   }
 });

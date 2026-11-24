@@ -41,6 +41,37 @@ const REMOVED_NAMES = [
   'PluginRunnerPlaceholder',
 ];
 
+/** The agent exports CORE-363 removes, runtime and type. */
+const REMOVED_AGENT_NAMES = [
+  'createSamplerController',
+  'createNdjsonExporter',
+  'createEventLoopSampler',
+  'createGcSampler',
+  'createBackpressureProbe',
+  'loadAgentConfig',
+  'defaultAgentConfig',
+  'PhargusConfigError',
+  'assertPermission',
+  'checkPermission',
+  'isPermissionModelEnabled',
+  'sampleMemory',
+  'DEFAULT_ALLOCATION_SAMPLING_INTERVAL',
+  'DEFAULT_ALLOCATION_SAMPLING_DURATION_MS',
+  'DEFAULT_ALLOCATION_SITE_LIMIT',
+  'SamplerController',
+  'NdjsonExporter',
+  'NdjsonExporterOptions',
+  'EventLoopSampler',
+  'EventLoopSamplerOptions',
+  'GcSampler',
+  'BackpressureProbe',
+  'BackpressureProbeOptions',
+  'LoadAgentConfigOptions',
+  'AgentConfig',
+  'PermissionCheck',
+  'PermissionScope',
+];
+
 const BUILD_TIMEOUT_MS = 170_000;
 const LOCK_WAIT_MS = 170_000;
 const LOCK_STALE_MS = 300_000;
@@ -325,6 +356,16 @@ describe('the public API documentation', () => {
     },
     TEST_TIMEOUT_MS,
   );
+
+  it('CORE-363: the agent section of docs/API.md names no removed agent export', () => {
+    const doc = readFileSync(join(repoRoot, 'docs', 'API.md'), 'utf8');
+    const section = apiSection(doc, 'agent') ?? '';
+    const named = REMOVED_AGENT_NAMES.filter((name) => section.includes(`\`${name}\``));
+    expect(named, 'the @pharn-dev/phargus/agent section of docs/API.md still names').toEqual([]);
+    expect(section).toContain('32768');
+    expect(section).toContain('1000 ms');
+    expect(section).toContain('20 sites');
+  });
 
   it('AC-3: the README Documentation table links docs/API.md', () => {
     const readme = readFileSync(join(repoRoot, 'README.md'), 'utf8');

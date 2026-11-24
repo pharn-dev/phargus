@@ -22,7 +22,10 @@ async function settle(rounds = 20): Promise<void> {
 }
 
 async function loadAgent(): Promise<Record<string, unknown>> {
-  return (await import('./index.js')) as unknown as Record<string, unknown>;
+  return {
+    ...(await import('./backpressure-probe.js')),
+    ...(await import('./ndjson-exporter.js')),
+  } as unknown as Record<string, unknown>;
 }
 
 /** A Writable with a 1-byte highWaterMark that acknowledges each chunk after a short delay. */

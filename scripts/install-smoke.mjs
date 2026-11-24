@@ -71,19 +71,33 @@ async function checkAnalyzer() {
   assert.equal(frames[0].original.line, 1);
 }
 
+// The agent's exporter and sampler controller are internal (not exported), so the smoke loads the
+// installed built files by path, in the same format.
+const internal = (file) => {
+  const path = join(
+    process.cwd(),
+    'node_modules/@pharn-dev/phargus/dist',
+    format === 'import' ? 'esm' : 'cjs',
+    'agent',
+    file,
+  );
+  return format === 'import' ? import(pathToFileURL(path).href) : Promise.resolve(require(path));
+};
+
 async function checkDashboard() {
-  const agent = await load('agent');
+  const { createNdjsonExporter } = await internal('ndjson-exporter.js');
+  const { createSamplerController } = await internal('sampler-controller.js');
   const { createCollector } = await load('collector');
   const { createDashboardServer } = await load('dashboard');
   const collector = createCollector({ windowMs: 100, capacity: 10 });
   const transport = new PassThrough();
-  const exporter = agent.createNdjsonExporter(transport);
+  const exporter = createNdjsonExporter(transport);
   // Observe pipeline failures immediately, even before the sampler finishes.
   const exporting = exporter.done.then(
     () => undefined,
     (error) => error,
   );
-  const controller = agent.createSamplerController((sample) => exporter.export(sample), {
+  const controller = createSamplerController((sample) => exporter.export(sample), {
     onError(error) {
       errors.push(error);
     },

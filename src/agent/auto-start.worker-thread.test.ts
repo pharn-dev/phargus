@@ -2,7 +2,7 @@ import { Server } from 'node:http';
 import { Writable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { createAgentExport, startAgentOnce } from './auto-start.js';
-import { sampleMemory } from './index.js';
+import { sampleMemory } from './memory-sampler.js';
 import type { AgentSampleLine } from './span-record.js';
 
 // Run auto-start as if it had been preloaded into a worker thread.

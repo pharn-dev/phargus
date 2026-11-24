@@ -36,7 +36,7 @@ async function makeCwdWithValidConfig(): Promise<string> {
 }
 
 async function expectPinRejects(cwd: string, pinned: string): Promise<void> {
-  const mod = (await import('./index.js')) as unknown as ConfigModuleUnderTest;
+  const mod = (await import('./config.js')) as unknown as ConfigModuleUnderTest;
 
   let caught: unknown;
   let resolvedWith: unknown;

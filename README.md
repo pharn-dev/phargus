@@ -300,14 +300,16 @@ Choose where the agent writes with `PHARGUS_OUTPUT`:
 | `PHARGUS_QUEUE_BOUND`      | `1024`     | lines held per output queue before the oldest are dropped                                      |
 | `PHARGUS_SPAN_BUFFER`      | `1024`     | spans kept per interval, 0 to 65536; `0` turns request tracing off, samplers stay on           |
 | `PHARGUS_ENABLED`          | `true`     | `false` or `0` turns the agent off: nothing is patched and no config file is read              |
-| `PHARGUS_CONFIG`           | none       | path to the one config file to load, `.json` or `.js`; skips the working-directory lookup      |
+| `PHARGUS_CONFIG`           | none       | path to the one `.json` config file to load; skips the working-directory lookup                |
 
 The same keys (`output`, `outputMaxBytes`, `intervalMs`, `queueBound`, `spanBuffer`, `enabled`)
-can go in `phargus.config.json` or `phargus.config.js` in the working directory. An unknown `PHARGUS_*`
-variable prints one warning on stderr and is ignored; `PHARGUS_TOKEN` and `PHARGUS_DEBUG`, which belong to `phargus serve`, are
-ignored without a warning. When `PHARGUS_CONFIG` is set, `phargus.config.json` and
-`phargus.config.js` in the working directory are not read, and a problem with the pinned file
-disables the agent like any invalid value. An invalid value disables the agent with one
+can go in `phargus.config.json` in the working directory. The file is JSON only and is parsed,
+never executed: a `phargus.config.js` is not read, and the agent prints one warning naming
+`phargus.config.json` when it finds one. An unknown `PHARGUS_*` variable prints one warning on
+stderr that lists the valid names, and is ignored; `PHARGUS_TOKEN` and `PHARGUS_DEBUG`, which
+belong to `phargus serve`, are ignored without a warning. When `PHARGUS_CONFIG` is set,
+`phargus.config.json` in the working directory is not read, and a problem with the pinned file
+(including an extension other than `.json`) disables the agent like any invalid value. An invalid value disables the agent with one
 `[phargus] agent disabled: ...` line on stderr; your app keeps running. `PHARGUS_ENABLED=false`
 or `PHARGUS_OUTPUT=none` turns the agent off before it patches anything or reads a config file.
 `enabled: false` or `output: "none"` in a config file is only known once the file is read, so

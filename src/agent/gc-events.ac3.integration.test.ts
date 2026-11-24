@@ -33,12 +33,12 @@ function compileAgent(outDir: string): void {
       'false',
       '--sourceMap',
       'false',
-      join(agentDir, 'index.ts'),
+      join(agentDir, 'sampler-controller.ts'),
     ],
     { cwd: repoRoot, encoding: 'utf8', timeout: 120_000 },
   );
   expect(
-    existsSync(join(outDir, 'index.js')),
+    existsSync(join(outDir, 'sampler-controller.js')),
     `compiling the agent entrypoint failed:\n${compile.stdout}\n${compile.stderr}`,
   ).toBe(true);
   writeFileSync(join(outDir, 'package.json'), JSON.stringify({ type: 'module' }));
@@ -52,7 +52,7 @@ describe('agent GC events — AC-3', () => {
       writeFileSync(
         join(outDir, 'child.mjs'),
         [
-          "import { createSamplerController } from './index.js';",
+          "import { createSamplerController } from './sampler-controller.js';",
           'let count = 0;',
           'let sawGc = false;',
           'const controller = createSamplerController((sample) => {',

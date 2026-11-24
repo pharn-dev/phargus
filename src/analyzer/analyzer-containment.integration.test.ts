@@ -19,7 +19,7 @@ import {
 import { portableExecArgv, workerExecArgv } from './worker-exec-argv.js';
 
 const srcDir = fileURLToPath(new URL('.', import.meta.url));
-const testWorker = join(srcDir, 'workers', 'test-task.worker.ts');
+const testWorker = join(srcDir, 'fixtures', 'test-task.worker.ts');
 
 // Lets a plain `node` child import this module's TypeScript sources (`./x.js` -> `./x.ts`).
 const TS_HOOKS = `
@@ -336,7 +336,7 @@ const [srcDir] = process.argv.slice(2);
 const { createWorkerPool } = await import(pathToFileURL(join(srcDir, 'worker-pool.ts')).href);
 const pool = createWorkerPool({
   size: 1,
-  workerFile: join(srcDir, 'workers', 'test-task.worker.ts'),
+  workerFile: join(srcDir, 'fixtures', 'test-task.worker.ts'),
   resourceLimits: { maxOldGenerationSizeMb: 16, maxYoungGenerationSizeMb: 4 },
 });
 const outcomes = [];
@@ -397,7 +397,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 const srcDir = process.argv[1];
 const { createWorkerPool } = await import(pathToFileURL(join(srcDir, 'worker-pool.ts')).href);
-const pool = createWorkerPool({ size: 1, workerFile: join(srcDir, 'workers', 'test-task.worker.ts') });
+const pool = createWorkerPool({ size: 1, workerFile: join(srcDir, 'fixtures', 'test-task.worker.ts') });
 try {
   const value = await pool.run({ kind: 'echo', marker: 7 });
   console.log(JSON.stringify({ ok: true, value }));

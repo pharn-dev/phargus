@@ -2,8 +2,7 @@
 import type { Writable } from 'node:stream';
 import { isMainThread } from 'node:worker_threads';
 import { openAgentOutput } from './agent-output.js';
-import { readConfigEnv } from './config-env.js';
-import { loadAgentConfig } from './config.js';
+import { loadAgentConfig, readConfigEnv } from './config.js';
 import {
   DEFAULT_SPAN_BUFFER_SIZE,
   enable as enableTracing,

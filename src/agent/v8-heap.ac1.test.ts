@@ -42,7 +42,7 @@ describe('agent V8 heap spaces — AC-1', () => {
   });
 
   it("the sampler controller's sample carries eventLoop, memory, gc and backpressure, and no heapSpaces (CORE-273)", async () => {
-    const { createSamplerController } = await import('./index.js');
+    const { createSamplerController } = await import('./sampler-controller.js');
 
     const samples: unknown[] = [];
     let resolveFirst: () => void = () => undefined;

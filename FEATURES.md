@@ -20,7 +20,7 @@ Status legend:
 - ✅ Zero external dependencies in the agent (Node core only; enforced by ESLint).
 - ✅ Dual package: ESM + CJS, six subpath exports.
 - ✅ Config via env vars (`PHARGUS_OUTPUT`, `PHARGUS_OUTPUT_MAX_BYTES`, `PHARGUS_INTERVAL_MS`,
-  `PHARGUS_QUEUE_BOUND`, `PHARGUS_SPAN_BUFFER`, `PHARGUS_ENABLED`) + `phargus.config.{js,json}`, or one explicit file pinned with `PHARGUS_CONFIG`. Unknown `PHARGUS_*` variables warn and are ignored (the CLI's `PHARGUS_TOKEN` and `PHARGUS_DEBUG` are ignored silently).
+  `PHARGUS_QUEUE_BOUND`, `PHARGUS_SPAN_BUFFER`, `PHARGUS_ENABLED`) + `phargus.config.json`, or one explicit `.json` file pinned with `PHARGUS_CONFIG`. A config file is parsed, never executed: a `phargus.config.js` is not read and gets one warning. Unknown `PHARGUS_*` variables warn, listing the valid names, and are ignored (the CLI's `PHARGUS_TOKEN` and `PHARGUS_DEBUG` are ignored silently).
 - ✅ A file output has a size bound (`PHARGUS_OUTPUT_MAX_BYTES`, default 64 MiB, `0` = none): at
   the bound it is renamed to `<file>.1` and a new `0600` file is started, so at most twice the
   bound is on disk.

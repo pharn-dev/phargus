@@ -1,6 +1,6 @@
 import type { AggregatedWindow } from '../collector/index.js';
 import type { PluginRunner } from './plugin-runner.js';
-import type { RuleDescriptor } from './rule-descriptor.js';
+import type { RuleDescriptor } from './rule-result.js';
 import { RuleErrorCode, ruleFailure } from './rule-result.js';
 import type { RuleRunResult } from './rule-result.js';
 

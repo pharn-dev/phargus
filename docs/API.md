@@ -11,72 +11,47 @@ type lists are not runtime exports and are checked by reading the declaration fi
 
 ## `@pharn-dev/phargus/agent`
 
-Importing this subpath also starts the agent (it reads `PHARGUS_*` variables and writes NDJSON to
-the configured output), whichever of the functions below you import. The functions are the library
-API for code that wants the pieces directly. To use them with the agent off, set
-`PHARGUS_ENABLED=false` (or `PHARGUS_OUTPUT=none`) before the import: then nothing is patched and
-no config file is read. A worker thread never starts the agent.
+Importing this subpath starts the agent (it reads `PHARGUS_*` variables and `phargus.config.json`,
+never a `.js` config, and writes NDJSON to the configured output), whichever of the functions below you import. The functions work next to the
+running agent: the trace context, on-demand heap and allocation diagnostics, and the deopt parser.
+To call them with the agent off, set `PHARGUS_ENABLED=false` (or `PHARGUS_OUTPUT=none`) before the
+import: then nothing is patched and no config file is read. A worker thread never starts the agent.
 
 **Runtime exports**
 
 - `ANONYMOUS_FUNCTION` — the function name the deopt parser reports for an unnamed function
-- `DEFAULT_ALLOCATION_SAMPLING_DURATION_MS` — default length of one allocation sampling run
-- `DEFAULT_ALLOCATION_SAMPLING_INTERVAL` — default allocation sampling interval, in bytes
-- `DEFAULT_ALLOCATION_SITE_LIMIT` — default number of allocation sites returned
 - `DEPENDENT_CODE_KIND` — the deopt event kind reported for dependent-code deoptimizations
-- `PhargusConfigError` — thrown for an invalid agent configuration value
-- `PhargusPermissionError` — thrown when the Node permission model denies something the agent needs
+- `PhargusPermissionError` — what `takeHeapSnapshot` rejects with when the Node permission model
+  denies the write
 - `SPAN_RECORD_TYPE` — the `type` value of a span line in the NDJSON stream
-- `assertPermission` — throws `PhargusPermissionError` unless a permission scope is granted
-- `checkPermission` — reports whether a permission scope is granted
-- `createBackpressureProbe` — creates the stream backpressure probe
 - `createDeoptParser` — creates a parser for `--trace-deopt` output
-- `createEventLoopSampler` — creates the event loop delay sampler
-- `createGcSampler` — creates the garbage collection sampler
-- `createNdjsonExporter` — creates an exporter that writes records as NDJSON with backpressure
-- `createSamplerController` — creates the controller that runs all samplers on an interval
 - `currentTraceId` — returns the trace id of the current async context, if any
-- `defaultAgentConfig` — the agent configuration used when nothing is set
-- `isPermissionModelEnabled` — reports whether the process runs with the permission model
-- `loadAgentConfig` — builds the agent configuration from the environment
 - `runWithTrace` — runs a function inside a fresh trace context with a new trace id (it takes no id)
-- `sampleAllocations` — takes an allocation profile and returns the top allocation sites
+- `sampleAllocations` — takes an allocation profile and returns the top allocation sites. Defaults:
+  `samplingInterval` 32768 bytes (V8's own), `durationMs` 1000 ms, `limit` 20 sites
 - `sampleHeapSpaces` — samples `v8.getHeapSpaceStatistics()`
-- `sampleMemory` — samples process memory usage
 - `takeHeapSnapshot` — writes a heap snapshot to disk on demand
 
 **Types**
 
-- `AgentConfig` — the validated agent configuration
 - `AgentLossCounters` — counters for samples and spans the agent dropped
 - `AgentSample` — one combined sampler reading
 - `AgentSampleLine` — the NDJSON line shape for a sample
 - `AllocationSamplingOptions` — options for `sampleAllocations`
 - `AllocationSite` — one allocation site in an allocation profile
 - `BackpressureHotspot` — one stream with recorded backpressure stalls
-- `BackpressureProbe` — the backpressure probe
-- `BackpressureProbeOptions` — options for `createBackpressureProbe`
 - `BackpressureSample` — one backpressure reading
 - `DeoptEvent` — one parsed deoptimization event
 - `DeoptLocation` — a source location in a deoptimization event
 - `DeoptParser` — the deopt output parser
 - `DeoptParserOptions` — options for `createDeoptParser`
 - `EventLoopSample` — one event loop delay reading
-- `EventLoopSampler` — the event loop sampler
-- `EventLoopSamplerOptions` — options for `createEventLoopSampler`
 - `GcSample` — one garbage collection reading
-- `GcSampler` — the garbage collection sampler
 - `HeapSnapshotOptions` — options for `takeHeapSnapshot`
 - `HeapSnapshotResult` — the result of `takeHeapSnapshot`
 - `HeapSpaceEntry` — one V8 heap space reading
 - `HeapSpaceSample` — all heap spaces at one moment
-- `LoadAgentConfigOptions` — options for `loadAgentConfig`
 - `MemorySample` — one memory reading
-- `NdjsonExporter` — the NDJSON exporter
-- `NdjsonExporterOptions` — options for `createNdjsonExporter`
-- `PermissionCheck` — the result of `checkPermission`
-- `PermissionScope` — a permission-model scope name
-- `SamplerController` — the sampler controller
 - `SpanRecord` — a trace span as it appears in the NDJSON stream
 - `TraceSpan` — a finished HTTP request span
 

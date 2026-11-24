@@ -33,7 +33,7 @@ afterEach(async () => {
 
 describe('agent config path env — AC-1', () => {
   it('AC-1: PHARGUS_CONFIG pins a .json file whose values win over the cwd file, with a relative output resolved against the cwd, no PHARGUS_CONFIG key and no warning', async () => {
-    const { loadAgentConfig } = (await import('./index.js')) as unknown as ConfigModuleUnderTest;
+    const { loadAgentConfig } = (await import('./config.js')) as unknown as ConfigModuleUnderTest;
 
     const cwd = await makeTempDir();
     await writeFile(

@@ -1,8 +1,12 @@
 export { createPluginRunner } from './plugin-runner.js';
 export type { PluginRunner, PluginRunnerOptions } from './plugin-runner.js';
 export { RuleErrorCode } from './rule-result.js';
-export type { RuleErrorCodeValue, RuleFinding, RuleRunResult } from './rule-result.js';
-export type { RuleDescriptor } from './rule-descriptor.js';
+export type {
+  RuleDescriptor,
+  RuleErrorCodeValue,
+  RuleFinding,
+  RuleRunResult,
+} from './rule-result.js';
 export { RuleParameterError } from './rule-parameter-error.js';
 export {
   BuiltinRuleId,

@@ -11,7 +11,7 @@
 //    process (FATAL ERROR: Reached heap limit), taking the host down with the worker.
 import { open } from 'node:fs/promises';
 import { parentPort } from 'node:worker_threads';
-import type { SerializedError, TaskReply, TaskRequest } from '../worker-protocol.js';
+import type { SerializedError, TaskReply, TaskRequest } from '../worker-pool.js';
 
 type TypeStats = { count: number; selfSize: number };
 
