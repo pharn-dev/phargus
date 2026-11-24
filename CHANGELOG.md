@@ -9,6 +9,13 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Added
 
+- A file output now has a size bound: `PHARGUS_OUTPUT_MAX_BYTES` (config key `outputMaxBytes`,
+  default 64 MiB, `0` = no bound). Before a line would take the file past it, the agent renames it
+  to `<file>.1`, replacing an older one, and continues in a new file created with mode `0600`, so
+  at most twice the bound is on disk and no line is split. Rotation uses asynchronous file calls
+  only; a failed rename disables the agent with one `[phargus] agent disabled: ...` line. Under
+  `--permission` a file output now also needs `--allow-fs-write=<file>.1` and
+  `--allow-fs-read=<file>` (see `docs/PERMISSIONS.md`).
 - `phargus serve --alert '<metric><op><threshold>[:<windows>]'` raises collector alerts from the
   command line, for example `--alert 'eventLoop.p99>50ms:3'` or `--alert 'memory.rssLast>=512MiB'`.
   The flag is repeatable, the rule id is its text, and the threshold takes `ms`/`s` for time

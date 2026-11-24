@@ -5,6 +5,7 @@ import type { AgentConfig, AgentConfigKey } from './config-schema.js';
 const VARIABLES: Readonly<Record<string, AgentConfigKey>> = {
   PHARGUS_INTERVAL_MS: 'intervalMs',
   PHARGUS_OUTPUT: 'output',
+  PHARGUS_OUTPUT_MAX_BYTES: 'outputMaxBytes',
   PHARGUS_QUEUE_BOUND: 'queueBound',
   PHARGUS_ENABLED: 'enabled',
 };
@@ -26,6 +27,7 @@ function parse(name: string, key: AgentConfigKey, text: string): unknown {
   switch (key) {
     case 'intervalMs':
     case 'queueBound':
+    case 'outputMaxBytes':
       if (!/^[0-9]+$/.test(text)) {
         throw new PhargusConfigError(
           name,

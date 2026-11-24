@@ -292,17 +292,18 @@ The skills are a development draft targeting the 0.1.x runtime; see the
 
 Choose where the agent writes with `PHARGUS_OUTPUT`:
 
-| Variable              | Default  | Meaning                                                                                   |
-| --------------------- | -------- | ----------------------------------------------------------------------------------------- |
-| `PHARGUS_OUTPUT`      | `stdout` | `stdout`, `none` (agent off), or a file path                                              |
-| `PHARGUS_INTERVAL_MS` | `1000`   | sampling interval                                                                         |
-| `PHARGUS_QUEUE_BOUND` | `1024`   | lines held per output queue before the oldest are dropped                                 |
-| `PHARGUS_ENABLED`     | `true`   | `false` or `0` turns the agent off: nothing is patched and no config file is read         |
-| `PHARGUS_CONFIG`      | none     | path to the one config file to load, `.json` or `.js`; skips the working-directory lookup |
+| Variable                   | Default    | Meaning                                                                                        |
+| -------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| `PHARGUS_OUTPUT`           | `stdout`   | `stdout`, `none` (agent off), or a file path                                                   |
+| `PHARGUS_OUTPUT_MAX_BYTES` | `67108864` | size bound of a file output (64 MiB): at the bound it is renamed to `<file>.1`; `0` = no bound |
+| `PHARGUS_INTERVAL_MS`      | `1000`     | sampling interval                                                                              |
+| `PHARGUS_QUEUE_BOUND`      | `1024`     | lines held per output queue before the oldest are dropped                                      |
+| `PHARGUS_ENABLED`          | `true`     | `false` or `0` turns the agent off: nothing is patched and no config file is read              |
+| `PHARGUS_CONFIG`           | none       | path to the one config file to load, `.json` or `.js`; skips the working-directory lookup      |
 
-The same keys (`output`, `intervalMs`, `queueBound`, `enabled`) can go in `phargus.config.json` or
-`phargus.config.js` in the working directory. An unknown `PHARGUS_*` variable prints one warning on
-stderr and is ignored; `PHARGUS_TOKEN` and `PHARGUS_DEBUG`, which belong to `phargus serve`, are
+The same keys (`output`, `outputMaxBytes`, `intervalMs`, `queueBound`, `enabled`) can go in
+`phargus.config.json` or `phargus.config.js` in the working directory. An unknown `PHARGUS_*`
+variable prints one warning on stderr and is ignored; `PHARGUS_TOKEN` and `PHARGUS_DEBUG`, which belong to `phargus serve`, are
 ignored without a warning. When `PHARGUS_CONFIG` is set, `phargus.config.json` and
 `phargus.config.js` in the working directory are not read, and a problem with the pinned file
 disables the agent like any invalid value. An invalid value disables the agent with one
@@ -310,6 +311,12 @@ disables the agent like any invalid value. An invalid value disables the agent w
 or `PHARGUS_OUTPUT=none` turns the agent off before it patches anything or reads a config file.
 `enabled: false` or `output: "none"` in a config file is only known once the file is read, so
 request tracing is switched on until then.
+
+A file output never grows past `PHARGUS_OUTPUT_MAX_BYTES`: before a line would take it past the
+bound, the agent renames it to `<file>.1` (replacing an older `.1`) and continues in a new file
+created with mode `0600`, so at most twice the bound is on disk. Rotation happens between lines,
+so no line is split. If the rename fails, the agent is disabled with one
+`[phargus] agent disabled: ...` line.
 
 ---
 

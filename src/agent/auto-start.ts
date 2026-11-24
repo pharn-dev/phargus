@@ -94,7 +94,7 @@ async function start(): Promise<void> {
     disableTracing();
     return;
   }
-  const destination = openAgentOutput(config.output);
+  const destination = openAgentOutput(config.output, config.outputMaxBytes);
   const output = createAgentExport(destination, { queueBound: config.queueBound }, drainSpans);
   let disable = (err: unknown): void => {
     reportOnce(err);

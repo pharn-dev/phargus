@@ -2,6 +2,8 @@
 export type AgentConfig = Readonly<{
   intervalMs: number;
   output: string;
+  /** Size bound of a file `output` in bytes; at the bound it moves to `<file>.1`. 0 = no bound. */
+  outputMaxBytes: number;
   queueBound: number;
   enabled: boolean;
 }>;
@@ -11,6 +13,7 @@ export type AgentConfigKey = keyof AgentConfig;
 export const defaultAgentConfig: AgentConfig = Object.freeze({
   intervalMs: 1000,
   output: 'stdout',
+  outputMaxBytes: 67_108_864,
   queueBound: 1024,
   enabled: true,
 });
@@ -18,6 +21,7 @@ export const defaultAgentConfig: AgentConfig = Object.freeze({
 export const CONFIG_KEYS: readonly AgentConfigKey[] = [
   'intervalMs',
   'output',
+  'outputMaxBytes',
   'queueBound',
   'enabled',
 ];
@@ -76,6 +80,9 @@ export function validateConfigValue(source: string, key: AgentConfigKey, value: 
       return;
     case 'queueBound':
       validateInteger(source, key, value, 1, QUEUE_BOUND_MAX);
+      return;
+    case 'outputMaxBytes':
+      validateInteger(source, key, value, 0, Number.MAX_SAFE_INTEGER);
       return;
     case 'enabled':
       if (typeof value !== 'boolean') {
