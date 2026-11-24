@@ -1,8 +1,47 @@
-import type { AggregatedWindow, CollectorListener } from '../collector/index.js';
+import type { AggregatedWindow, CollectorListener, SpanRecord } from '../collector/index.js';
 import { createOtlpBatchQueue } from './otlp-batch-queue.js';
 import { resolveOtlpExporterOptions, type OtlpExporterOptions } from './otlp-exporter-options.js';
-import { toOtlpMetrics } from './otlp-metrics.js';
-import { DEFAULT_SERVICE_INSTANCE_ID, requireServiceInstanceId } from './otlp-resource.js';
+import {
+  DEFAULT_SERVICE_INSTANCE_ID,
+  requireServiceInstanceId,
+  toOtlpMetrics,
+} from './otlp-metrics.js';
+import { toOtlpTraces } from './otlp-traces.js';
+
+/** An OTLP/HTTP JSON exporter of items (collector windows or spans). */
+export type OtlpExporter<T> = {
+  /**
+   * Adds items to the pending queue. Synchronous; never throws, never awaits. Pending items are
+   * batched: one request carries up to `maxBatchSize` items and is sent when a full batch is
+   * pending or after `flushIntervalMs`. When more than `maxQueueSize` items are pending, the
+   * OLDEST are dropped, counted and reported. Call `close()` or `flush()` before the process
+   * exits: items still pending at exit are not delivered.
+   */
+  export(items: T | readonly T[]): void;
+  /**
+   * Sends the items pending at the call and resolves once they, and the request in flight, are
+   * done. Never rejects for an export failure.
+   */
+  flush(): Promise<void>;
+  /**
+   * Stops accepting items, then flushes for at most `closeTimeoutMs` (default `timeoutMs`); items
+   * still pending then are dropped and reported, the request in flight is aborted. Items exported
+   * after `close()` are dropped and counted. Idempotent.
+   */
+  close(): Promise<void>;
+  /** Export calls that lost at least one item, each counted once. */
+  readonly droppedBatches: number;
+  /** Requests that failed, or whose items could not be encoded. */
+  readonly failedBatches: number;
+  /** Items dropped: evicted from a full queue, exported after `close()`, or dropped by `close()`. */
+  readonly droppedItems: number;
+  /** Items the endpoint accepted (a 2xx answer). */
+  readonly exportedItems: number;
+  /** Items in a failed request, or in a batch that could not be encoded. */
+  readonly failedItems: number;
+  /** For `collector.subscribe(exporter.listener)`: one item per callback. */
+  readonly listener: CollectorListener;
+};
 
 export type OtlpMetricsExporterOptions = OtlpExporterOptions & {
   /**
@@ -12,74 +51,35 @@ export type OtlpMetricsExporterOptions = OtlpExporterOptions & {
   serviceInstanceId?: string;
 };
 
-export type OtlpMetricsExporter = {
-  /**
-   * Adds windows to the pending queue. Synchronous; never throws, never awaits. Pending windows
-   * are batched: one request carries up to `maxBatchSize` windows and is sent when a full batch
-   * is pending or after `flushIntervalMs`. When more than `maxQueueSize` windows are pending, the
-   * OLDEST are dropped, counted and reported. Call `close()` or `flush()` before the process
-   * exits: windows still pending at exit are not delivered.
-   */
-  export(windows: AggregatedWindow | readonly AggregatedWindow[]): void;
-  /**
-   * Sends the windows pending at the call and resolves once they, and the request in flight, are
-   * done. Never rejects for an export failure.
-   */
-  flush(): Promise<void>;
-  /**
-   * Stops accepting windows, then flushes for at most `closeTimeoutMs` (default `timeoutMs`);
-   * windows still pending then are dropped and reported, the request in flight is aborted.
-   * Windows exported after `close()` are dropped and counted. Idempotent.
-   */
-  close(): Promise<void>;
-  /** Export calls that lost at least one window, each counted once. */
-  readonly droppedBatches: number;
-  /** Requests that failed, or whose windows could not be encoded. */
-  readonly failedBatches: number;
-  /** Windows dropped: evicted from a full queue, exported after `close()`, or dropped by `close()`. */
-  readonly droppedItems: number;
-  /** Windows the endpoint accepted (a 2xx answer). */
-  readonly exportedItems: number;
-  /** Windows in a failed request, or windows that could not be encoded. */
-  readonly failedItems: number;
-  /** For `collector.subscribe(exporter.listener)`: one window per callback. */
-  readonly listener: CollectorListener;
-};
+/** Exports collector windows as OTLP metrics; `listener.window` receives them. */
+export type OtlpMetricsExporter = OtlpExporter<AggregatedWindow>;
 
-export function createOtlpMetricsExporter(
-  options: OtlpMetricsExporterOptions,
-): OtlpMetricsExporter {
-  const {
-    target,
-    serviceName,
-    flushIntervalMs,
-    maxBatchSize,
-    maxQueueSize,
-    closeTimeoutMs,
-    onError,
-  } = resolveOtlpExporterOptions(options);
-  requireServiceInstanceId(options.serviceInstanceId);
-  const serviceInstanceId = options.serviceInstanceId ?? DEFAULT_SERVICE_INSTANCE_ID;
-  const queue = createOtlpBatchQueue<AggregatedWindow>({
-    maxBatchSize,
-    maxQueueSize,
-    flushIntervalMs,
-    encode: (batch) => JSON.stringify(toOtlpMetrics(batch, { serviceName, serviceInstanceId })),
-    target,
-    closeTimeoutMs,
-    onError,
+export type OtlpTraceExporterOptions = OtlpExporterOptions;
+
+/** Exports span records as OTLP traces; `listener.span` receives them. */
+export type OtlpTraceExporter = OtlpExporter<SpanRecord>;
+
+/**
+ * The one exporter behind both public factories: validates `options`, builds the batch queue with
+ * `encode` and exposes it. `listen` maps the export function onto the collector callback.
+ */
+function createOtlpExporter<T>(
+  options: OtlpExporterOptions,
+  encode: (batch: readonly T[], serviceName: string) => string,
+  listen: (exportItems: (item: T) => void) => CollectorListener,
+): OtlpExporter<T> {
+  const { serviceName, ...queueOptions } = resolveOtlpExporterOptions(options);
+  const queue = createOtlpBatchQueue<T>({
+    ...queueOptions,
+    encode: (batch) => encode(batch, serviceName),
   });
 
-  function exportBatch(windows: AggregatedWindow | readonly AggregatedWindow[]): void {
-    queue.push(
-      Array.isArray(windows)
-        ? (windows as readonly AggregatedWindow[])
-        : [windows as AggregatedWindow],
-    );
+  function exportItems(items: T | readonly T[]): void {
+    queue.push(Array.isArray(items) ? (items as readonly T[]) : [items as T]);
   }
 
   return {
-    export: exportBatch,
+    export: exportItems,
     flush: () => queue.flush(),
     close: () => queue.close(),
     get droppedBatches() {
@@ -97,10 +97,27 @@ export function createOtlpMetricsExporter(
     get failedItems() {
       return queue.failedItems;
     },
-    listener: {
-      window: (window) => {
-        exportBatch(window);
-      },
-    },
+    listener: listen(exportItems),
   };
+}
+
+export function createOtlpMetricsExporter(
+  options: OtlpMetricsExporterOptions,
+): OtlpMetricsExporter {
+  requireServiceInstanceId(options.serviceInstanceId);
+  const serviceInstanceId = options.serviceInstanceId ?? DEFAULT_SERVICE_INSTANCE_ID;
+  return createOtlpExporter<AggregatedWindow>(
+    options,
+    (batch, serviceName) =>
+      JSON.stringify(toOtlpMetrics(batch, { serviceName, serviceInstanceId })),
+    (exportItems) => ({ window: exportItems }),
+  );
+}
+
+export function createOtlpTraceExporter(options: OtlpTraceExporterOptions): OtlpTraceExporter {
+  return createOtlpExporter<SpanRecord>(
+    options,
+    (batch, serviceName) => JSON.stringify(toOtlpTraces(batch, { serviceName })),
+    (exportItems) => ({ span: exportItems }),
+  );
 }

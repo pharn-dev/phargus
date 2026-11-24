@@ -120,11 +120,12 @@ function childEnv(extra: Record<string, string>): NodeJS.ProcessEnv {
 /** What a thread reports about the agent's prototype patches in its own isolate. */
 const PATCH_PROBE = [
   "import http from 'node:http';",
-  "import { Writable } from 'node:stream';",
+  "import { Duplex, Writable } from 'node:stream';",
   'function patches() {',
   '  return {',
   "    emitOwn: Object.hasOwn(http.Server.prototype, 'emit'),",
-  "    writeWrapped: Symbol.for('phargus.backpressure.write') in Writable.prototype.write,",
+  '    // Node copies Writable#write onto Duplex.prototype; the probe wraps each one separately.',
+  '    writeWrapped: Duplex.prototype.write !== Writable.prototype.write,',
   '  };',
   '}',
 ].join('\n');

@@ -24,9 +24,12 @@ export type WindowStore = {
   readonly restored: number;
   readonly bytes: number;
   restore(): Promise<AggregatedWindow[]>;
-  /** Appends one window. Rejects after `close()`, and never reopens the file then. */
+  /**
+   * Appends one window; call it again only once the previous call settled (the collector's
+   * persistence queue appends one at a time). Rejects after `close()`, and never reopens the file.
+   */
   append(window: AggregatedWindow): Promise<void>;
-  /** Closes the file handle after queued appends; a later `append()` reopens it. */
+  /** Closes the file handle once a pending write finishes; a later `append()` reopens it. */
   release(): Promise<void>;
   /** Releases and latches the store closed: every later `append()` rejects. Idempotent. */
   close(): Promise<void>;
@@ -48,15 +51,8 @@ export function createWindowStore(options: PersistOptions & { capacity: number }
   let needsNewline = false;
   let handle: FileHandle | undefined;
   let closed = false;
-  let chain: Promise<void> = Promise.resolve();
 
-  function enqueue(task: () => Promise<void>): Promise<void> {
-    const next = chain.then(task);
-    // Keep the chain usable after a failure; the caller still sees the rejection via `next`.
-    chain = next.catch(() => undefined);
-    return next;
-  }
-
+  // FileHandle.close() waits for a pending write on the handle before it closes it.
   async function closeHandle(): Promise<void> {
     const current = handle;
     handle = undefined;
@@ -177,33 +173,27 @@ export function createWindowStore(options: PersistOptions & { capacity: number }
       restored = out.length;
       return out;
     },
-    append(window: AggregatedWindow): Promise<void> {
+    async append(window: AggregatedWindow): Promise<void> {
       if (closed) {
-        return Promise.reject(
-          new Error(`window store ${path} is closed; the window was not persisted`),
-        );
+        throw new Error(`window store ${path} is closed; the window was not persisted`);
       }
-      return enqueue(async () => {
-        const line = `${needsNewline ? '\n' : ''}${serializeWindow(window)}`;
-        ring.push(window);
-        if (bytes + Buffer.byteLength(line) > maxBytes) {
-          // Compacting first keeps the file within maxBytes; the rewrite includes this window. If
-          // it fails, nothing is appended, so the file stays within the cap.
-          await compact();
-          return;
-        }
-        handle ??= await open(path, 'a', FILE_MODE);
-        await handle.appendFile(line);
-        needsNewline = false;
-        bytes += Buffer.byteLength(line);
-      });
+      const line = `${needsNewline ? '\n' : ''}${serializeWindow(window)}`;
+      ring.push(window);
+      if (bytes + Buffer.byteLength(line) > maxBytes) {
+        // Compacting first keeps the file within maxBytes; the rewrite includes this window. If
+        // it fails, nothing is appended, so the file stays within the cap.
+        await compact();
+        return;
+      }
+      handle ??= await open(path, 'a', FILE_MODE);
+      await handle.appendFile(line);
+      needsNewline = false;
+      bytes += Buffer.byteLength(line);
     },
-    release(): Promise<void> {
-      return enqueue(closeHandle);
-    },
+    release: closeHandle,
     close(): Promise<void> {
       closed = true;
-      return enqueue(closeHandle);
+      return closeHandle();
     },
   };
 }

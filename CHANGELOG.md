@@ -90,8 +90,39 @@ All notable changes to Phargus are recorded here. The format follows
   shape of their worker's reply; the inputs are still checked before any worker runs. The `pool`
   option is meant for a pool from `createHeapSnapshotPool()` or `createSymbolizationPool()`: a pool
   running some other worker now gets that worker's reply back as is.
+- An OTLP batch that cannot be encoded now fails as a whole: it counts as one failed batch and all
+  its items in `failedItems`, reported once through `onError`. The exporters no longer re-encode
+  item by item to send the rest, since the collector already rejects malformed spans. The metrics
+  and trace exporters now share one implementation; their options, counters and types are
+  unchanged.
+- `WindowStore.append()` (from `createWindowStore`) no longer queues overlapping calls: call it
+  again only once the previous call settled. The collector's persistence queue already appends one
+  window at a time. `release()` and `close()` close the file once a pending write finishes. The
+  collector now validates `windowMs` and the alert rules once, in `createCollector`, instead of on
+  every `consume()`.
+- The agent's prototype patches (`write` on `Writable`, `Duplex` and `OutgoingMessage`, `emit` on
+  the HTTP and HTTPS `Server`) are installed once and never removed. When the agent disables
+  itself they stay in place and are inert: they call the original with the same `this` and
+  arguments and return its result, so a wrapper another library installed on top keeps working.
+  The `globalThis` registries that let an ESM and a CJS copy share one set of wrappers, the
+  identity-guarded restore and the peeling of dead wrapper layers are gone: only the copy that
+  starts the agent patches, and the start-once flag is the agent's only `globalThis` entry.
 
 ### Removed
+
+- **Breaking:** `createSinks`, `SinkConfig` and `SinkInput` are gone from
+  `@pharn-dev/phargus/collector`, and the collector's `sinks` option takes ready sinks only, built
+  with `createStdoutSink`, `createFileSink` or `createWebhookSink`. A configuration object in
+  `sinks` now throws a `TypeError` from `createCollector` that names the factory to use. Pass
+  `onError` to the factory for a sink's delivery failures; `onSinkError` still sees a `send()` that
+  rejects or a `close()` that fails. Before and after:
+
+  ```js
+  // before
+  createCollector({ windowMs, capacity, sinks: [{ type: 'webhook', url }] });
+  // after
+  createCollector({ windowMs, capacity, sinks: [createWebhookSink({ url })] });
+  ```
 
 - **Breaking:** the deprecated dashboard login link `/?token=<token>` is gone, along with its
   `PHARGUS_DEP_TOKEN_QUERY` warning. A `?token=` query is no longer a credential: `GET /?token=…`
@@ -119,6 +150,10 @@ All notable changes to Phargus are recorded here. The format follows
   `phargus.config.json`, and `PHARGUS_CONFIG=settings.js` disables the agent with the
   "unsupported extension" message. The unknown-variable warning lists the valid `PHARGUS_*` names
   instead of guessing one ("did you mean").
+- **Breaking:** the deprecated OTLP exporter option `queueCapacity` is gone from
+  `OtlpExporterOptions` (and so from `createOtlpMetricsExporter` and `createOtlpTraceExporter`).
+  It bounded nothing; use `maxQueueSize`, counted in items. An untyped caller that still passes it
+  is not refused: the value is ignored.
 
 ### Fixed
 

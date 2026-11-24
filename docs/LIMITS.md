@@ -251,11 +251,10 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   stream" in section 2).
 - **ESM and CJS can both be loaded.** The package ships both formats. If an application loads
   `@pharn-dev/phargus/agent` once through `import` and once through `require`, it gets two copies of the module
-  (the "dual package hazard"). The agent itself starts only once per process, and the two copies
-  share one set of prototype wrappers through `globalThis` registries, so disabling either copy, in
-  any order, leaves `write` and `emit` working and restores the prototypes when the last one is
-  disabled. Each copy still keeps its own samples, spans and trace context. Pick one format per
-  process.
+  (the "dual package hazard"). The agent itself starts only once per process, and only the copy
+  that started it patches `write` and `emit`, once. The patches are never removed and are inert
+  when disabled: they pass every call straight through, so `write` and `emit` keep working. Each
+  copy still keeps its own trace context. Pick one format per process.
 - **Platform.** Phargus is developed on Linux and macOS. The required CI checks run on Linux; a
   non-required smoke job runs the build, the exports check and the test suite on Windows and macOS.
   The packed-package install check and the release-workflow check run on Linux only, and releases

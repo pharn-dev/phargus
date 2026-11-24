@@ -14,12 +14,6 @@ export type OtlpExporterOptions = {
   serviceName?: string;
   timeoutMs?: number;
   /**
-   * @deprecated No longer bounds anything: the queue holds items, not batches. Still accepted and
-   * validated (a positive safe integer) so existing configuration keeps working; use
-   * `maxQueueSize`, which is counted in items, instead.
-   */
-  queueCapacity?: number;
-  /**
    * How long the oldest pending items wait for a full batch before they are sent anyway, in
    * milliseconds. Defaults to 1000.
    */
@@ -77,10 +71,6 @@ export function resolveOtlpExporterOptions(
   refuseUrlCredentials('OTLP exporter', parsed);
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   requirePositiveSafeInteger('timeoutMs', timeoutMs);
-  // Deprecated and otherwise ignored, but an invalid value is still rejected as before.
-  if (options.queueCapacity !== undefined) {
-    requirePositiveSafeInteger('queueCapacity', options.queueCapacity);
-  }
   const flushIntervalMs = options.flushIntervalMs ?? DEFAULT_FLUSH_INTERVAL_MS;
   requirePositiveSafeInteger('flushIntervalMs', flushIntervalMs);
   const maxBatchSize = options.maxBatchSize ?? DEFAULT_MAX_BATCH_SIZE;

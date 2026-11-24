@@ -35,7 +35,7 @@ async function thrownBy(
 }
 
 describe('otel span batching — AC-10', () => {
-  it('AC-10: the three new options reject invalid values with a RangeError naming them, and queueCapacity keeps its validation', async () => {
+  it('AC-10: the three new options reject invalid values with a RangeError naming them, and the removed queueCapacity is ignored', async () => {
     const otel = (await import('./index.js')) as unknown as OtelModule;
     const factories = [
       ['createOtlpTraceExporter', otel.createOtlpTraceExporter],
@@ -55,14 +55,10 @@ describe('otel span batching — AC-10', () => {
         }
       }
 
-      const valid = await thrownBy(create, { url: URL_UNDER_TEST, queueCapacity: 64 });
-      if (valid !== undefined) {
-        failures.push(`${factoryName}({ queueCapacity: 64 }) threw ${String(valid)}`);
-      }
-
-      const zero = await thrownBy(create, { url: URL_UNDER_TEST, queueCapacity: 0 });
-      if (!(zero instanceof RangeError) || !zero.message.includes('queueCapacity')) {
-        failures.push(`${factoryName}({ queueCapacity: 0 }) threw ${String(zero)}`);
+      // queueCapacity is no longer an option: an untyped caller that still passes it is not refused.
+      const removed = await thrownBy(create, { url: URL_UNDER_TEST, queueCapacity: 0 });
+      if (removed !== undefined) {
+        failures.push(`${factoryName}({ queueCapacity: 0 }) threw ${String(removed)}`);
       }
     }
 

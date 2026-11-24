@@ -10,7 +10,7 @@ function expectNonNegativeInt(value: unknown, label: string): void {
 }
 
 describe('agent backpressure probes — AC-3', () => {
-  it('AC-3: the controller sample carries a backpressure part of non-negative integers, and stop() restores Writable.prototype.write', async () => {
+  it('AC-3: the controller sample carries a backpressure part of non-negative integers, and stop() leaves the write wrapper installed', async () => {
     const original = Writable.prototype.write;
     const agent = (await import('./sampler-controller.js')) as unknown as Record<string, unknown>;
     const createSamplerController = agent['createSamplerController'] as (
@@ -28,7 +28,7 @@ describe('agent backpressure probes — AC-3', () => {
       resolveFirst();
     });
 
-    let restored: boolean;
+    let stillWrapped: boolean;
     controller.start(50);
     try {
       await Promise.race([
@@ -39,8 +39,7 @@ describe('agent backpressure probes — AC-3', () => {
       ]);
     } finally {
       controller.stop();
-      restored = Writable.prototype.write === original;
-      Writable.prototype.write = original;
+      stillWrapped = Writable.prototype.write !== original;
     }
 
     const sample = samples[0] as Record<string, unknown> | undefined;
@@ -68,6 +67,6 @@ describe('agent backpressure probes — AC-3', () => {
       expectNonNegativeInt(hotspot['maxStall'], `hotspots[${i}].maxStall`);
     }
 
-    expect(restored, 'Writable.prototype.write is the original after stop()').toBe(true);
+    expect(stillWrapped, 'the write wrapper stays installed, inert, after stop()').toBe(true);
   }, 10_000);
 });

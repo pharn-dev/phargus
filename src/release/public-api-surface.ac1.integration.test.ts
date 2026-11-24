@@ -47,6 +47,8 @@ const REMOVED_RUNTIME = [
   'DEFAULT_ALLOCATION_SAMPLING_INTERVAL',
   'DEFAULT_ALLOCATION_SAMPLING_DURATION_MS',
   'DEFAULT_ALLOCATION_SITE_LIMIT',
+  // CORE-367: the sink configuration path.
+  'createSinks',
 ];
 const REMOVED_TYPES = [
   'SpanExport',
@@ -70,6 +72,9 @@ const REMOVED_TYPES = [
   'AgentConfig',
   'PermissionCheck',
   'PermissionScope',
+  // CORE-367: the sink configuration types.
+  'SinkConfig',
+  'SinkInput',
 ];
 // The agent's runtime exports, exactly (sorted, code-unit order).
 const AGENT_RUNTIME = [

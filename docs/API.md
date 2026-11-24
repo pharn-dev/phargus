@@ -66,7 +66,6 @@ import: then nothing is patched and no config file is read. A worker thread neve
 - `createFileSink` — creates an alert sink that appends to a file
 - `createNdjsonDecoder` — creates a transform that splits a byte stream into NDJSON records
 - `createRingBuffer` — creates a fixed-size buffer that drops the oldest item when full
-- `createSinks` — builds alert sinks from sink configurations
 - `createStdoutSink` — creates an alert sink that writes to stdout
 - `createWebhookSink` — creates an alert sink that posts to a URL
 - `createWindowStore` — creates the in-memory window store, with optional disk persistence
@@ -92,9 +91,7 @@ import: then nothing is patched and no config file is read. A worker thread neve
 - `NdjsonSkip` — a line the decoder skipped, with the reason
 - `PersistOptions` — options for disk persistence of windows
 - `RingBuffer` — the ring buffer
-- `SinkConfig` — a sink configuration object
 - `SinkErrorHandler` — a callback for sink errors
-- `SinkInput` — a sink configuration or a ready sink
 - `SpanRecord` — a trace span record, re-exported from the agent
 - `StdoutSinkOptions` — options for `createStdoutSink`
 - `WebhookSinkOptions` — options for `createWebhookSink`
@@ -110,9 +107,10 @@ import: then nothing is patched and no config file is read. A worker thread neve
   memory; the oldest is dropped when full.
 - `spanCapacity` — how many spans it keeps (default `DEFAULT_SPAN_CAPACITY`, 1024).
 - `alerts` — alert rules, checked when the collector is created (a bad rule throws, naming its id).
-- `sinks` — where alerts go, besides `collector.alerts`.
-- `onSinkError(error, sink)` — called with each sink error, such as a failed delivery. Without it
-  the error becomes a process warning.
+- `sinks` — where alerts go, besides `collector.alerts`: an array of ready sinks.
+- `onSinkError(error, sink)` — called when a sink's `send()` rejects or its `close()` fails. A
+  sink's own delivery failures go to the `onError` given to its factory. Without a handler the
+  error becomes a process warning.
 - `persist` — opt-in disk persistence of windows.
 - `onIgnored` — called once for each record `consume()` skips.
 
@@ -143,13 +141,15 @@ alert on the first window that does not breach, not one alert per window. Its st
 `consume()` calls. `phargus serve --alert '<metric><op><threshold>[:<windows>]'` builds the same
 rule from the command line, with unit suffixes (see the README).
 
-**Sinks.** Each entry in `sinks` is a ready `AlertSink` (from `createStdoutSink`, `createFileSink`,
-`createWebhookSink` or your own) or a config object; every entry may carry a `name` for its error
-messages:
+**Sinks.** Each entry in `sinks` is a ready `AlertSink`: built with one of the factories below or
+your own object with `send` and `close`. A configuration object such as `{ type: 'webhook', url }`
+throws a `TypeError` naming the factory to use. Every factory takes an optional `name` for its error
+messages and an optional `onError(error, sink)` for its delivery failures:
 
-- `{ type: 'stdout', stream? }` — one JSON line per alert to `stream` (default `process.stdout`).
-- `{ type: 'file', path }` — one JSON line per alert appended to `path` (created with mode `0600`).
-- `{ type: 'webhook', url, ... }` — a `POST` of each alert as JSON:
+- `createStdoutSink({ stream? })` — one JSON line per alert to `stream` (default `process.stdout`).
+- `createFileSink({ path })` — one JSON line per alert appended to `path` (created with mode
+  `0600`).
+- `createWebhookSink({ url, ... })` — a `POST` of each alert as JSON:
   - `url` — `http:` or `https:`. A URL with a username or password is refused: put credentials in
     `headers`.
   - `headers` — extra request headers. `content-type` is reserved (always `application/json`).
@@ -163,8 +163,8 @@ messages:
   - `closeTimeoutMs` — how long `close()` waits for in-flight requests before it aborts them
     (default `timeoutMs`).
 
-An unknown sink type or a bad option throws when the collector is created. Every alert goes to every
-sink, and a failing sink never stops the others. A sink counts its losses in `failed` and `dropped`.
+A bad option throws from the factory. Every alert goes to every sink, and a failing sink never
+stops the others. A sink counts its losses in `failed` and `dropped`.
 
 **Persistence.** `persist: { path, maxBytes, maxQueueSize? }` appends each closed window as one JSON
 line to `path` (created with mode `0600`). `maxBytes` (required, a positive integer) caps the file.
@@ -178,7 +178,7 @@ Example, from `src/collector/collector-alert-sinks.ac3.integration.test.ts` (her
 `Writable` and `server.url` a local HTTP endpoint):
 
 ```js
-import { createCollector } from '@pharn-dev/phargus/collector';
+import { createCollector, createStdoutSink, createWebhookSink } from '@pharn-dev/phargus/collector';
 
 const rules = [{ id: 'loop-max', metric: 'eventLoop.max', comparison: '>', threshold: 100 }];
 
@@ -187,12 +187,16 @@ const collector = createCollector({
   capacity: 10,
   alerts: rules,
   sinks: [
-    { type: 'stdout', stream },
-    { type: 'webhook', url: server.url, retries: 0, timeoutMs: 2000 },
+    createStdoutSink({ stream }),
+    createWebhookSink({
+      url: server.url,
+      retries: 0,
+      timeoutMs: 2000,
+      onError: (error) => {
+        sinkErrors.push(error);
+      },
+    }),
   ],
-  onSinkError: (error) => {
-    sinkErrors.push(error);
-  },
 });
 ```
 

@@ -20,8 +20,6 @@ type AlertSinkUnderTest = {
   close(): Promise<void>;
 };
 
-type SinkConfigInput = { type: string } & Record<string, unknown>;
-
 type CollectorUnderTest = {
   readonly sinks: readonly AlertSinkUnderTest[];
   consume(source: Readable | AsyncIterable<unknown>): Promise<void>;
@@ -33,9 +31,15 @@ type CollectorModule = {
     windowMs: number;
     capacity: number;
     alerts?: readonly AlertRuleInput[];
-    sinks?: readonly SinkConfigInput[];
-    onSinkError?: (error: Error, sink: AlertSinkUnderTest) => void;
+    sinks?: readonly unknown[];
   }) => CollectorUnderTest;
+  createStdoutSink: (options: { stream: Writable }) => AlertSinkUnderTest;
+  createWebhookSink: (options: {
+    url: string;
+    retries?: number;
+    timeoutMs?: number;
+    onError?: (error: Error) => void;
+  }) => AlertSinkUnderTest;
 };
 
 /** A full AgentSample-shaped object at the given timestamp with the given event-loop max. */
@@ -102,12 +106,16 @@ describe('collector alert sinks — AC-3', () => {
         capacity: 10,
         alerts: rules,
         sinks: [
-          { type: 'stdout', stream },
-          { type: 'webhook', url: server.url, retries: 0, timeoutMs: 2000 },
+          collectorModule.createStdoutSink({ stream }),
+          collectorModule.createWebhookSink({
+            url: server.url,
+            retries: 0,
+            timeoutMs: 2000,
+            onError: (error) => {
+              sinkErrors.push(error);
+            },
+          }),
         ],
-        onSinkError: (error) => {
-          sinkErrors.push(error);
-        },
       });
 
       const source = Readable.from([
@@ -138,20 +146,26 @@ describe('collector alert sinks — AC-3', () => {
     }
 
     const base = { windowMs: 1000, capacity: 10, alerts: rules };
+    const cases: Array<{ sink: unknown; factory: RegExp }> = [
+      { sink: { type: 'webhook', url: 'http://127.0.0.1/alerts' }, factory: /createWebhookSink/ },
+      { sink: { type: 'stdout' }, factory: /createStdoutSink/ },
+      { sink: { type: 'file', path: 'alerts.ndjson' }, factory: /createFileSink/ },
+      {
+        sink: { type: 'carrier-pigeon' },
+        factory: /createStdoutSink, createFileSink or createWebhookSink/,
+      },
+      { sink: null, factory: /createStdoutSink, createFileSink or createWebhookSink/ },
+    ];
+    for (const { sink, factory } of cases) {
+      expect(() => collectorModule.createCollector({ ...base, sinks: [sink] })).toThrow(TypeError);
+      expect(() => collectorModule.createCollector({ ...base, sinks: [sink] })).toThrow(factory);
+    }
     expect(() =>
-      collectorModule.createCollector({ ...base, sinks: [{ type: 'carrier-pigeon' }] }),
-    ).toThrow(/carrier-pigeon/);
-    expect(() =>
-      collectorModule.createCollector({
-        ...base,
-        sinks: [{ type: 'webhook', url: 'ftp://127.0.0.1/alerts' }],
-      }),
-    ).toThrow(/webhook/);
-    expect(() =>
-      collectorModule.createCollector({
-        ...base,
-        sinks: [{ type: 'webhook', url: 'http://127.0.0.1/alerts', timeoutMs: 0 }],
-      }),
-    ).toThrow(/webhook/);
+      collectorModule.createCollector({ ...base, sinks: 'stdout' as unknown as unknown[] }),
+    ).toThrow(/sinks must be an array/);
+    // A bad option now throws from the factory itself.
+    expect(() => collectorModule.createWebhookSink({ url: 'ftp://127.0.0.1/alerts' })).toThrow(
+      /webhook/,
+    );
   }, 15_000);
 });

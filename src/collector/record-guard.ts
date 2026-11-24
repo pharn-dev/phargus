@@ -173,9 +173,9 @@ function warnOtherProcesses(followed: number | undefined, others: number): void 
 }
 
 /**
- * Object-mode Transform that forwards sample records unchanged, forwards each well-formed span as
- * the fresh object `parseSpanRecord` builds, and hands every other record to `onSkip`. A throw
- * from `onSkip` errors the Transform, so the surrounding pipeline rejects.
+ * Object-mode Transform that forwards sample records unchanged, hands each well-formed span to
+ * `onSpan` as the fresh object `parseSpanRecord` builds (spans are not forwarded), and hands every
+ * other record to `onSkip`. A throw from either errors the Transform, so the pipeline rejects.
  *
  * One guard serves one `consume()` run and follows one process: the first sample `pid` it sees.
  * A sample with another `pid` is skipped as `other-process`; samples without a `pid` (an older
@@ -184,6 +184,7 @@ function warnOtherProcesses(followed: number | undefined, others: number): void 
  */
 export function createRecordGuard(
   onSkip: (record: unknown, reason: IgnoredReason) => void,
+  onSpan: (span: SpanRecord) => void,
 ): Transform {
   let followed: number | undefined;
   const others = new Set<number>();
@@ -203,12 +204,16 @@ export function createRecordGuard(
           }
         }
       }
-      if (kind === 'sample' || kind === 'span') {
-        callback(null, span ?? chunk);
+      if (kind === 'sample') {
+        callback(null, chunk);
         return;
       }
       try {
-        onSkip(chunk, kind);
+        if (kind === 'span') {
+          onSpan(span as SpanRecord);
+        } else {
+          onSkip(chunk, kind);
+        }
       } catch (error) {
         callback(error instanceof Error ? error : new Error(String(error)));
         return;

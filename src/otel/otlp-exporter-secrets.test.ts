@@ -2,8 +2,7 @@ import { createServer } from 'node:net';
 import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import type { AggregatedWindow, SpanRecord } from '../collector/index.js';
-import { createOtlpMetricsExporter } from './otlp-exporter.js';
-import { createOtlpTraceExporter } from './otlp-trace-exporter.js';
+import { createOtlpMetricsExporter, createOtlpTraceExporter } from './otlp-exporter.js';
 
 // Fake markers: the test fails if either reaches a reported error.
 const URL_MARKER = 'url-marker-5d1c07';
