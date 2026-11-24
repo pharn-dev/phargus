@@ -6,13 +6,14 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // Child-process regression tests for F-01 and F-12 (production-readiness audit):
-//  - the dual-package hazard: an ESM copy and a CJS copy of the agent, each enabling a probe and
-//    disabling it in either order, must leave every write working and the prototypes restored;
+//  - the dual-package hazard: with an ESM copy and a CJS copy of the agent loaded in one process,
+//    only the copy that starts the agent patches, so each prototype is wrapped once; probes enabled
+//    directly in both copies, disabled in either order, leave every write working;
 //  - a throwing onSample with the default reporting path warns once and does not crash the process.
 
 const agentDir = fileURLToPath(new URL('.', import.meta.url));
 const repoRoot = resolve(agentDir, '..', '..');
-const entries = ['backpressure-probe.ts', 'http-tracing.ts', 'sampler-controller.ts'];
+const entries = ['auto.ts', 'sampler-controller.ts'];
 
 let outDir = '';
 
@@ -49,11 +50,26 @@ function compile(dir: string, moduleArgs: string[]): void {
   ).toBe(true);
 }
 
-function runChild(script: string): { status: number | null; stdout: string; stderr: string } {
+/** The parent's environment minus NODE_OPTIONS and every PHARGUS_* name, plus `extra`. */
+function childEnv(extra: Record<string, string>): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const [name, value] of Object.entries(process.env)) {
+    if (value !== undefined && !name.startsWith('PHARGUS_') && name !== 'NODE_OPTIONS') {
+      env[name] = value;
+    }
+  }
+  return { ...env, ...extra };
+}
+
+function runChild(
+  script: string,
+  env: Record<string, string> = {},
+): { status: number | null; stdout: string; stderr: string } {
   const file = join(outDir, `child-${Math.random().toString(36).slice(2)}.mjs`);
   writeFileSync(file, script);
   const child = spawnSync(process.execPath, [file], {
     cwd: outDir,
+    env: childEnv(env),
     encoding: 'utf8',
     timeout: 30_000,
   });
@@ -85,7 +101,7 @@ afterAll(() => {
 });
 
 describe('prototype patch safety across an ESM and a CJS copy (F-01)', () => {
-  it('enabling a probe in each copy and disabling in either order keeps writes working and restores the prototypes', () => {
+  it('enabling a probe in each copy and disabling in either order keeps writes working and leaves the wrappers installed', () => {
     const script = `
 import { createRequire } from 'node:module';
 import { once } from 'node:events';
@@ -98,7 +114,6 @@ const esmTracing = await import('./esm/http-tracing.js');
 const cjsTracing = require('./cjs/http-tracing.js');
 const targets = [Writable.prototype, Duplex.prototype, OutgoingMessage.prototype];
 const pristine = targets.map((t) => t.write);
-const pristineEmit = Object.getOwnPropertyDescriptor(Server.prototype, 'emit');
 
 async function stall() {
   const s = new Writable({ highWaterMark: 1, write(_c, _e, cb) { setTimeout(cb, 2); } });
@@ -135,10 +150,9 @@ for (const order of ['esm-first', 'cjs-first']) {
   second.disable();
   secondT.disable();
   const errors = tryWrites();
-  const restored = targets.every((t, i) => t.write === pristine[i]);
-  const emitRestored =
-    JSON.stringify(Object.getOwnPropertyDescriptor(Server.prototype, 'emit')) === JSON.stringify(pristineEmit);
-  results.push({ order, events, midErrors, errors, restored, emitRestored });
+  const installed = targets.every((t, i) => t.write !== pristine[i]);
+  const emitInstalled = Object.hasOwn(Server.prototype, 'emit');
+  results.push({ order, events, midErrors, errors, installed, emitInstalled });
 }
 process.stdout.write(JSON.stringify(results));
 `;
@@ -151,19 +165,78 @@ process.stdout.write(JSON.stringify(results));
         events: [1, 1],
         midErrors: [],
         errors: [],
-        restored: true,
-        emitRestored: true,
+        installed: true,
+        emitInstalled: true,
       },
       {
         order: 'cjs-first',
         events: [1, 1],
         midErrors: [],
         errors: [],
-        restored: true,
-        emitRestored: true,
+        installed: true,
+        emitInstalled: true,
       },
     ]);
   }, 60_000);
+
+  it.each([['esm'], ['cjs']] as const)(
+    'loading the agent through %s first and then through the other format patches each prototype once, by the first copy',
+    (first) => {
+      const script = `
+import { createRequire } from 'node:module';
+import { OutgoingMessage, Server } from 'node:http';
+import { Server as HttpsServer } from 'node:https';
+import { Duplex, PassThrough, Writable } from 'node:stream';
+const require = createRequire(import.meta.url);
+const read = () => [
+  Writable.prototype.write,
+  Duplex.prototype.write,
+  OutgoingMessage.prototype.write,
+  Server.prototype.emit,
+  HttpsServer.prototype.emit,
+];
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const load = {
+  esm: () => import('./esm/auto.js'),
+  cjs: async () => require('./cjs/auto.js'),
+};
+const first = ${JSON.stringify(first)};
+const pristine = read();
+await load[first]();
+// The write wrappers are installed once the agent's config has loaded.
+const deadline = Date.now() + 10000;
+while (Writable.prototype.write === pristine[0] && Date.now() < deadline) await wait(5);
+const afterFirst = read();
+await load[first === 'esm' ? 'cjs' : 'esm']();
+await wait(200);
+const afterSecond = read();
+const errors = [];
+for (const make of [
+  () => new Writable({ write(_c, _e, cb) { cb(); } }),
+  () => new Duplex({ write(_c, _e, cb) { cb(); }, read() {} }),
+  () => new PassThrough(),
+]) {
+  try { make().write('hello'); } catch (error) { errors.push(String(error && error.message)); }
+}
+process.stdout.write(JSON.stringify({
+  patchedByFirst: afterFirst.map((fn, i) => fn !== pristine[i]),
+  unchangedBySecond: afterSecond.map((fn, i) => fn === afterFirst[i]),
+  errors,
+}));
+`;
+      const child = runChild(script, {
+        PHARGUS_OUTPUT: join(outDir, `out-${first}.ndjson`),
+        PHARGUS_INTERVAL_MS: '20',
+      });
+      expect(child.status, `child exited non-zero:\n${child.stderr}`).toBe(0);
+      expect(JSON.parse(child.stdout)).toEqual({
+        patchedByFirst: [true, true, true, true, true],
+        unchangedBySecond: [true, true, true, true, true],
+        errors: [],
+      });
+    },
+    60_000,
+  );
 });
 
 describe('sampler controller default failure reporting (F-12)', () => {

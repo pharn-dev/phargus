@@ -285,7 +285,7 @@ describe('phargus/agent entry — an agent that disables itself switches the tra
       expect(results['inFlight'], 'in the request in flight').toBeNull();
       expect(results['outside'], 'outside any request').toBeNull();
       expect(results['later'], 'in a later request').toBeNull();
-      expect(results['ownEmit'], 'emit restored').toBe(false);
+      expect(results['ownEmit'], 'the emit wrapper stays installed, inert').toBe(true);
     }, 300_000);
   }
 });

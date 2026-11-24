@@ -417,9 +417,10 @@ the data flow and module boundaries.
 | Overhead is measured, not assumed          | `bench/overhead.mjs` (agent on versus off, several HTTP workloads) and `bench/soak.mjs` (leaks under load), run nightly. Informational: no gate fails on a regression, so measure on your own workload. See [`bench/README.md`](./bench/README.md) |
 | No secrets in the repository               | gitleaks on every push, plus CodeQL                                                                                                                                                                                                                |
 
-- **Prototype patches are reversible and never throw.** The backpressure probe wraps `write` on
-  the stream prototypes and tracing wraps `Server.prototype.emit`; disabling them never removes a
-  wrapper another library installed later.
+- **Prototype patches are inert when disabled and never throw.** The backpressure probe wraps
+  `write` on the stream prototypes and tracing wraps `Server.prototype.emit`, once per process.
+  When the agent disables itself the wrappers stay in place and pass every call straight through,
+  so a wrapper another library installed later keeps working.
 - **The agent runs under the Node permission model.** The flags each module needs are in
   [`docs/PERMISSIONS.md`](./docs/PERMISSIONS.md).
 - **Heap snapshots and traces can contain sensitive data.** See [`SECURITY.md`](./SECURITY.md),

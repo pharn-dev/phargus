@@ -78,7 +78,8 @@ describe('startAgentOnce — spanBuffer (CORE-275)', () => {
     const config = join(dir, 'off.json');
     writeFileSync(config, JSON.stringify({ spanBuffer: 0 }));
     await startWith('file-0', { PHARGUS_CONFIG: config });
-    expect(Object.hasOwn(Server.prototype, 'emit')).toBe(false);
+    // The preload installed the emit wrapper before the file was read; it stays, inert.
+    expect(Object.hasOwn(Server.prototype, 'emit')).toBe(true);
     await serve(3);
     expect(drainSpans()).toEqual({ spans: [], dropped: 0 });
   });

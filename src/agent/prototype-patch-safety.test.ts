@@ -7,12 +7,16 @@ import { Duplex, Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Regression tests for F-01, F-13 and F-22 (production-readiness audit): Phargus must never leave a
-// prototype method that throws, and never remove a wrapper a third party installed after it.
+// Regression tests for F-01, F-13 and F-22 (production-readiness audit) and CORE-365: Phargus
+// installs each prototype wrapper once and never removes it; a disabled wrapper is inert, never
+// throws, and a wrapper a third party installs on top of it keeps working.
 
 type Sample = { events: number; hotspots: { site: string }[] };
 type Probe = { enable(): void; disable(): void; sample(): Sample };
-type ProbeModule = { createBackpressureProbe(options?: { maxHotspots?: number }): Probe };
+type ProbeModule = {
+  createBackpressureProbe(options?: { maxHotspots?: number }): Probe;
+  excludeFromBackpressure(stream: object): void;
+};
 type TracingModule = {
   enable(options?: { spanBufferSize?: number }): void;
   disable(): void;
@@ -141,14 +145,14 @@ describe('prototype patch safety — backpressure probe write wrappers (F-01)', 
     },
   );
 
-  it('an inactive Phargus wrapper that a third party restored on top is skipped by the next enable()', async () => {
+  it('an inert Phargus wrapper that a third party restored on top is reused, not wrapped again, by the next enable()', async () => {
     const original = Writable.prototype.write;
     const { createBackpressureProbe } = await loadProbeCopy();
     const probe = track(createBackpressureProbe());
     probe.enable();
     const foreign = installForeignWrite(Writable.prototype);
     probe.disable();
-    // The third party uninstalls itself by restoring what it saw: Phargus's now-inactive wrapper.
+    // The third party uninstalls itself by restoring what it saw: Phargus's now-inert wrapper.
     (Writable.prototype as { write: AnyFn }).write = foreign.beneath;
 
     const { stream, received } = sink(Writable);
@@ -159,11 +163,12 @@ describe('prototype patch safety — backpressure probe write wrappers (F-01)', 
     await stallOnce(slowWritable());
     expect(probe.sample().events).toBe(1);
     probe.disable();
-    expect(Writable.prototype.write).toBe(original);
+    expect(Writable.prototype.write).toBe(foreign.beneath);
+    expect(Writable.prototype.write).not.toBe(original);
   });
 
   it.each([['first-enabled disabled first'], ['first-enabled disabled last']])(
-    'two module copies enabled together, %s: writes keep working and the prototypes are restored',
+    'two module copies enabled together, %s: writes keep working and the wrappers stay installed',
     async (order) => {
       const copyA = await loadProbeCopy();
       const copyB = await loadProbeCopy();
@@ -172,11 +177,10 @@ describe('prototype patch safety — backpressure probe write wrappers (F-01)', 
       const probeB = track(copyB.createBackpressureProbe());
 
       probeA.enable();
-      const wrappedOnce = writeTargets.map((target) => (target as { write: unknown }).write);
       probeB.enable();
-      // The second copy joins the first copy's wrappers instead of wrapping again.
-      expect(writeTargets.map((target) => (target as { write: unknown }).write)).toEqual(
-        wrappedOnce,
+      // The second copy wraps the first copy's wrappers again: each copy has its own guard.
+      const wrapped = writeTargets.map((target) =>
+        Object.getOwnPropertyDescriptor(target, 'write'),
       );
 
       // Each copy's probe sees the stall exactly once.
@@ -188,6 +192,7 @@ describe('prototype patch safety — backpressure probe write wrappers (F-01)', 
       first.disable();
       expect(() => sink(Writable).stream.write('mid')).not.toThrow();
       await stallOnce(slowWritable());
+      expect(first.sample().events).toBe(0);
       expect(second.sample().events).toBe(1);
       second.disable();
 
@@ -197,8 +202,67 @@ describe('prototype patch safety — backpressure probe write wrappers (F-01)', 
         expect(received).toEqual(['after']);
       }
       writeTargets.forEach((target, i) => {
-        expect(Object.getOwnPropertyDescriptor(target, 'write')).toEqual(pristineWrite[i]);
+        expect(Object.getOwnPropertyDescriptor(target, 'write')).toEqual(wrapped[i]);
       });
+    },
+  );
+
+  it('enabling, disabling and enabling again leaves one wrapper on each prototype', async () => {
+    const { createBackpressureProbe } = await loadProbeCopy();
+    const probe = track(createBackpressureProbe());
+    probe.enable();
+    const wrapped = writeTargets.map((target) => (target as { write: unknown }).write);
+    wrapped.forEach((write, i) => {
+      expect(write, `target ${i}`).not.toBe(pristineWrite[i]?.value);
+    });
+    probe.disable();
+    probe.enable();
+    const second = track(createBackpressureProbe());
+    second.enable();
+    writeTargets.forEach((target, i) => {
+      expect((target as { write: unknown }).write, `target ${i}`).toBe(wrapped[i]);
+    });
+
+    // One wrapper, so each enabled probe sees the stall exactly once.
+    await stallOnce(slowWritable());
+    expect(probe.sample().events).toBe(1);
+    expect(second.sample().events).toBe(1);
+  });
+
+  it.each([
+    ['Writable', Writable.prototype],
+    ['Duplex', Duplex.prototype],
+    ['OutgoingMessage', OutgoingMessage.prototype],
+  ] as const)(
+    'after disable() the %s.prototype.write wrapper stays installed and is inert: same this, arguments, return value and length',
+    async (_name, target) => {
+      const holder = target as unknown as { write: AnyFn };
+      const calls: { self: unknown; args: unknown[] }[] = [];
+      const returned: unknown[] = [{ sentinel: true }, false];
+      const beneath = function write(this: unknown, ...args: unknown[]): unknown {
+        calls.push({ self: this, args });
+        return returned[calls.length - 1];
+      };
+      Object.defineProperty(beneath, 'length', { value: 3 });
+      holder.write = beneath;
+
+      const { createBackpressureProbe } = await loadProbeCopy();
+      const probe = track(createBackpressureProbe());
+      probe.enable();
+      probe.disable();
+
+      expect(holder.write).not.toBe(beneath);
+      expect(holder.write.length).toBe(3);
+      const self = sink(Writable).stream;
+      const callback = (): void => {};
+      expect(holder.write.call(self, 'a', 'utf8', callback)).toBe(returned[0]);
+      expect(holder.write.call(self, 'b')).toBe(false);
+      expect(calls).toHaveLength(2);
+      expect(calls[0]?.self).toBe(self);
+      expect(calls[0]?.args).toEqual(['a', 'utf8', callback]);
+      expect(calls[0]?.args[2]).toBe(callback);
+      expect(calls[1]?.self).toBe(self);
+      expect(calls[1]?.args).toEqual(['b']);
     },
   );
 
@@ -301,26 +365,27 @@ describe('prototype patch safety — http tracing emit wrapper (F-13)', () => {
     expect(heard).toBe(1);
   });
 
-  it('enable() then disable() leaves no own emit on the server prototypes', async () => {
+  it('enable() then disable() leaves the emit wrapper installed on the server prototypes', async () => {
     const tracing = track(await loadTracingCopy());
     tracing.enable();
     expect(Object.hasOwn(HttpServer.prototype, 'emit')).toBe(true);
     expect((HttpServer.prototype.emit as AnyFn).length).toBe(1);
+    const wrapped = emitTargets.map((target) => Object.getOwnPropertyDescriptor(target, 'emit'));
     tracing.disable();
     emitTargets.forEach((target, i) => {
-      expect(Object.getOwnPropertyDescriptor(target, 'emit')).toEqual(pristineEmit[i]);
+      expect(Object.getOwnPropertyDescriptor(target, 'emit')).toEqual(wrapped[i]);
     });
   });
 
   it.each([['first-enabled disabled first'], ['first-enabled disabled last']])(
-    'two module copies share one emit wrapper, both trace a request, and %s restores emit',
+    'two module copies both trace a request, and %s leaves the emit wrapper installed',
     async (order) => {
       const copyA = track(await loadTracingCopy());
       const copyB = track(await loadTracingCopy());
       copyA.enable();
-      const wrapped = HttpServer.prototype.emit;
       copyB.enable();
-      expect(HttpServer.prototype.emit).toBe(wrapped);
+      // The second copy wraps the first copy's wrapper again: each copy has its own guard.
+      const wrapped = emitTargets.map((target) => Object.getOwnPropertyDescriptor(target, 'emit'));
 
       const seen: (string | undefined)[] = [];
       const server = createServer((_req, res) => {
@@ -350,11 +415,72 @@ describe('prototype patch safety — http tracing emit wrapper (F-13)', () => {
 
       const [first, second] = order.endsWith('first') ? [copyA, copyB] : [copyB, copyA];
       first.disable();
-      expect(HttpServer.prototype.emit).toBe(wrapped);
+      expect(HttpServer.prototype.emit).toBe(wrapped[0]?.value);
       second.disable();
       emitTargets.forEach((target, i) => {
-        expect(Object.getOwnPropertyDescriptor(target, 'emit')).toEqual(pristineEmit[i]);
+        expect(Object.getOwnPropertyDescriptor(target, 'emit')).toEqual(wrapped[i]);
       });
+    },
+  );
+
+  it('enabling, disabling and enabling again leaves one emit wrapper on each server prototype', async () => {
+    const tracing = track(await loadTracingCopy());
+    tracing.enable();
+    const wrapped = emitTargets.map(
+      (target) => Object.getOwnPropertyDescriptor(target, 'emit')?.value as unknown,
+    );
+    wrapped.forEach((emit, i) => {
+      expect(typeof emit, `target ${i}`).toBe('function');
+    });
+    tracing.disable();
+    tracing.enable();
+    emitTargets.forEach((target, i) => {
+      expect(Object.getOwnPropertyDescriptor(target, 'emit')?.value, `target ${i}`).toBe(
+        wrapped[i],
+      );
+    });
+  });
+
+  it.each([
+    ['http', HttpServer.prototype],
+    ['https', HttpsServer.prototype],
+  ] as const)(
+    'after disable() the %s Server.prototype.emit wrapper stays installed and is inert: same this, arguments, return value and length',
+    async (_name, proto) => {
+      const calls: { self: unknown; args: unknown[] }[] = [];
+      const sentinel = { sentinel: true };
+      const beneath = function emit(this: unknown, ...args: unknown[]): unknown {
+        calls.push({ self: this, args });
+        return sentinel;
+      };
+      Object.defineProperty(beneath, 'length', { value: 1 });
+      Object.defineProperty(proto, 'emit', {
+        value: beneath,
+        writable: true,
+        configurable: true,
+        enumerable: false,
+      });
+
+      const tracing = track(await loadTracingCopy());
+      tracing.enable();
+      tracing.disable();
+
+      const emit = (proto as unknown as { emit: AnyFn }).emit;
+      expect(emit).not.toBe(beneath);
+      expect(emit.length).toBe(1);
+      const self = new EventEmitter();
+      const request = {};
+      const response = {};
+      expect(emit.call(self, 'request', request, response)).toBe(sentinel);
+      expect(emit.call(self, 'custom')).toBe(sentinel);
+      expect(calls).toHaveLength(2);
+      expect(calls[0]?.self).toBe(self);
+      expect(calls[0]?.args[0]).toBe('request');
+      expect(calls[0]?.args[1]).toBe(request);
+      expect(calls[0]?.args[2]).toBe(response);
+      expect(calls[0]?.args).toHaveLength(3);
+      expect(calls[1]?.self).toBe(self);
+      expect(calls[1]?.args).toEqual(['custom']);
     },
   );
 
@@ -458,5 +584,21 @@ describe('prototype patch safety — http tracing emit wrapper (F-13)', () => {
     expect(child.status, child.stderr).toBe(0);
     const lines = child.stdout.trim().split('\n');
     expect(JSON.parse(lines[lines.length - 1] ?? '')).toEqual({ caught: 'boom' });
+  });
+});
+
+describe('prototype patch safety — no globalThis registry (CORE-365)', () => {
+  it('enabling the probe and tracing and excluding a stream puts no phargus symbol on globalThis', async () => {
+    const { createBackpressureProbe, excludeFromBackpressure } = await loadProbeCopy();
+    const probe = track(createBackpressureProbe());
+    probe.enable();
+    excludeFromBackpressure(sink(Writable).stream);
+    const tracing = track(await loadTracingCopy());
+    tracing.enable();
+    // Only the start-once flag of auto-start.ts may live there, and nothing here starts the agent.
+    const keys = Object.getOwnPropertySymbols(globalThis)
+      .map((symbol) => Symbol.keyFor(symbol))
+      .filter((key) => key !== undefined && key.startsWith('phargus.') && key !== 'phargus.agent');
+    expect(keys).toEqual([]);
   });
 });
