@@ -17,8 +17,11 @@ let server: Server | undefined;
 let port = 0;
 const handlers = new Map<string, Handler>();
 
-/** Sends a GET; resolves on the full body or on any client-side error (an aborted request). */
-function get(path: string, abortAfterMs?: number): Promise<void> {
+/**
+ * Sends a GET; resolves on the full body or on any client-side error (an aborted request).
+ * With `abortWhen`, the client destroys the request once that promise settles.
+ */
+function get(path: string, abortWhen?: Promise<void>): Promise<void> {
   return new Promise((resolve) => {
     const req = httpRequest({ host: '127.0.0.1', port, path, method: 'GET' }, (res) => {
       res.resume();
@@ -28,9 +31,7 @@ function get(path: string, abortAfterMs?: number): Promise<void> {
     req.on('error', () => resolve());
     req.on('close', () => resolve());
     req.end();
-    if (abortAfterMs !== undefined) {
-      setTimeout(() => req.destroy(), abortAfterMs);
-    }
+    void abortWhen?.then(() => req.destroy());
   });
 }
 
@@ -87,13 +88,24 @@ afterAll(async () => {
 describe('agent HTTP tracing — aborted and destroyed requests leave a span', () => {
   it('a client that disconnects before the response ends yields one aborted span with status 0', async () => {
     let closed: Promise<number> | undefined;
+    let arrived: () => void = () => undefined;
+    const inHandler = new Promise<void>((resolve) => {
+      arrived = resolve;
+    });
     handlers.set('/client-gone?q=1', (req, res) => {
       // A framework may rewrite req.url; the span keeps the path seen at start.
       req.url = '/rewritten';
       // Never respond: the client gives up first.
       closed = timeUntilClose(res);
+      arrived();
     });
-    await get('/client-gone?q=1', HOLD_MS);
+    // Client and server share this event loop. A timer armed at send time can fire before the
+    // request is even read (one stall of HOLD_MS is enough), and then no span is due. So the hold
+    // starts only once the handler has run.
+    await get(
+      '/client-gone?q=1',
+      inHandler.then(() => delay(HOLD_MS)),
+    );
     const spans = await spansFor('/client-gone');
     const untilClose = await closed;
 
