@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { setTimeout as delay } from 'node:timers/promises';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { disable, drainSpans, enable } from './http-tracing.js';
-import { toSpanRecord } from './span-record.js';
+import { SPAN_RECORD_TYPE } from './span-record.js';
 
 let server: Server | undefined;
 let port = 0;
@@ -72,7 +72,7 @@ describe('http tracing span path', () => {
     expect(span?.path).toBe(path.slice(0, 256));
     expect(span?.path).toHaveLength(256);
     if (span === undefined) return;
-    const line = `${JSON.stringify(toSpanRecord(span))}\n`;
+    const line = `${JSON.stringify({ type: SPAN_RECORD_TYPE, ...span })}\n`;
     expect(Buffer.byteLength(line)).toBeLessThan(1024);
   });
 });

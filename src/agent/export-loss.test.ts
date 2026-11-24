@@ -5,7 +5,7 @@ import { createAgentExport } from './auto-start.js';
 import { sampleMemory } from './memory-sampler.js';
 import type { AgentSample, AgentSampleLine, SpanRecord, TraceSpan } from './index.js';
 import { createSpanBuffer } from './span-buffer.js';
-import type { SpanDrain } from './span-buffer.js';
+import type { SpanBuffer, SpanDrain } from './span-buffer.js';
 
 /** Let pending stream and generator work run to a quiet point. */
 async function settle(rounds = 20): Promise<void> {
@@ -42,6 +42,19 @@ function makeSpan(): TraceSpan {
     startTimeMs: 1,
     durationNs: 1000,
   };
+}
+
+/** Buffer one span the way the HTTP tracer does. */
+function recordSpan(buffer: SpanBuffer): void {
+  const span = makeSpan();
+  buffer.record(
+    span.traceId,
+    span.method,
+    span.path,
+    span.statusCode,
+    span.startTimeMs,
+    span.durationNs,
+  );
 }
 
 /** A destination that accepts every write at once and keeps the NDJSON lines it received. */
@@ -117,7 +130,7 @@ describe('agent export — samples survive span load, losses are reported (F-24,
 
       for (let tick = 0; tick < TICKS; tick += 1) {
         for (let i = 0; i < SPANS_PER_TICK; i += 1) {
-          buffer.push(makeSpan());
+          recordSpan(buffer);
         }
         // The auto-start tick: flush spans, then queue the sample with its loss counters.
         output.flushSpans();
@@ -181,7 +194,7 @@ describe('agent export — samples survive span load, losses are reported (F-24,
     const output = createAgentExport(destination, { queueBound: 16 }, () => buffer.drain());
     for (let tick = 0; tick < 3; tick += 1) {
       for (let i = 0; i < 6; i += 1) {
-        buffer.push(makeSpan());
+        recordSpan(buffer);
       }
       output.flushSpans();
       output.exportSample(makeSample(1_000 * tick));

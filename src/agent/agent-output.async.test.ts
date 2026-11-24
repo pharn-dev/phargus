@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { openAgentOutput } from './agent-output.js';
+import { openAgentOutput } from './auto-start.js';
 
 const RENAME_DELAY_MS = 120;
 const TICK_MS = 10;

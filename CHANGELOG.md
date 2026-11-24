@@ -157,6 +157,12 @@ All notable changes to Phargus are recorded here. The format follows
   `OtlpExporterOptions` (and so from `createOtlpMetricsExporter` and `createOtlpTraceExporter`).
   It bounded nothing; use `maxQueueSize`, counted in items. An untyped caller that still passes it
   is not refused: the value is ignored.
+- Internal agent code that nothing in production called: the span buffer's `push()` and its
+  string fallbacks for ids and paths the tracer never produces (the buffer is now fixed-size),
+  `newSpanId`, the `span-export` layer and `toSpanRecord` (folded into the agent's export wiring),
+  the event loop sampler's `resolution` option (always 10 ms), the exporter's `spanQueueBound`
+  option and `dropped` total. Six one-importer files are folded into their importer. No public
+  export or output line changes.
 
 ### Fixed
 

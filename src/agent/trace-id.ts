@@ -35,20 +35,9 @@ export function newTraceId(): string {
   return id;
 }
 
-const ALL_ZERO_SPAN_ID = '0'.repeat(16);
-
-/** A fresh W3C-shaped span id: 16 lowercase hex characters, never all zeros. */
-export function newSpanId(): string {
-  let id = randomHex(8);
-  while (id === ALL_ZERO_SPAN_ID) {
-    id = randomHex(8);
-  }
-  return id;
-}
-
 /**
- * Write a fresh span id as its 8 raw bytes at `target[offset]`, never all zeros: the same id
- * `newSpanId()` would make, without creating its hex string.
+ * Write a fresh W3C-shaped span id as its 8 raw bytes at `target[offset]`, never all zeros, cut
+ * from the same pool as trace ids.
  */
 export function writeSpanId(target: Uint8Array, offset: number): void {
   for (;;) {

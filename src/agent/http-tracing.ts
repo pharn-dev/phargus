@@ -234,7 +234,9 @@ export function disable(): void {
 
 /**
  * Keep at most `size` spans until the next drain. Spans already buffered move to the new buffer;
- * when it is smaller, the oldest are dropped and counted, like any other overflow.
+ * when it is smaller, the oldest are dropped and counted, like any other overflow. A moved span
+ * gets a fresh span id: nothing has read the old one, since a span id leaves the buffer only when
+ * drained.
  */
 export function setSpanBufferSize(size: number): void {
   if (size === buffer.capacity) {
@@ -243,7 +245,16 @@ export function setSpanBufferSize(size: number): void {
   const next = createSpanBuffer(size);
   const previous = buffer.drain();
   for (const span of previous.spans) {
-    next.push(span);
+    next.record(
+      span.traceId,
+      span.method,
+      span.path,
+      span.statusCode,
+      span.startTimeMs,
+      span.durationNs,
+      span.aborted,
+      span.parentSpanId,
+    );
   }
   carriedDrops += previous.dropped;
   buffer = next;

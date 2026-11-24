@@ -11,7 +11,7 @@ import { repoRoot, sleep } from '../../test/support.js';
 // are dropped and counted, and the event loop keeps turning. On Linux and macOS the agent writes
 // through `process.stdout`, which queues in Node. On Windows Node writes a stdout pipe
 // synchronously, so the agent writes that pipe itself with asynchronous `fs.write`
-// (agent-output.ts, `writesStdoutItself`); before that, a full pipe blocked the whole process there.
+// (auto-start.ts, `writesStdoutItself`); before that, a full pipe blocked the whole process there.
 // The test prints what it observed, so the platform-smoke job's log is the evidence for
 // docs/LIMITS.md.
 

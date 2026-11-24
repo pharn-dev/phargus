@@ -19,10 +19,6 @@ export type AgentLossCounters = { samples: number; spans: number };
  */
 export type AgentSampleLine = AgentSample & { pid: number; dropped: AgentLossCounters };
 
-export function toSpanRecord(span: TraceSpan): SpanRecord {
-  return { type: SPAN_RECORD_TYPE, ...span };
-}
-
 export function isSpanRecord(value: unknown): value is SpanRecord {
   return (
     typeof value === 'object' &&
