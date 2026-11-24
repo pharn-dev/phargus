@@ -4,8 +4,8 @@ Phargus requires Node.js 22.18 or newer, where the permission model is enabled w
 (stable since Node 22.13, and on Node 24). The older `--experimental-permission` flag is not
 supported by the agent.
 
-Each module needs only the grants for what it does. The agent needs file system grants only; the
-analyzer and the plugin runner also start threads or processes.
+Each module needs only the grants for what it does. The agent needs file system grants only, except
+for `sampleAllocations` (below); the analyzer and the plugin runner also start threads or processes.
 
 ## Agent (`@pharn-dev/phargus/agent`)
 
@@ -40,6 +40,13 @@ can write.
 
 The agent spawns no worker threads and no child processes, so none of `--allow-worker`,
 `--allow-child-process`, `--allow-addons` or `--allow-wasi` is needed for it.
+
+`sampleAllocations` opens a `node:inspector` session, which the permission model restricts. On
+Node 22 it is always refused under `--permission`: the release has no flag to grant it. Node
+releases that have `--allow-inspector` (24.13 does; 24.11 does not) allow it with that flag, which
+Node itself warns "could invalidate the permission model". Without the grant, `sampleAllocations`
+rejects with an `allocation sampling failed: Access to this API has been restricted` error, and
+nothing else in the agent is affected.
 
 ## Analyzer (`@pharn-dev/phargus/analyzer`)
 

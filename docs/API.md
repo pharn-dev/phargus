@@ -12,8 +12,10 @@ type lists are not runtime exports and are checked by reading the declaration fi
 ## `@pharn-dev/phargus/agent`
 
 Importing this subpath also starts the agent (it reads `PHARGUS_*` variables and writes NDJSON to
-the configured output). The functions below are the library API for code that wants the pieces
-without relying on the auto-start.
+the configured output), whichever of the functions below you import. The functions are the library
+API for code that wants the pieces directly. To use them with the agent off, set
+`PHARGUS_ENABLED=false` (or `PHARGUS_OUTPUT=none`) before the import: then nothing is patched and
+no config file is read. A worker thread never starts the agent.
 
 **Runtime exports**
 
@@ -37,7 +39,7 @@ without relying on the auto-start.
 - `defaultAgentConfig` — the agent configuration used when nothing is set
 - `isPermissionModelEnabled` — reports whether the process runs with the permission model
 - `loadAgentConfig` — builds the agent configuration from the environment
-- `runWithTrace` — runs a function inside a given trace id
+- `runWithTrace` — runs a function inside a fresh trace context with a new trace id (it takes no id)
 - `sampleAllocations` — takes an allocation profile and returns the top allocation sites
 - `sampleHeapSpaces` — samples `v8.getHeapSpaceStatistics()`
 - `sampleMemory` — samples process memory usage

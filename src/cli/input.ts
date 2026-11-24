@@ -28,6 +28,11 @@ export async function openInput(
   let handle;
   try {
     handle = await open(input.path, 'r');
+    if ((await handle.stat()).isDirectory()) {
+      // open() succeeds on a directory; only the first read fails, after the dashboard is up.
+      await handle.close();
+      throw Object.assign(new Error('illegal operation on a directory'), { code: 'EISDIR' });
+    }
   } catch (error) {
     const reason = (error as NodeJS.ErrnoException).code ?? (error as Error).message;
     throw new Error(`cannot read input file "${input.path}": ${reason}`, { cause: error });

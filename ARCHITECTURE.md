@@ -10,7 +10,8 @@ This document is the "how it fits together" companion to `CLAUDE.md`. Read
 Only the agent runs **inside** the process you want to observe. It samples, traces and writes
 NDJSON to stdout or a file; it starts no server. Everything else is a library you wire to that
 stream: the collector aggregates it, the dashboard serves the collector's output to a browser, and
-the OpenTelemetry exporter and plugin runner read the collector's windows. You can run those in the
+the OpenTelemetry exporter reads the collector's windows, and the plugin runner runs rules over
+windows your code hands it. You can run those in the
 monitored process, but the usual setup runs them in a second process that reads the app's stdout,
 so aggregation and serving never use the app's event loop. `phargus serve` (`src/cli`) is that second
 process for the collector and dashboard; `examples/express-app` wires the same libraries by hand,
@@ -23,10 +24,10 @@ with an alert rule.
 │ @pharn-dev/phargus/agent  (Node core only)                              │
 │  ├─ HTTP tracing: diagnostics_channel + Server#emit wrap,  │
 │  │  AsyncLocalStorage → traceId per incoming request       │
-│  ├─ samplers: event loop delay, memory, heap spaces,       │
+│  ├─ samplers: event loop delay, memory,                    │
 │  │  GC (PerformanceObserver), backpressure probe           │
-│  ├─ library API: heap snapshot, allocation sampling,       │
-│  │  --trace-deopt line parser                              │
+│  ├─ library API: heap spaces, heap snapshot, allocation    │
+│  │  sampling, --trace-deopt line parser                    │
 │  └─ NDJSON exporter: sample lane + span lane, each bounded │
 │     drop-oldest, one pipeline() to stdout or a file        │
 └─────────────────────────────┬──────────────────────────────┘
@@ -40,9 +41,11 @@ with an alert rule.
 │        │            drop-oldest) → append-only file                │
 │        │ subscribe()                                               │
 │        ├─▶ @pharn-dev/phargus/dashboard: HTTP server, static UI, SSE /events    │
-│        ├─▶ @pharn-dev/phargus/otel: OTLP/HTTP JSON metrics and traces (opt-in)  │
-│        └─▶ @pharn-dev/phargus/plugin-runner: rules over windows (opt-in)        │
-│             └─ child process → isolated-vm (memory + time limit)   │
+│        └─▶ @pharn-dev/phargus/otel: OTLP/HTTP JSON metrics and traces (opt-in)  │
+│                                                                    │
+│ @pharn-dev/phargus/plugin-runner (opt-in, called by your code): rules over     │
+│ windows you pass in, findings returned to the caller               │
+│  └─ child process → isolated-vm (memory + time limit)              │
 │                                                                    │
 │ @pharn-dev/phargus/analyzer (independent): Worker Thread pool for heap-snapshot │
 │ summaries/diffs and stack-trace symbolization                      │
@@ -101,8 +104,11 @@ with an alert rule.
    collector and serves the UI and an SSE endpoint. Each SSE client has its own bounded queue; a
    stalled client loses its oldest events, never the server's memory.
 5. **Export and rules (optional).** `@pharn-dev/phargus/otel` exporters subscribe to the collector and send
-   windows as OTLP metrics and spans as OTLP traces. `@pharn-dev/phargus/plugin-runner` runs user rules over a
-   copy of recent windows in a sandboxed child process.
+   windows as OTLP metrics and spans as OTLP traces. `@pharn-dev/phargus/plugin-runner` does not
+   subscribe: your code calls `runner.run(source, windows)` or `runRules(runner, rules, windows)`
+   with windows it chose (for example `collector.windows.snapshot()`), the rules run in a sandboxed
+   child process, and the results come back to that caller. Nothing schedules rules, and a finding
+   never becomes a collector alert.
 6. **Heavy analysis (analyzer).** Heap-snapshot summaries and diffs and stack-trace symbolization
    run in a Worker Thread pool with `resourceLimits`, a task timeout and input size caps, so the
    calling event loop is never blocked. The analyzer has no coupling to the other modules; you call

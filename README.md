@@ -337,7 +337,7 @@ spans under load (see [`docs/LIMITS.md`](./docs/LIMITS.md) §1).
 | **Backpressure**    | How often and how long writes stalled, grouped by the call site that wrote. Covers `Writable` subclasses, `fs.WriteStream`, `Duplex`, `Transform`, `PassThrough`, `net.Socket`, `tls.TLSSocket`, `http.ServerResponse` and `http.ClientRequest`                                                                               | `@pharn-dev/phargus/agent`         |
 | **Request tracing** | Each request to a `node:http` or `node:https` server gets a trace id, carried by `AsyncLocalStorage` with no code change; an inbound `traceparent` sets its trace id and parent span id. Spans record method, the first 256 characters of the requested path (no query), status and duration. `currentTraceId()` reads the id | `@pharn-dev/phargus/agent`         |
 | **Loss accounting** | Output queues are bounded and drop the oldest lines; every sample line carries cumulative `dropped: { samples, spans }` counters                                                                                                                                                                                              | `@pharn-dev/phargus/agent`         |
-| **V8 and memory**   | On-demand heap snapshots (`takeHeapSnapshot`); snapshot summaries, diffs and stack-trace symbolization in a Worker Thread pool; allocation sampling (`sampleAllocations`); a parser for `node --trace-deopt` output (`createDeoptParser`, you feed it the lines)                                                              | `@pharn-dev/phargus/analyzer`      |
+| **V8 and memory**   | On-demand heap snapshots (`takeHeapSnapshot`), allocation sampling (`sampleAllocations`) and a `node --trace-deopt` output parser (`createDeoptParser`, you feed it the lines); snapshot summaries, diffs and stack-trace symbolization in a Worker Thread pool come from `@pharn-dev/phargus/analyzer`                       | `@pharn-dev/phargus/agent`         |
 | **Collector**       | Fixed time windows with integer math, threshold alerts, alert sinks (stdout, file, webhook), opt-in persistence of recent windows to an append-only file                                                                                                                                                                      | `@pharn-dev/phargus/collector`     |
 | **Dashboard**       | Vanilla JS, no framework, no bundler, live over Server-Sent Events: latest event loop, memory, GC and backpressure figures with the top stalling call sites, alerts, and a waterfall of recent requests                                                                                                                       | `@pharn-dev/phargus/dashboard`     |
 | **Custom rules**    | User rules run in an `isolated-vm` sandbox in a child process, with a memory limit, a timeout and capped results. `isolated-vm` is an optional peer dependency                                                                                                                                                                | `@pharn-dev/phargus/plugin-runner` |
@@ -372,6 +372,9 @@ monotonic, and their interval is the window.
 The resource carries `service.name` (option `serviceName`, default `phargus`),
 `service.instance.id` (option `serviceInstanceId`, default a random UUID generated once per
 process), `host.name` and `process.pid`, so several instances of one service stay separate series.
+`host.name` and `process.pid` describe the process that runs the exporter. In the usual setup that
+is the collector process you wire the exporter into, not the monitored app, so they identify the
+collector; set `serviceInstanceId` when you need to tell the monitored instances apart.
 The trace exporter's resource still carries `service.name` only.
 
 ---
@@ -386,13 +389,15 @@ flowchart LR
   subgraph second["a second process (or the same one)"]
     collector["collector<br/>windows, alerts, sinks"] --> dashboard["dashboard<br/>SSE to the browser"]
     collector -.-> otel["otel<br/>(opt-in)"]
-    collector -.-> rules["plugin-runner<br/>(opt-in)"]
+    collector -. "windows your code passes in" .-> rules["plugin-runner<br/>(opt-in, returns findings<br/>to its caller)"]
   end
   agent -- "NDJSON" --> collector
 ```
 
-The agent never waits for the consumer: if the reader is slow, the agent drops the oldest queued
-lines and counts them, so a slow consumer cannot slow your app.
+On Linux and macOS the agent never waits for the consumer: if the reader is slow, the agent drops
+the oldest queued lines and counts them, so a slow consumer cannot slow your app. On Windows, Node
+writes to a stdout pipe synchronously, so a stalled reader of that pipe blocks the whole app once
+the pipe is full; use a file output there (see [`docs/LIMITS.md`](./docs/LIMITS.md)).
 
 Phargus is one npm package: the six modules are subpath exports, shipped as both ESM and CommonJS.
 `analyzer` runs its CPU-heavy work in Worker Threads. See [`ARCHITECTURE.md`](./ARCHITECTURE.md) for

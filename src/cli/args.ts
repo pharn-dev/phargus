@@ -193,6 +193,14 @@ export function parseServeArgs(argv: readonly string[], env: NodeJS.ProcessEnv):
     });
   } catch (error) {
     if (error instanceof TypeError) {
+      // --help and --version still win over a bad flag (`--bogus --help` prints the usage).
+      const loose = parseArgs({ args: [...argv], allowPositionals: true, strict: false });
+      if (loose.values['help'] === true || loose.values['h'] === true) {
+        return { kind: 'help' };
+      }
+      if (loose.values['version'] === true || loose.values['v'] === true) {
+        return { kind: 'version' };
+      }
       // Strict parseArgs reports unknown flags and missing values by name (`Unknown option '--bogus'`).
       throw new UsageError(error.message);
     }
