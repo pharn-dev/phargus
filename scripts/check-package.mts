@@ -27,7 +27,8 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const problems: string[] = [];
 
 const ALLOWED_OUTSIDE_DIST = new Set(['package.json', 'README.md', 'LICENSE']);
-const TEST_FILE = /(^|\/)(__tests__|fixtures?)\/|\.(test|spec)\.[cm]?[jt]s(\.map)?$/;
+const TEST_DIR = /(?:^|\/)(?:__tests__|fixtures?)\//;
+const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]s(?:\.map)?$/;
 const TS_SOURCE = /\.[cm]?ts$/;
 const DECLARATION = /\.d\.[cm]?ts$/;
 const EXACT_VERSION = /^\d+\.\d+\.\d+$/;
@@ -115,7 +116,9 @@ function checkTarball(pkg: PackageJson): number {
     if (!path.startsWith('dist/') && !ALLOWED_OUTSIDE_DIST.has(path)) {
       problems.push(`${path}: ships outside dist/`);
     }
-    if (TEST_FILE.test(path)) problems.push(`${path}: test file or fixture ships`);
+    if (TEST_DIR.test(path) || TEST_FILE.test(path)) {
+      problems.push(`${path}: test file or fixture ships`);
+    }
     if (TS_SOURCE.test(path) && !DECLARATION.test(path)) {
       problems.push(`${path}: TypeScript source ships`);
     }
