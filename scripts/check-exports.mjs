@@ -34,7 +34,6 @@ const EXPECTED_EXPORTS = {
     'createFileSink',
     'createNdjsonDecoder',
     'createRingBuffer',
-    'createSinks',
     'createStdoutSink',
     'createWebhookSink',
     'createWindowStore',

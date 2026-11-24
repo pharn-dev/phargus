@@ -95,8 +95,27 @@ All notable changes to Phargus are recorded here. The format follows
   item by item to send the rest, since the collector already rejects malformed spans. The metrics
   and trace exporters now share one implementation; their options, counters and types are
   unchanged.
+- `WindowStore.append()` (from `createWindowStore`) no longer queues overlapping calls: call it
+  again only once the previous call settled. The collector's persistence queue already appends one
+  window at a time. `release()` and `close()` close the file once a pending write finishes. The
+  collector now validates `windowMs` and the alert rules once, in `createCollector`, instead of on
+  every `consume()`.
 
 ### Removed
+
+- **Breaking:** `createSinks`, `SinkConfig` and `SinkInput` are gone from
+  `@pharn-dev/phargus/collector`, and the collector's `sinks` option takes ready sinks only, built
+  with `createStdoutSink`, `createFileSink` or `createWebhookSink`. A configuration object in
+  `sinks` now throws a `TypeError` from `createCollector` that names the factory to use. Pass
+  `onError` to the factory for a sink's delivery failures; `onSinkError` still sees a `send()` that
+  rejects or a `close()` that fails. Before and after:
+
+  ```js
+  // before
+  createCollector({ windowMs, capacity, sinks: [{ type: 'webhook', url }] });
+  // after
+  createCollector({ windowMs, capacity, sinks: [createWebhookSink({ url })] });
+  ```
 
 - **Breaking:** the deprecated dashboard login link `/?token=<token>` is gone, along with its
   `PHARGUS_DEP_TOKEN_QUERY` warning. A `?token=` query is no longer a credential: `GET /?token=…`

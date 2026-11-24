@@ -22,16 +22,9 @@ export type AlertSink = {
 
 export type SinkErrorHandler = (error: Error, sink: AlertSink) => void;
 
-/** Builds the `"<type> sink "<name>" [<index>]"` prefix used in every sink message. */
-export function sinkLabel(type: string, name?: string, index?: number): string {
-  let label = `${type} sink`;
-  if (name !== undefined) {
-    label += ` "${name}"`;
-  }
-  if (index !== undefined) {
-    label += ` [${index}]`;
-  }
-  return label;
+/** Builds the `<type> sink "<name>"` prefix used in every sink message. */
+export function sinkLabel(type: string, name?: string): string {
+  return name === undefined ? `${type} sink` : `${type} sink "${name}"`;
 }
 
 /**

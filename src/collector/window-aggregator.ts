@@ -20,9 +20,6 @@ export const MAX_LATE_WINDOWS = 60;
 /** Object-mode Transform: AgentSample in, AggregatedWindow out, one window per aligned interval. */
 export function createWindowAggregator(options: WindowAggregatorOptions): Transform {
   const { windowMs } = options;
-  if (!Number.isSafeInteger(windowMs) || windowMs <= 0) {
-    throw new RangeError('windowMs must be a positive safe integer');
-  }
   let open: WindowAccumulator | undefined;
 
   return new Transform({
@@ -30,10 +27,6 @@ export function createWindowAggregator(options: WindowAggregatorOptions): Transf
     transform(chunk: unknown, _encoding: BufferEncoding, callback: TransformCallback): void {
       try {
         const sample = chunk as AgentSample;
-        if (typeof sample.timestamp !== 'number' || !Number.isFinite(sample.timestamp)) {
-          callback(new TypeError('sample.timestamp must be a finite number'));
-          return;
-        }
         const start = windowStartOf(sample.timestamp, windowMs);
         if (open === undefined) {
           open = openWindow(start);

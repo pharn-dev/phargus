@@ -1,7 +1,7 @@
 import { createServer } from 'node:net';
 import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
-import { createSinks, createWebhookSink, type Alert } from './index.js';
+import { createWebhookSink, type Alert } from './index.js';
 
 // Fake markers: the test fails if either reaches a reported error.
 const URL_MARKER = 'url-marker-7f3a9c';
@@ -43,21 +43,16 @@ function thrownBy(create: () => unknown): unknown {
 describe('webhook sink secrets', () => {
   it('refuses a URL with a username or password at creation, without quoting it', () => {
     for (const url of ['https://user:pass@host/x', 'https://user@host/x', 'https://:pass@host/x']) {
-      for (const create of [
-        () => createWebhookSink({ url }),
-        () => createSinks([{ type: 'webhook', url }]),
-      ]) {
-        const error = thrownBy(create);
-        expect(error).toBeInstanceOf(TypeError);
-        const { message } = error as Error;
-        expect(message).not.toContain('user');
-        expect(message).not.toContain('pass');
-        // Stack paths may hold any word, so the whole inspected error is checked for the URL parts.
-        const text = inspect(error, { depth: null });
-        expect(text).not.toContain(':pass');
-        expect(text).not.toContain('@host');
-        expect((error as Error).message).toContain('headers option');
-      }
+      const error = thrownBy(() => createWebhookSink({ url }));
+      expect(error).toBeInstanceOf(TypeError);
+      const { message } = error as Error;
+      expect(message).not.toContain('user');
+      expect(message).not.toContain('pass');
+      // Stack paths may hold any word, so the whole inspected error is checked for the URL parts.
+      const text = inspect(error, { depth: null });
+      expect(text).not.toContain(':pass');
+      expect(text).not.toContain('@host');
+      expect((error as Error).message).toContain('headers option');
     }
   });
 
