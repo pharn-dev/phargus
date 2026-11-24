@@ -94,7 +94,7 @@ export function createNdjsonExporter(
         return;
       }
       const line = encodeNdjsonLine(record);
-      if (records.push(line)) {
+      if (records.push(line) !== undefined) {
         droppedRecords += 1;
       }
       wakeSource();
@@ -105,7 +105,7 @@ export function createNdjsonExporter(
         return;
       }
       const line = encodeNdjsonLine(record);
-      if (spans.push(line)) {
+      if (spans.push(line) !== undefined) {
         droppedSpans += 1;
       }
       wakeSource();

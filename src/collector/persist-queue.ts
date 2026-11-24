@@ -1,3 +1,4 @@
+import { createBoundedQueue } from '../agent/bounded-queue.js';
 import type { AggregatedWindow } from './window.js';
 
 /** Default most windows waiting for the disk; matches the agent's default `queueBound`. */
@@ -59,11 +60,8 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
   ) {
     throw new RangeError('persist.maxQueueSize must be a positive safe integer');
   }
-  const limit: number = maxQueueSize;
 
-  // An array plus a head index: no per-item shift and no up-front allocation of `limit` slots.
-  let items: AggregatedWindow[] = [];
-  let head = 0;
+  const queue = createBoundedQueue<AggregatedWindow>(maxQueueSize);
   let dropped = 0;
   let failed = 0;
   let running = false;
@@ -71,20 +69,6 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
   // True from a failure until the next successful append: one warning per run of failures.
   let failing = false;
   let waiters: Array<() => void> = [];
-
-  function size(): number {
-    return items.length - head;
-  }
-
-  function take(): AggregatedWindow {
-    const window = items[head] as AggregatedWindow;
-    head += 1;
-    if (head * 2 >= items.length) {
-      items = items.slice(head);
-      head = 0;
-    }
-    return window;
-  }
 
   function fail(error: Error): void {
     failed = increment(failed);
@@ -98,7 +82,7 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
   }
 
   function drained(): Promise<void> {
-    if (!running && size() === 0) {
+    if (!running && queue.size === 0) {
       return Promise.resolve();
     }
     return new Promise<void>((resolve) => {
@@ -107,8 +91,7 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
   }
 
   async function drain(): Promise<void> {
-    while (size() > 0) {
-      const window = take();
+    for (let window = queue.shift(); window !== undefined; window = queue.shift()) {
       try {
         await append(window);
         failing = false;
@@ -139,11 +122,9 @@ export function createPersistQueue(options: PersistQueueOptions): PersistQueue {
         });
         return;
       }
-      if (size() >= limit) {
-        take();
+      if (queue.push(window) !== undefined) {
         dropped = increment(dropped);
       }
-      items.push(window);
       if (!running) {
         running = true;
         // The loop catches every append failure itself; this guards the impossible rest.

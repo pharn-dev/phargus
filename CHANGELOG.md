@@ -82,6 +82,10 @@ All notable changes to Phargus are recorded here. The format follows
   sees, skips samples from other processes as the new `IgnoredReason` `other-process` (counted in
   `collector.ignored`, passed to `onIgnored`), and emits one process warning saying how many
   other processes it skipped. Samples without a `pid` and all spans are kept as before.
+- One bounded drop-oldest queue (`src/agent/bounded-queue.ts`) now serves the agent exporter, the
+  collector's ring buffers and persistence queue, the dashboard's SSE client and the OTLP batch
+  queue, replacing four separate implementations. It grows to its capacity on demand, so a large
+  bound costs nothing until used. `createRingBuffer` keeps its type and behaviour.
 
 ### Removed
 
