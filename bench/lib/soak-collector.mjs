@@ -31,7 +31,6 @@ const MAX_LINE_LENGTH = 1024 * 1024;
 const FLOOD_EVERY_MS = 100;
 const FLOOD_BATCHES = 500;
 const EXPORT_TIMEOUT_MS = 200;
-const EXPORT_QUEUE = 8;
 const SYMBOLIZE_EVERY_MS = 500;
 const FRESH_POOL_EVERY = 4;
 const RULES_EVERY_MS = 1000;
@@ -131,7 +130,6 @@ async function main() {
   const dead = `http://127.0.0.1:${await deadPort()}`;
   const exporterOptions = {
     timeoutMs: EXPORT_TIMEOUT_MS,
-    queueCapacity: EXPORT_QUEUE,
     onError: (err) => {
       counters.exportErrors += 1;
       note('export', err);
