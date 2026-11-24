@@ -68,7 +68,7 @@ import: then nothing is patched and no config file is read. A worker thread neve
 - `createRingBuffer` — creates a fixed-size buffer that drops the oldest item when full
 - `createStdoutSink` — creates an alert sink that writes to stdout
 - `createWebhookSink` — creates an alert sink that posts to a URL
-- `createWindowStore` — creates the in-memory window store, with optional disk persistence
+- `createWindowStore` — creates the file-backed window store behind `persist` (`path` and `maxBytes` required)
 - `validateAlertRules` — checks alert rules and returns them typed
 
 **Types**
@@ -95,7 +95,7 @@ import: then nothing is patched and no config file is read. A worker thread neve
 - `SpanRecord` — a trace span record, re-exported from the agent
 - `StdoutSinkOptions` — options for `createStdoutSink`
 - `WebhookSinkOptions` — options for `createWebhookSink`
-- `WindowPersistence` — the persistence hook the collector writes windows through
+- `WindowPersistence` — the read-only `collector.persistence` view: file path, size and counters
 - `WindowStore` — the window store
 
 ### Options

@@ -26,9 +26,10 @@ Status legend:
   bound is on disk.
 - ✅ Tracing can be reduced or switched off without switching the samplers off:
   `PHARGUS_SPAN_BUFFER` (config key `spanBuffer`, 0 to 65536, default 1024) is the number of spans
-  kept per sampling interval, and `0` turns HTTP tracing off (no `emit` wrap, no
-  diagnostics-channel subscription, no `AsyncLocalStorage`; `currentTraceId()` is `undefined`).
-  The variable is read before anything is patched. Measured costs: `docs/LIMITS.md` §1.
+  kept per sampling interval, and `PHARGUS_SPAN_BUFFER=0` turns HTTP tracing off (no `emit` wrap,
+  no diagnostics-channel subscription, no `AsyncLocalStorage`; `currentTraceId()` is `undefined`).
+  The variable is read before anything is patched; `spanBuffer: 0` in a config file switches
+  tracing off once the file is read. Measured costs: `docs/LIMITS.md` §1.
 - ✅ CLI: `phargus serve` reads the agent's NDJSON from stdin or a file and serves the dashboard,
   so `node --import @pharn-dev/phargus/agent app.mjs | npx phargus serve` is the whole setup.
   Loopback by default; a non-loopback `--host` requires a token. ESM-only, not an `exports` subpath.
@@ -91,7 +92,7 @@ Status legend:
 - ✅ OpenTelemetry export of windows (metrics) and spans (traces) as OTLP/HTTP JSON, in
   `@pharn-dev/phargus/otel`, outside the agent core. Batched sends, a bounded drop-oldest queue with
   counted and reported loss, timeouts, no redirects, bounded `close()`.
-- ✅ Every window field exported as an OTLP metric: event loop lag and memory gauges, GC count and
+- ✅ Every window field but the backpressure hotspots and `dropped` exported as an OTLP metric: event loop lag and memory gauges, GC count and
   pause, backpressure events and stalls, and the window's sample and late-sample counts (maxima and
   last values as gauges, per-window totals as delta sums; the list is in the README). Metrics carry
   the resource attributes `service.name`, `service.instance.id` (a per-process UUID, or
@@ -111,7 +112,7 @@ Status legend:
 - ⬜ Time-range scrubbing of recent windows: the sparklines cover the last 300 windows, with no
   way to pick a range.
 - ✅ Exposure/auth model: loopback without a token, any other bind requires one; `Host`/`Origin`
-  allowlist (`allowedHosts`); a `/login#token=` fragment link exchanged once through `POST /session` for an `HttpOnly`, `SameSite=Strict` cookie (the `?token=` link still works for one release, deprecated);
+  allowlist (`allowedHosts`); a `/login#token=` fragment link exchanged once through `POST /session` for an `HttpOnly`, `SameSite=Strict` cookie;
   `Authorization: Bearer` for API clients.
 
 ## 6. Custom diagnostic rules (plugin runner)
@@ -174,7 +175,8 @@ Status legend:
 ## 11. Measurement
 
 - ✅ `bench/overhead.mjs` (agent-on versus agent-off) and `bench/soak.mjs` (leak checks under
-  load), run nightly. Informational: no overhead gate yet.
+  load), run nightly. The benchmark fails the nightly run on an exceeded budget; nothing gates a
+  merge or release.
 
 ---
 

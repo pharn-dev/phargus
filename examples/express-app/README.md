@@ -46,10 +46,10 @@ mode; `index.mjs` is the version that configures one.
 
 ## Configuration
 
-| Variable         | Default | Meaning                                       |
-| ---------------- | ------- | --------------------------------------------- |
-| `APP_PORT`       | `3000`  | Port of the app. `0` picks a free port.       |
-| `DASHBOARD_PORT` | `7070`  | Port of the dashboard. `0` picks a free port. |
+| Variable         | Default | Meaning                                                                                                           |
+| ---------------- | ------- | ----------------------------------------------------------------------------------------------------------------- |
+| `APP_PORT`       | `3000`  | Port of the app. `0` picks a free port. The default applies to `index.mjs`; `app.mjs` run on its own requires it. |
+| `DASHBOARD_PORT` | `7070`  | Port of the dashboard. `0` picks a free port.                                                                     |
 
 `PHARGUS_INTERVAL_MS` is passed to the agent and defaults to `250` here.
 
