@@ -31,11 +31,11 @@ describe('heap snapshot diff ordering', () => {
   it('ranks a type that shrank first, drops unchanged rows and orders growth and shrink by absolute size change', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'phargus-diff-shrink-'));
     try {
-      let held: PhargusShrinkMarker[] = [];
+      const held: PhargusShrinkMarker[] = [];
       for (let i = 0; i < 5_000; i += 1) held.push(new PhargusShrinkMarker(i));
       const beforePath = writeHeapSnapshot(join(dir, 'before.heapsnapshot'));
       expect(held.length).toBe(5_000);
-      held = [];
+      held.length = 0;
       // Writing a snapshot runs a full GC first, so the released objects are gone from this one.
       const afterPath = writeHeapSnapshot(join(dir, 'after.heapsnapshot'));
 
