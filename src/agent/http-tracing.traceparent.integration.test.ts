@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { currentTraceId } from './context.js';
 import { disable, drainSpans, enable } from './http-tracing.js';
 import type { TraceSpan } from './span-buffer.js';
-import { toSpanRecord } from './span-record.js';
+import { SPAN_RECORD_TYPE } from './span-record.js';
 
 const TRACE_ID = '4bf92f3577b34da6a3ce929d0e0e4736';
 const PARENT_ID = '00f067aa0ba902b7';
@@ -74,7 +74,10 @@ describe('http tracing — a continued traceparent keeps its parent span id (COR
     expect(span.parentSpanId).toBe(PARENT_ID);
     expect(span.spanId).not.toBe(PARENT_ID);
     expect(seen.get('/continued')).toBe(TRACE_ID);
-    const line = JSON.parse(JSON.stringify(toSpanRecord(span))) as Record<string, unknown>;
+    const line = JSON.parse(JSON.stringify({ type: SPAN_RECORD_TYPE, ...span })) as Record<
+      string,
+      unknown
+    >;
     expect(line['traceId']).toBe(TRACE_ID);
     expect(line['parentSpanId']).toBe(PARENT_ID);
   });
@@ -84,7 +87,7 @@ describe('http tracing — a continued traceparent keeps its parent span id (COR
     expect(span.traceId).toMatch(/^[0-9a-f]{32}$/);
     expect(span.traceId).not.toBe(TRACE_ID);
     expect(seen.get('/fresh')).toBe(span.traceId);
-    expect(Object.hasOwn(toSpanRecord(span), 'parentSpanId')).toBe(false);
+    expect(Object.hasOwn({ type: SPAN_RECORD_TYPE, ...span }, 'parentSpanId')).toBe(false);
   });
 
   it('an invalid header gets a fresh trace id and no parentSpanId key', async () => {
@@ -94,6 +97,6 @@ describe('http tracing — a continued traceparent keeps its parent span id (COR
     expect(span.traceId).toMatch(/^[0-9a-f]{32}$/);
     expect(span.traceId).not.toBe(TRACE_ID);
     expect(seen.get('/invalid')).toBe(span.traceId);
-    expect(Object.hasOwn(toSpanRecord(span), 'parentSpanId')).toBe(false);
+    expect(Object.hasOwn({ type: SPAN_RECORD_TYPE, ...span }, 'parentSpanId')).toBe(false);
   });
 });

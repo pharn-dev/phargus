@@ -29,6 +29,18 @@ async function load(): Promise<TraceIdModule> {
   return import('./trace-id.js');
 }
 
+/** Trace ids as made, and span ids as the span buffer stores them: writeSpanId's bytes as hex. */
+function withSpanIds(mod: TraceIdModule): { newTraceId(): string; newSpanId(): string } {
+  return {
+    newTraceId: mod.newTraceId,
+    newSpanId: (): string => {
+      const bytes = Buffer.alloc(8);
+      mod.writeSpanId(bytes, 0);
+      return bytes.toString('hex');
+    },
+  };
+}
+
 beforeEach(() => {
   randomBytes.mockClear();
   randomFillSync.mockClear();
@@ -36,7 +48,7 @@ beforeEach(() => {
 
 describe('trace and span ids — pooled CSPRNG bytes', () => {
   it('makes well-formed, non-zero, unique ids across many pool refills', async () => {
-    const { newSpanId, newTraceId } = await load();
+    const { newSpanId, newTraceId } = withSpanIds(await load());
     const traceIds = new Set<string>();
     const spanIds = new Set<string>();
     for (let i = 0; i < 5000; i += 1) {
@@ -58,7 +70,7 @@ describe('trace and span ids — pooled CSPRNG bytes', () => {
   });
 
   it('draws randomness in batches, not with one native call per id', async () => {
-    const { newSpanId, newTraceId } = await load();
+    const { newSpanId, newTraceId } = withSpanIds(await load());
     for (let i = 0; i < 1000; i += 1) {
       newTraceId();
       newSpanId();
@@ -70,7 +82,7 @@ describe('trace and span ids — pooled CSPRNG bytes', () => {
   });
 
   it('never hands out an all-zero id, even when the random source returns zeros', async () => {
-    const { newSpanId, newTraceId } = await load();
+    const { newSpanId, newTraceId } = withSpanIds(await load());
     // The first fill is all zeros; every id cut from it is all-zero and must be skipped.
     randomFillSync.mockImplementationOnce((target: FillTarget): FillTarget => {
       bytesOf(target).fill(0);
@@ -96,7 +108,7 @@ describe('trace and span ids — pooled CSPRNG bytes', () => {
   });
 
   it('never reuses pool bytes: consecutive ids are disjoint slices of the random stream', async () => {
-    const { newSpanId, newTraceId } = await load();
+    const { newSpanId, newTraceId } = withSpanIds(await load());
     let counter = 0;
     // A deterministic, never-repeating stream (1, 2, 3, …) makes reuse visible.
     randomFillSync.mockImplementation((target: FillTarget): FillTarget => {

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createFdOutput, isPipeMode, writesStdoutItself } from './agent-output.js';
+import { createFdOutput, isPipeMode, writesStdoutItself } from './auto-start.js';
 
 const dirs: string[] = [];
 const fds: number[] = [];

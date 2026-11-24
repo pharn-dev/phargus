@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createSpanBuffer } from '../agent/span-buffer.js';
-import { toSpanRecord } from '../agent/span-record.js';
+import { SPAN_RECORD_TYPE } from '../agent/span-record.js';
 import { createCollector } from './collector.js';
 import { classifyRecord, MAX_SPAN_STRING_LENGTH, parseSpanRecord } from './record-guard.js';
 
@@ -118,7 +118,9 @@ describe('record guard: only a well-formed span is stored (CORE-242)', () => {
     buffer.record(traceId, 'PUT', '/both', 0, 1_700_000_000_003, 8_000, true, '00f067aa0ba902b7');
     const lines = buffer
       .drain()
-      .spans.map((span) => JSON.parse(JSON.stringify(toSpanRecord(span))) as unknown);
+      .spans.map(
+        (span) => JSON.parse(JSON.stringify({ type: SPAN_RECORD_TYPE, ...span })) as unknown,
+      );
     expect(lines).toHaveLength(4);
     for (const line of lines) {
       expect(classifyRecord(line)).toBe('span');

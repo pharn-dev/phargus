@@ -4,7 +4,7 @@ import { roundToNonNegativeInt } from './int.js';
 
 /**
  * One window of event loop delay, all values integer nanoseconds. Each value is the delay beyond the
- * expected timer interval (the sampler's `resolution`), clamped at 0, so an idle loop reads close to 0.
+ * expected timer interval (`DEFAULT_RESOLUTION_MS`), clamped at 0, so an idle loop reads close to 0.
  */
 export type EventLoopSample = {
   min: number;
@@ -21,31 +21,13 @@ export type EventLoopSampler = {
   sample(): EventLoopSample;
 };
 
-export type EventLoopSamplerOptions = {
-  /**
-   * Timer interval of the underlying `monitorEventLoopDelay` histogram, in whole milliseconds
-   * (default 10). It is subtracted from every exported value.
-   */
-  resolution?: number;
-};
-
+/** Timer interval of the underlying `monitorEventLoopDelay` histogram, in whole milliseconds. */
 export const DEFAULT_RESOLUTION_MS = 10;
-const NS_PER_MS = 1_000_000;
+/** The histogram records the whole timer interval on every tick, even on an idle loop. */
+const BASELINE_NS = DEFAULT_RESOLUTION_MS * 1_000_000;
 
-function validateResolution(value: unknown): number {
-  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
-    throw new RangeError(
-      `createEventLoopSampler: resolution must be a positive integer number of milliseconds, got ${String(value)}`,
-    );
-  }
-  return value;
-}
-
-export function createEventLoopSampler(options?: EventLoopSamplerOptions): EventLoopSampler {
-  const resolution = validateResolution(options?.resolution ?? DEFAULT_RESOLUTION_MS);
-  // The histogram records the whole timer interval on every tick, even on an idle loop.
-  const baselineNs = resolution * NS_PER_MS;
-  const histogram = monitorEventLoopDelay({ resolution });
+export function createEventLoopSampler(): EventLoopSampler {
+  const histogram = monitorEventLoopDelay({ resolution: DEFAULT_RESOLUTION_MS });
   return {
     enable(): void {
       histogram.enable();
@@ -59,11 +41,11 @@ export function createEventLoopSampler(options?: EventLoopSamplerOptions): Event
         histogram.count === 0
           ? { min: 0, max: 0, mean: 0, p50: 0, p99: 0 }
           : {
-              min: roundToNonNegativeInt(histogram.min - baselineNs),
-              max: roundToNonNegativeInt(histogram.max - baselineNs),
-              mean: roundToNonNegativeInt(histogram.mean - baselineNs),
-              p50: roundToNonNegativeInt(histogram.percentile(50) - baselineNs),
-              p99: roundToNonNegativeInt(histogram.percentile(99) - baselineNs),
+              min: roundToNonNegativeInt(histogram.min - BASELINE_NS),
+              max: roundToNonNegativeInt(histogram.max - BASELINE_NS),
+              mean: roundToNonNegativeInt(histogram.mean - BASELINE_NS),
+              p50: roundToNonNegativeInt(histogram.percentile(50) - BASELINE_NS),
+              p99: roundToNonNegativeInt(histogram.percentile(99) - BASELINE_NS),
             };
       histogram.reset();
       return result;

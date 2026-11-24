@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 type ExporterUnderTest = {
   export(record: unknown): void;
-  readonly dropped: number;
+  readonly droppedRecords: number;
   stop(): Promise<void>;
   readonly done: Promise<void>;
 };
@@ -92,7 +92,7 @@ describe('agent NDJSON export — AC-2', () => {
     // The criterion needs more than N records beyond what the destination accepted.
     expect(total - acceptedDuringStall).toBeGreaterThan(N);
 
-    const dropped = exporter.dropped;
+    const dropped = exporter.droppedRecords;
     expect(Number.isInteger(dropped)).toBe(true);
     expect(dropped).toBe(total - acceptedDuringStall - N);
 

@@ -2,13 +2,13 @@ import type { Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { excludeFromBackpressure } from './backpressure-probe.js';
 import { createBoundedQueue } from './bounded-queue.js';
-import { encodeNdjsonLine } from './ndjson-encoder.js';
 
 export type NdjsonExporterOptions = {
-  /** Maximum queued `export()` records (samples) before the oldest is dropped. Defaults to 1024. */
+  /**
+   * Maximum queued lines in each lane (`export()` records and `exportSpan()` lines) before that
+   * lane drops its oldest. Defaults to 1024.
+   */
   queueBound?: number;
-  /** Maximum queued `exportSpan()` lines before the oldest span is dropped. Defaults to `queueBound`. */
-  spanQueueBound?: number;
 };
 
 export type NdjsonExporter = {
@@ -19,8 +19,6 @@ export type NdjsonExporter = {
    * written only while no `export()` record is waiting, so a burst of spans never displaces a sample.
    */
   exportSpan(record: unknown): void;
-  /** Integer count of records (both lanes) discarded without reaching the destination. */
-  readonly dropped: number;
   /** Integer count of `export()` records discarded without reaching the destination. */
   readonly droppedRecords: number;
   /** Integer count of `exportSpan()` records discarded without reaching the destination. */
@@ -33,16 +31,27 @@ export type NdjsonExporter = {
 
 const DEFAULT_QUEUE_BOUND = 1024;
 
+/**
+ * Encode one record as a single NDJSON line (JSON text plus a trailing newline).
+ * Encode failures (a cycle, a BigInt) propagate as the TypeError JSON.stringify throws.
+ */
+export function encodeNdjsonLine(record: unknown): string {
+  const text = JSON.stringify(record) as string | undefined;
+  if (text === undefined) {
+    throw new TypeError('record is not JSON-serializable (undefined, function or symbol)');
+  }
+  return `${text}\n`;
+}
+
 export function createNdjsonExporter(
   destination: Writable,
   options: NdjsonExporterOptions = {},
 ): NdjsonExporter {
   excludeFromBackpressure(destination);
   const queueBound = options.queueBound ?? DEFAULT_QUEUE_BOUND;
-  const spanQueueBound = options.spanQueueBound ?? queueBound;
-  // createBoundedQueue validates each bound and throws RangeError.
+  // createBoundedQueue validates the bound and throws RangeError.
   const records = createBoundedQueue<string>(queueBound);
-  const spans = createBoundedQueue<string>(spanQueueBound);
+  const spans = createBoundedQueue<string>(queueBound);
   let droppedRecords = 0;
   let droppedSpans = 0;
   let stopping = false;
@@ -109,9 +118,6 @@ export function createNdjsonExporter(
         droppedSpans += 1;
       }
       wakeSource();
-    },
-    get dropped(): number {
-      return droppedRecords + droppedSpans;
     },
     get droppedRecords(): number {
       return droppedRecords;

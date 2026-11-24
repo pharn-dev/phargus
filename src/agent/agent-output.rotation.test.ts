@@ -6,7 +6,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { isMainThread } from 'node:worker_threads';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openAgentOutput, rotatedOutputPath, writesStdoutItself } from './agent-output.js';
+import { openAgentOutput, rotatedOutputPath, writesStdoutItself } from './auto-start.js';
 import { defaultAgentConfig, readConfigEnv, validateConfigValue } from './config.js';
 
 const MIB = 1_048_576;

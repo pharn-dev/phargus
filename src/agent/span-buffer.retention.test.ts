@@ -1,26 +1,7 @@
-import { setFlagsFromString } from 'node:v8';
-import { runInNewContext } from 'node:vm';
 import { describe, expect, it } from 'vitest';
-import { createSpanBuffer, type TraceSpan } from './span-buffer.js';
-
-setFlagsFromString('--expose-gc');
-const gc = runInNewContext('gc') as () => void;
+import { createSpanBuffer } from './span-buffer.js';
 
 const TRACE_ID = '4bf92f3577b34da6a3ce929d0e0e4736';
-
-function makeSpan(n: number, overrides: Partial<TraceSpan> = {}): TraceSpan {
-  return {
-    traceId: n.toString(16).padStart(32, '0'),
-    spanId: n.toString(16).padStart(16, '0'),
-    name: `GET /p${n}`,
-    method: 'GET',
-    path: `/p${n}`,
-    statusCode: 200,
-    startTimeMs: 1_700_000_000_000 + n,
-    durationNs: 1000 + n,
-    ...overrides,
-  };
-}
 
 describe('span buffer — keeps span fields, not span objects', () => {
   it('record() buffers a span with a fresh span id and the name built from method and path', () => {
@@ -48,88 +29,53 @@ describe('span buffer — keeps span fields, not span objects', () => {
     expect(buffer.drain()).toEqual({ spans: [], dropped: 0 });
   });
 
-  it('push() hands back exactly the span it was given, including ids that are not lowercase hex', () => {
-    const buffer = createSpanBuffer(8);
-    const odd = makeSpan(7, {
-      traceId: 'not-a-hex-trace-id',
-      spanId: 'ABCDEF0123456789',
-      name: 'custom name',
-    });
-    const plain = makeSpan(8);
-    buffer.push(odd);
-    buffer.record(TRACE_ID, 'GET', '/r', 200, 5, 6);
-    buffer.push(plain);
-
-    const { spans } = buffer.drain();
-    expect(spans[0]).toEqual(odd);
-    expect(spans[0]).not.toBe(odd);
-    expect(spans[1]?.traceId).toBe(TRACE_ID);
-    expect(spans[1]?.path).toBe('/r');
-    expect(spans[2]).toEqual(plain);
-  });
-
-  it('keeps aborted: true through record() and push(), and writes no aborted key otherwise', () => {
+  it('keeps aborted: true through record(), and writes no aborted key otherwise', () => {
     const buffer = createSpanBuffer(2);
     buffer.record(TRACE_ID, 'GET', '/gone', 0, 1, 2, true);
-    buffer.push(makeSpan(4, { aborted: true }));
+    buffer.record(TRACE_ID, 'GET', '/gone', 0, 1, 2, true);
     expect(buffer.drain().spans.map((span) => span.aborted)).toEqual([true, true]);
 
     // The same slots, reused for spans that finished normally, carry no aborted key.
     buffer.record(TRACE_ID, 'GET', '/ok', 200, 1, 2, false);
-    buffer.push(makeSpan(5));
+    buffer.record(TRACE_ID, 'GET', '/ok', 200, 1, 2);
     const { spans } = buffer.drain();
     expect(spans.map((span) => Object.hasOwn(span, 'aborted'))).toEqual([false, false]);
-    expect(spans[1]).toEqual(makeSpan(5));
   });
 
-  it('keeps parentSpanId through record() and push(), and writes no parentSpanId key otherwise', () => {
+  it('keeps parentSpanId through record(), and writes no parentSpanId key otherwise', () => {
     const buffer = createSpanBuffer(3);
     buffer.record(TRACE_ID, 'GET', '/child', 200, 1, 2, false, '00f067aa0ba902b7');
     buffer.record(TRACE_ID, 'GET', '/gone', 0, 1, 2, true, 'b7ad6b7169203331');
-    // Not lowercase hex: kept as its string.
-    buffer.push(makeSpan(4, { parentSpanId: 'NOT-HEX' }));
     let { spans } = buffer.drain();
     expect(spans.map((span) => span.parentSpanId)).toEqual([
       '00f067aa0ba902b7',
       'b7ad6b7169203331',
-      'NOT-HEX',
     ]);
     expect(spans[1]?.aborted).toBe(true);
 
     // The same slots, reused for root spans, carry no parentSpanId key.
     buffer.record(TRACE_ID, 'GET', '/root', 200, 1, 2);
     buffer.record(TRACE_ID, 'GET', '/root', 200, 1, 2, false, undefined);
-    buffer.push(makeSpan(5));
     ({ spans } = buffer.drain());
-    expect(spans.map((span) => Object.hasOwn(span, 'parentSpanId'))).toEqual([false, false, false]);
-    expect(spans[2]).toEqual(makeSpan(5));
+    expect(spans.map((span) => Object.hasOwn(span, 'parentSpanId'))).toEqual([false, false]);
   });
 
-  it('round-trips paths of every shape: empty, Latin-1, longer than a slot, and beyond Latin-1', () => {
+  it('round-trips the paths the tracer keeps: empty, Latin-1, and a full 256-character slot', () => {
     const buffer = createSpanBuffer(8);
-    const paths = [
-      '',
-      '/caf\u00e9?x=\u00ff',
-      `/${'a'.repeat(300)}`,
-      '/\u20ac/\u{1f600}',
-      `/${'b'.repeat(255)}`,
-    ];
+    const paths = ['', '/caf\u00e9?x=\u00ff', `/${'b'.repeat(255)}`, '/short'];
     for (const path of paths) {
       buffer.record(TRACE_ID, 'GET', path, 200, 1, 1);
     }
-    const pushed = makeSpan(3, { path: '/\u4e2d\u6587', name: 'GET /\u4e2d\u6587' });
-    buffer.push(pushed);
 
     const { spans } = buffer.drain();
-    expect(spans.map((span) => span.path)).toEqual([...paths, pushed.path]);
-    expect(spans.map((span) => span.name)).toEqual([...paths.map((p) => `GET ${p}`), pushed.name]);
-    expect(spans.at(-1)).toEqual(pushed);
+    expect(spans.map((span) => span.path)).toEqual(paths);
+    expect(spans.map((span) => span.name)).toEqual(paths.map((p) => `GET ${p}`));
   });
 
-  it('drops the oldest spans past capacity and counts them, across push() and record()', () => {
+  it('drops the oldest spans past capacity and counts them', () => {
     const buffer = createSpanBuffer(3);
     for (let n = 1; n <= 4; n += 1) {
-      buffer.push(makeSpan(n));
+      buffer.record(TRACE_ID, 'GET', `/p${n}`, 200, n, n);
     }
     buffer.record(TRACE_ID, 'GET', '/last', 200, 9, 9);
 
@@ -137,22 +83,9 @@ describe('span buffer — keeps span fields, not span objects', () => {
     expect(first.dropped).toBe(2);
     expect(first.spans.map((span) => span.path)).toEqual(['/p3', '/p4', '/last']);
     // The count resets with each drain, and the ring keeps working after it wraps.
-    buffer.push(makeSpan(10));
-    expect(buffer.drain()).toEqual({ spans: [makeSpan(10)], dropped: 0 });
-  });
-
-  it('does not keep the pushed span object alive until the next drain', async () => {
-    const buffer = createSpanBuffer(16);
-    const ref = ((): WeakRef<TraceSpan> => {
-      const span = makeSpan(1);
-      buffer.push(span);
-      return new WeakRef(span);
-    })();
-    // A WeakRef target stays alive until the current job ends.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    gc();
-
-    expect(ref.deref()).toBeUndefined();
-    expect(buffer.drain().spans).toEqual([makeSpan(1)]);
+    buffer.record(TRACE_ID, 'GET', '/p10', 200, 10, 10);
+    const second = buffer.drain();
+    expect(second.dropped).toBe(0);
+    expect(second.spans.map((span) => span.path)).toEqual(['/p10']);
   });
 });

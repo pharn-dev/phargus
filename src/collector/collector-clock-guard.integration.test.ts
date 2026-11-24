@@ -1,7 +1,7 @@
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { describe, expect, it } from 'vitest';
-import { encodeNdjsonLine } from '../agent/ndjson-encoder.js';
+import { encodeNdjsonLine } from '../agent/ndjson-exporter.js';
 import { createCollector, createNdjsonDecoder } from './index.js';
 import type { IgnoredReason } from './record-guard.js';
 import type { AggregatedWindow } from './window.js';

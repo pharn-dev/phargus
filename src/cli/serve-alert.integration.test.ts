@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { afterAll, describe, expect, it } from 'vitest';
-import { encodeNdjsonLine } from '../agent/ndjson-encoder.js';
+import { encodeNdjsonLine } from '../agent/ndjson-exporter.js';
 import { main, type MainIo } from './main.js';
 
 const URL_LINE = /^dashboard at http:\/\/127\.0\.0\.1:(\d+)$/;

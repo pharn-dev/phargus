@@ -4,13 +4,12 @@ export { currentTraceId, runWithTrace } from './context.js';
 export { takeHeapSnapshot } from './heap-snapshot.js';
 export type { HeapSnapshotOptions, HeapSnapshotResult } from './heap-snapshot.js';
 export { sampleAllocations } from './allocation-sampler.js';
-export type { AllocationSamplingOptions } from './allocation-sampler.js';
-export type { AllocationSite } from './allocation-profile.js';
+export type { AllocationSamplingOptions, AllocationSite } from './allocation-sampler.js';
 export { sampleHeapSpaces } from './heap-space-sampler.js';
 export type { HeapSpaceEntry, HeapSpaceSample } from './heap-space-sampler.js';
 export { createDeoptParser, ANONYMOUS_FUNCTION, DEPENDENT_CODE_KIND } from './deopt-parser.js';
 export type { DeoptEvent, DeoptLocation, DeoptParser, DeoptParserOptions } from './deopt-parser.js';
-export { PhargusPermissionError } from './permission-error.js';
+export { PhargusPermissionError } from './permission.js';
 
 // The output format: one NDJSON line per sample or span.
 export { SPAN_RECORD_TYPE } from './span-record.js';

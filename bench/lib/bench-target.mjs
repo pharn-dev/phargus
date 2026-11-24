@@ -35,10 +35,11 @@ async function setUpVariant() {
   if (variant === 'tracing') {
     // HTTP tracing only: spans drained once per interval, like the auto-started agent does.
     const tracing = await internal('./http-tracing.js');
-    const { createSpanExport } = await internal('./span-export.js');
     tracing.enable();
-    const spans = createSpanExport(tracing.drainSpans, (record) => exporter.export(record));
-    setInterval(() => spans.flush(), SAMPLE_INTERVAL_MS).unref();
+    const flushSpans = () => {
+      for (const span of tracing.drainSpans().spans) exporter.export({ type: 'span', ...span });
+    };
+    setInterval(flushSpans, SAMPLE_INTERVAL_MS).unref();
   } else {
     // Samplers and the backpressure probe only; HTTP tracing stays off.
     const { createSamplerController } = await internal('./sampler-controller.js');
