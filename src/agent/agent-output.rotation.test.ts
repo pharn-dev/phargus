@@ -1,10 +1,12 @@
+import { fstatSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { isMainThread } from 'node:worker_threads';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openAgentOutput, rotatedOutputPath } from './agent-output.js';
+import { openAgentOutput, rotatedOutputPath, writesStdoutItself } from './agent-output.js';
 import { readConfigEnv } from './config-env.js';
 import { defaultAgentConfig, validateConfigValue } from './config-schema.js';
 
@@ -134,12 +136,16 @@ describe('agent output file size bound', () => {
     );
   });
 
-  // On Windows a stdout pipe gets the agent's own writer (agent-output.stdout.test.ts).
-  it.skipIf(process.platform === 'win32')(
-    'AC-5: stdout is returned as is, whatever the bound',
-    () => {
-      expect(openAgentOutput('stdout', 0)).toBe(process.stdout);
-      expect(openAgentOutput('stdout', MIB)).toBe(process.stdout);
-    },
-  );
+  it('AC-5: stdout is returned as is, whatever the bound, unless the agent writes it itself', () => {
+    const own = writesStdoutItself(process.platform, isMainThread, () => fstatSync(1).mode);
+    for (const bound of [0, MIB]) {
+      const destination = openAgentOutput('stdout', bound);
+      if (own) {
+        // Windows with stdout a pipe: the agent's own writer (agent-output.stdout.test.ts).
+        expect(destination).not.toBe(process.stdout);
+      } else {
+        expect(destination).toBe(process.stdout);
+      }
+    }
+  });
 });

@@ -135,13 +135,13 @@ class FdOutput extends Writable {
         return;
       }
       const next = offset + bytesWritten;
-      if (next >= chunk.length) {
-        callback();
-      } else if (bytesWritten === 0) {
-        callback(new Error(`write to fd ${String(this.#fd)} made no progress`));
-      } else {
+      if (next < chunk.length && bytesWritten > 0) {
         this.#writeFrom(chunk, next, callback);
+        return;
       }
+      callback(
+        next < chunk.length ? new Error(`write to fd ${String(this.#fd)} made no progress`) : null,
+      );
     });
   }
 }
@@ -160,18 +160,24 @@ export function createFdOutput(fd: number): Writable {
 export function writesStdoutItself(
   platform: NodeJS.Platform,
   mainThread: boolean,
-  stdoutIsPipe: () => boolean,
+  stdoutMode: () => number,
 ): boolean {
-  return platform === 'win32' && mainThread && stdoutIsPipe();
+  return platform === 'win32' && mainThread && isPipeMode(stdoutMode());
 }
 
-function stdoutIsPipe(): boolean {
-  try {
-    return fstatSync(1).isFIFO();
-  } catch {
-    // No usable fd 1: fall back to process.stdout, whose first write reports the error.
-    return false;
-  }
+const S_IFMT = 0o170000;
+const S_IFIFO = 0o010000;
+
+/**
+ * Whether an `fs.Stats` mode is a pipe. Node's `Stats.isFIFO()` always returns false on Windows,
+ * though libuv reports a pipe there with the S_IFIFO bits, so the bits are read directly.
+ */
+export function isPipeMode(mode: number): boolean {
+  return (mode & S_IFMT) === S_IFIFO;
+}
+
+function stdoutMode(): number {
+  return fstatSync(1).mode;
 }
 
 /**
@@ -184,7 +190,7 @@ function stdoutIsPipe(): boolean {
  */
 export function openAgentOutput(output: string, maxBytes: number): Writable {
   if (output === 'stdout') {
-    return writesStdoutItself(process.platform, isMainThread, stdoutIsPipe)
+    return writesStdoutItself(process.platform, isMainThread, stdoutMode)
       ? createFdOutput(1)
       : process.stdout;
   }

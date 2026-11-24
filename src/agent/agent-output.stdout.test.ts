@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createFdOutput, writesStdoutItself } from './agent-output.js';
+import { createFdOutput, isPipeMode, writesStdoutItself } from './agent-output.js';
 
 const dirs: string[] = [];
 const fds: number[] = [];
@@ -28,8 +28,9 @@ afterEach(async () => {
 });
 
 describe('writesStdoutItself', () => {
-  const pipe = (): boolean => true;
-  const notPipe = (): boolean => false;
+  // Modes as libuv reports them on Windows: a pipe, a console.
+  const pipe = (): number => 0o010000;
+  const notPipe = (): number => 0o020000;
 
   it('is true only on the main thread on Windows with stdout a pipe', () => {
     expect(writesStdoutItself('win32', true, pipe)).toBe(true);
@@ -40,10 +41,20 @@ describe('writesStdoutItself', () => {
   });
 
   it('does not look at stdout off Windows', () => {
-    const throws = (): boolean => {
+    const throws = (): number => {
       throw new Error('stdout must not be inspected');
     };
     expect(writesStdoutItself('linux', true, throws)).toBe(false);
+  });
+});
+
+describe('isPipeMode', () => {
+  it('reads the file-type bits of a mode', () => {
+    expect(isPipeMode(0o010000)).toBe(true);
+    expect(isPipeMode(0o010644)).toBe(true);
+    expect(isPipeMode(0o100644)).toBe(false);
+    expect(isPipeMode(0o020666)).toBe(false);
+    expect(isPipeMode(0o140777)).toBe(false);
   });
 });
 
