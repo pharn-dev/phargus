@@ -7,11 +7,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 // With the agent's output on stdout and stdout piped to a reader that stops reading, does the app
-// keep running? On Linux and macOS the agent's writes queue in Node (bounded by its lanes) and the
-// event loop keeps turning. Node writes pipes synchronously on Windows, so there a full pipe blocks
-// the whole process (docs/LIMITS.md, "With output on stdout, a stalled reader stops the app on
-// Windows"). The test prints what it observed on every platform, so the platform-smoke job's log
-// is the evidence for that limit, and it fails if either platform's behaviour changes.
+// keep running? It must, on every platform: the agent's lines wait in its bounded lanes, the oldest
+// are dropped and counted, and the event loop keeps turning. On Linux and macOS the agent writes
+// through `process.stdout`, which queues in Node. On Windows Node writes a stdout pipe
+// synchronously, so the agent writes that pipe itself with asynchronous `fs.write`
+// (agent-output.ts, `writesStdoutItself`); before that, a full pipe blocked the whole process there.
+// The test prints what it observed, so the platform-smoke job's log is the evidence for
+// docs/LIMITS.md.
 
 const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const srcDir = join(repoRoot, 'src');
@@ -30,6 +32,8 @@ const OBSERVE_MS = 5_000;
 /** A gap between two app reports at least this long counts as the app being blocked. */
 const BLOCKED_GAP_MS = 1_000;
 const REPORT_EVERY_MS = 100;
+/** How long the reader reads again after the stall, to collect the agent's later sample lines. */
+const RESUME_MS = 1_500;
 
 const lockDir = join(
   tmpdir(),
@@ -144,7 +148,7 @@ describe('agent output on stdout, reader stalled', () => {
     await ensureFreshDist();
   }, 180_000);
 
-  it('reports whether the app keeps running when nobody reads its stdout: it does on Linux and macOS, it stops on Windows', async () => {
+  it('the app keeps running and the agent drops lines when nobody reads its stdout, on every platform', async () => {
     workDir = mkdtempSync(join(tmpdir(), 'phargus-stdout-stall-'));
     const appFile = join(workDir, 'app.mjs');
     writeFileSync(appFile, APP_SOURCE);
@@ -155,6 +159,8 @@ describe('agent output on stdout, reader stalled', () => {
     }
     // A sample line every 2 ms (about 450 bytes each) fills a pipe buffer in well under a second.
     env['PHARGUS_INTERVAL_MS'] = '2';
+    // Small lanes, so the stall drops sample lines even at Windows' coarse timer resolution.
+    env['PHARGUS_QUEUE_BOUND'] = '8';
 
     const child = spawn(process.execPath, ['--import', pathToFileURL(AGENT_ENTRY).href, appFile], {
       cwd: workDir,
@@ -213,6 +219,28 @@ describe('agent output on stdout, reader stalled', () => {
       const last = reports[reports.length - 1];
       const maxBufferedBytes = Math.max(...reports.map((r) => r.bufferedBytes));
       const blocked = maxGapMs >= BLOCKED_GAP_MS;
+
+      // Read again: the agent's sample lines written after the stall carry the drops it counted.
+      let stdoutText = '';
+      child.stdout.setEncoding('utf8');
+      child.stdout.on('data', (chunk: string) => {
+        stdoutText += chunk;
+      });
+      child.stdout.resume();
+      await sleep(RESUME_MS);
+      let droppedSamples = 0;
+      let sampleLines = 0;
+      // Only newline-terminated lines: the agent is still writing, so the text can end mid-record.
+      const complete = stdoutText.slice(0, stdoutText.lastIndexOf('\n') + 1);
+      for (const line of complete.split('\n')) {
+        if (!line.startsWith('{')) continue;
+        const record = JSON.parse(line) as { dropped?: { samples?: unknown } };
+        const samples = record.dropped?.samples;
+        if (typeof samples !== 'number') continue;
+        sampleLines += 1;
+        droppedSamples = Math.max(droppedSamples, samples);
+      }
+
       const observed = {
         platform: process.platform,
         node: process.version,
@@ -222,20 +250,25 @@ describe('agent output on stdout, reader stalled', () => {
         lastTurns: last?.turns,
         lastElapsedMs: last?.elapsedMs,
         maxBufferedBytes,
+        sampleLines,
+        droppedSamples,
         exited: exited ?? null,
       };
       // The evidence for docs/LIMITS.md: printed on every platform, read from the CI job log.
       console.log(`[stdout-stall] observed ${JSON.stringify(observed)}`);
 
       expect(exited, `the app exited; stderr:\n${stderrText}`).toBeUndefined();
+      expect(stderrText, 'the agent turned itself off').not.toContain('[phargus] agent disabled');
+      // The event loop kept turning while nobody read stdout.
+      expect(blocked, JSON.stringify(observed)).toBe(false);
+      // The agent kept running and dropped lines instead of waiting for the reader.
+      expect(droppedSamples, JSON.stringify(observed)).toBeGreaterThan(0);
       if (process.platform === 'win32') {
-        // Each write is synchronous, so nothing queues in Node and a full pipe stops the process.
+        // The agent writes the pipe itself, not through the app's `process.stdout`.
         expect(maxBufferedBytes, JSON.stringify(observed)).toBe(0);
-        expect(blocked, JSON.stringify(observed)).toBe(true);
       } else {
-        // Node queued the agent's lines (the pipe was full) and the event loop kept turning.
+        // Node queued the agent's lines in `process.stdout` (the pipe was full).
         expect(maxBufferedBytes, JSON.stringify(observed)).toBeGreaterThan(0);
-        expect(blocked, JSON.stringify(observed)).toBe(false);
       }
     } finally {
       child.kill();

@@ -1,9 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncReturns } from 'node:child_process';
 import {
+  closeSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
+  openSync,
   readFileSync,
   readdirSync,
   rmSync,
@@ -269,12 +271,23 @@ describe('phargus/agent entry — an agent that disables itself switches the tra
       const app = join(dir, preload === '--require' ? 'in-flight-app.cjs' : 'in-flight-app.mjs');
       writeFileSync(app, [...IN_FLIGHT_APP_HEADERS[preload], IN_FLIGHT_APP_BODY].join('\n'));
       const resultFile = join(dir, 'results.json');
-      const child = spawnSync(process.execPath, [preload, 'phargus/agent', app, resultFile], {
-        cwd: dir,
-        env: childEnv({ PHARGUS_OUTPUT: 'stdout', PHARGUS_INTERVAL_MS: '60000' }),
-        encoding: 'utf8',
-        timeout: 30_000,
-      });
+      // The app fails the destination by destroying process.stdout. On Windows a stdout pipe gets
+      // the agent's own writer instead (agent-output.ts), so there stdout is a file, which the
+      // agent writes through process.stdout.
+      const stdoutFd =
+        process.platform === 'win32' ? openSync(join(dir, 'stdout.txt'), 'w') : 'pipe';
+      let child: SpawnSyncReturns<string>;
+      try {
+        child = spawnSync(process.execPath, [preload, 'phargus/agent', app, resultFile], {
+          cwd: dir,
+          env: childEnv({ PHARGUS_OUTPUT: 'stdout', PHARGUS_INTERVAL_MS: '60000' }),
+          encoding: 'utf8',
+          stdio: ['ignore', stdoutFd, 'pipe'],
+          timeout: 30_000,
+        });
+      } finally {
+        if (typeof stdoutFd === 'number') closeSync(stdoutFd);
+      }
       expectCleanRun(child);
       const stderrLines = child.stderr.split('\n').filter((l) => l.length > 0);
       expect(stderrLines, `stderr:\n${child.stderr}`).toEqual([

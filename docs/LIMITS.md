@@ -122,7 +122,9 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   `[phargus] agent disabled: write EPIPE` once on stderr and stays off until the app restarts.
   Because those listeners are still attached, the `EPIPE` no longer ends the app as it does
   without the agent, and whatever the app writes to stdout afterwards is lost without a message.
-  Set `PHARGUS_OUTPUT` to a file if the app's stdout reader may go away.
+  Set `PHARGUS_OUTPUT` to a file if the app's stdout reader may go away. On Windows with stdout a
+  pipe the agent writes fd 1 through its own writer, not `process.stdout`, so it adds no listeners
+  there and the app's own stdout errors behave as they do without the agent.
 - **Runtime figures are for one process per stream.** When several agents write to one stream (a
   `node:cluster` app, or an app that forks children, where every child inherits `--import` and
   stdout), each `collector.consume()` run follows the first sample `pid` it sees. Samples from
@@ -268,16 +270,22 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   lines past 1 MiB waiting as it does on Linux and macOS. A terminal is not affected. Pass
   `--no-passthrough` when stdout goes to a reader that may stall. The test for the 1 MiB bound is
   skipped on Windows.
-- **With output on stdout, a stalled reader stops the app on Windows.** The agent's writes to a
-  stdout pipe are synchronous on Windows too: once the reader stops reading and the pipe is full,
-  the agent's next write blocks the whole process, event loop included, until the reader reads
-  again. So on Windows a slow consumer can slow your app, against what the README says. On Linux
-  and macOS the agent's lines wait in Node, its bounded lanes drop the oldest, and the app runs
-  on. `stdout-stalled-reader.integration.test.ts` measures this on every platform: on the Windows
-  smoke job (Node 22.18) the app's 100 ms timer stopped about 2 s after start, once the agent had
-  filled the pipe, and Node buffered no bytes, because every write was synchronous; on Linux and
-  macOS the timer kept firing with about 64 KiB queued in Node. Set `PHARGUS_OUTPUT` to a file on
-  Windows when stdout may go to a reader that stalls.
+- **On Windows, a stalled stdout reader holds one thread-pool thread.** Node writes a stdout pipe
+  synchronously on Windows, so writing through `process.stdout` would stop the whole app once a
+  stalled reader let the pipe fill. When stdout is a pipe on Windows, the agent writes its lines to
+  fd 1 itself instead, with asynchronous `fs.write`, which runs on libuv's thread pool. The app
+  keeps running and the agent's bounded lanes drop the oldest lines and count them, as on Linux
+  and macOS. The cost: while the reader is stalled, the one write in flight holds one of the
+  pool's threads (4 by default, `UV_THREADPOOL_SIZE`), so the app's asynchronous `fs`,
+  `dns.lookup`, `crypto` and `zlib` calls have one thread fewer until the reader reads again; and
+  each agent line costs a thread-pool round trip. The app's own writes to `process.stdout` are
+  untouched and still block on a full pipe there: that is Node's behaviour, with or without the
+  agent. `stdout-stalled-reader.integration.test.ts` checks this on every platform: with nobody
+  reading for 5 s, the app's 100 ms timer must keep firing and the agent's later sample lines must
+  report drops. On the Windows smoke job (Node 22.18) the longest gap between the app's reports
+  was 117 ms and the agent dropped 246 sample lines; before this change the app stopped there for
+  over 3 s. On macOS (Node 24) the longest gap was 104 ms, with about 64 KiB queued in
+  `process.stdout` and 1519 sample lines dropped.
 - **Windows does not apply POSIX directory modes.** A directory made read-only with `chmod` stays
   writable on Windows, so the test that a heap snapshot into a non-writable directory is refused is
   skipped there.

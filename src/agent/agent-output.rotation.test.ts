@@ -1,10 +1,12 @@
+import { fstatSync } from 'node:fs';
 import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { isMainThread } from 'node:worker_threads';
 import { afterEach, describe, expect, it } from 'vitest';
-import { openAgentOutput, rotatedOutputPath } from './agent-output.js';
+import { openAgentOutput, rotatedOutputPath, writesStdoutItself } from './agent-output.js';
 import { defaultAgentConfig, readConfigEnv, validateConfigValue } from './config.js';
 
 const MIB = 1_048_576;
@@ -134,6 +136,12 @@ describe('agent output file size bound', () => {
   });
 
   it('AC-5: stdout is returned as is, whatever the bound', () => {
+    // On Windows with stdout a pipe the agent writes it itself (agent-output.stdout.test.ts).
+    if (writesStdoutItself(process.platform, isMainThread, () => fstatSync(1).mode)) {
+      expect(openAgentOutput('stdout', 0)).not.toBe(process.stdout);
+      expect(openAgentOutput('stdout', MIB)).not.toBe(process.stdout);
+      return;
+    }
     expect(openAgentOutput('stdout', 0)).toBe(process.stdout);
     expect(openAgentOutput('stdout', MIB)).toBe(process.stdout);
   });
