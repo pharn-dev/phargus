@@ -43,7 +43,7 @@ async function stallOnce(stream: Writable): Promise<void> {
 
 describe('agent backpressure probes — AC-1', () => {
   it('AC-1: an enabled probe reports the stalls of a slow Writable with integer totals, a test-file site hotspot, then resets', async () => {
-    const mod = (await import('./index.js')) as unknown as Record<string, unknown>;
+    const mod = (await import('./backpressure-probe.js')) as unknown as Record<string, unknown>;
     const createBackpressureProbe = mod['createBackpressureProbe'] as (options?: {
       maxHotspots?: number;
     }) => ProbeUnderTest;

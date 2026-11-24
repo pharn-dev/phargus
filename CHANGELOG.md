@@ -93,6 +93,22 @@ All notable changes to Phargus are recorded here. The format follows
   `PHARGUS_DEP_TOKEN_QUERY` warning. A `?token=` query is no longer a credential: `GET /?token=…`
   answers `401` and sets no cookie. Open `/login#token=<token>` in a browser, or send
   `Authorization: Bearer <token>`.
+- **Breaking:** `@pharn-dev/phargus/agent` no longer exports the agent's own wiring, configuration
+  and permission internals. Importing the subpath starts the agent, so these were never safe to use
+  next to it (a second controller doubles the observers; `createNdjsonExporter(process.stdout).stop()`
+  ends the app's stdout). Removed runtime exports: `createSamplerController`,
+  `createNdjsonExporter`, `createEventLoopSampler`, `createGcSampler`, `createBackpressureProbe`,
+  `loadAgentConfig`, `defaultAgentConfig`, `PhargusConfigError`, `assertPermission`,
+  `checkPermission`, `isPermissionModelEnabled`, `sampleMemory`,
+  `DEFAULT_ALLOCATION_SAMPLING_INTERVAL`, `DEFAULT_ALLOCATION_SAMPLING_DURATION_MS` and
+  `DEFAULT_ALLOCATION_SITE_LIMIT` (the `sampleAllocations` defaults, 32768 bytes, 1000 ms and 20
+  sites, are in `docs/API.md`). Their types go with them: `SamplerController`, `NdjsonExporter`,
+  `NdjsonExporterOptions`, `EventLoopSampler`, `EventLoopSamplerOptions`, `GcSampler`,
+  `BackpressureProbe`, `BackpressureProbeOptions`, `LoadAgentConfigOptions`, `AgentConfig`,
+  `PermissionCheck` and `PermissionScope`. The agent keeps ten runtime exports: `currentTraceId`,
+  `runWithTrace`, `takeHeapSnapshot`, `sampleAllocations`, `sampleHeapSpaces`, `createDeoptParser`,
+  `ANONYMOUS_FUNCTION`, `DEPENDENT_CODE_KIND`, `PhargusPermissionError` and `SPAN_RECORD_TYPE`, and
+  the output-format types. To check a permission grant, use Node's `process.permission.has()`.
 
 ### Fixed
 

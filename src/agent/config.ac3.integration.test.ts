@@ -39,7 +39,10 @@ async function messageOfFailure(
 
 describe('agent config — AC-3', () => {
   it('AC-3: every invalid source fails with an error naming the source and the key, and two config files fail naming both', async () => {
-    const { loadAgentConfig } = (await import('./index.js')) as unknown as ConfigModuleUnderTest;
+    const { loadAgentConfig } = {
+      ...(await import('./config.js')),
+      ...(await import('./config-schema.js')),
+    } as unknown as ConfigModuleUnderTest;
 
     // 1. phargus.config.json that is not valid JSON
     const invalidJsonDir = await makeTempDir();

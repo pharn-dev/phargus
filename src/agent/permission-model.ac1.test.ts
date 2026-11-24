@@ -31,7 +31,7 @@ afterEach(() => {
 
 describe('agent permission helper — AC-1', () => {
   it('AC-1: without the permission model the helper reports it inactive and the check is allowed; with a denying stub it is active, has() gets the scope and the absolute path, and the check is denied', async () => {
-    const { isPermissionModelEnabled, checkPermission } = await import('./index.js');
+    const { isPermissionModelEnabled, checkPermission } = await import('./permission.js');
 
     // Without the permission model (vitest runs without --permission).
     expect(

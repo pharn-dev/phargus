@@ -119,5 +119,5 @@ host:
   `resource` properties name the denied scope and the absolute path, and its message names the flag
   that would grant it. No file is written.
 
-Use `isPermissionModelEnabled()` and `checkPermission(scope, path)` from `@pharn-dev/phargus/agent` to check a
-grant yourself. When the permission model is off, every check is allowed.
+To check a grant yourself, use Node's own `process.permission.has(scope, path)`. When the permission
+model is off, `process.permission` is undefined and nothing is denied.

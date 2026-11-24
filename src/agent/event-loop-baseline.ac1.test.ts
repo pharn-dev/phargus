@@ -11,7 +11,7 @@ function expectNonNegativeInt(value: unknown): void {
 
 describe('event loop baseline — AC-1', () => {
   it('AC-1: with no options an idle loop reports p50 below the default resolution, and a never-enabled sampler reports zeros', async () => {
-    const { createEventLoopSampler } = await import('./index.js');
+    const { createEventLoopSampler } = await import('./event-loop-sampler.js');
 
     const sampler = createEventLoopSampler();
     sampler.enable();

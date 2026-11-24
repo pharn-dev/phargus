@@ -8,7 +8,7 @@ function expectNonNegativeInt(value: unknown, label: string): void {
 
 describe('agent GC events — AC-2', () => {
   it('AC-2: the controller sample carries a gc part of non-negative integers alongside eventLoop and memory', async () => {
-    const { createSamplerController } = await import('./index.js');
+    const { createSamplerController } = await import('./sampler-controller.js');
 
     const samples: unknown[] = [];
     let resolveFirst: () => void = () => undefined;
