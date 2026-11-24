@@ -5,8 +5,7 @@ import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { afterEach, describe, expect, it } from 'vitest';
 import { openAgentOutput, rotatedOutputPath } from './agent-output.js';
-import { readConfigEnv } from './config-env.js';
-import { defaultAgentConfig, validateConfigValue } from './config-schema.js';
+import { defaultAgentConfig, readConfigEnv, validateConfigValue } from './config.js';
 
 const MIB = 1_048_576;
 
