@@ -84,8 +84,9 @@ node --import @pharn-dev/phargus/agent app.mjs | npx phargus serve
 ```
 
 `phargus serve` prints `phargus: dashboard at http://127.0.0.1:7070` on stderr; open that address.
-Your app's stdout is the pipe, so it may log there too: lines that are not agent data are skipped
-and counted. When the app exits, the dashboard keeps serving what it collected until you press
+Your app's stdout is the pipe, so it may log there too: lines that are not agent data are copied
+to `phargus serve`'s stdout, so your app's own output still reaches the terminal
+(`--no-passthrough` turns that off). When the app exits, the dashboard keeps serving what it collected until you press
 Ctrl-C.
 
 With `node:cluster` or forked children, every process inherits the agent and the pipe, but the
