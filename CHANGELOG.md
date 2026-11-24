@@ -92,6 +92,19 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Fixed
 
+- `phargus --help` (and `--version`) now win over a bad flag: `phargus --bogus --help` prints the
+  usage and exits 0 instead of exiting 2.
+- `phargus serve <directory>` fails before the dashboard binds, with
+  `cannot read input file "<path>": EISDIR` and exit 1, instead of printing the dashboard URL and
+  then failing on the first read.
+- Docs: the README's V8 row names `/agent` for `takeHeapSnapshot`, `sampleAllocations` and
+  `createDeoptParser`; `docs/API.md` says `runWithTrace` always starts a fresh trace id and that
+  importing `/agent` starts the agent unless `PHARGUS_ENABLED=false`; `FEATURES.md` marks event
+  loop min/p50 and GC counts by kind as stopping at the sample line and documents how window `p99`
+  and `mean` are computed; `FEATURES.md`, `ARCHITECTURE.md` and the README diagram no longer show
+  the plugin runner fed by the collector; the OTLP resource notes say `host.name` and
+  `process.pid` describe the exporter's process; `docs/PERMISSIONS.md` says `sampleAllocations`
+  needs `--allow-inspector` and is refused on Node 22.
 - The backpressure probe names each stall by its own call site instead of caching the first
   stall's site per stream, so stalls from different code on one keep-alive socket, shared log
   stream or database connection are separate hotspots. A sampling window makes at most 32 stack

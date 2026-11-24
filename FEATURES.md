@@ -39,17 +39,25 @@ Status legend:
 
 ## 2. Runtime metrics (the headline diagnostics)
 
-- ✅ Event loop lag (min, max, mean, p50, p99 per interval; aggregated per window). Values are the
+- 🟡 Event loop lag (min, max, mean, p50, p99 per interval; aggregated per window). Values are the
   delay beyond the timer interval the histogram samples at (10 ms), so an idle loop reads close to 0.
+  Min and p50 stop at the agent's sample line: the collector window keeps only `max`, `p99` and
+  `mean`, so the dashboard, alerts and OTLP never see them. The window's `max` is the largest
+  sample max, its `p99` is the largest of the samples' p99 values (not a p99 over the window), and
+  its `mean` is the mean of the samples' means, rounded down (not weighted by histogram counts).
 - ✅ Memory pressure (samples carry heap used/total, RSS, external and array buffers; windows keep
   the last and max heap used and RSS).
-- ✅ GC events (count, total and max pause, by kind) from `PerformanceObserver` `gc` entries. There
-  is no `--trace-gc` text hook; the observer gives the same counts without parsing.
+- 🟡 GC events (count, total and max pause, by kind) from `PerformanceObserver` `gc` entries. There
+  is no `--trace-gc` text hook; the observer gives the same counts without parsing. The counts by
+  kind (`kinds`: minor, major, incremental, weakcb) stop at the agent's sample line: the collector
+  window keeps only `count`, `totalPause` and `maxPause`, so the dashboard, alerts and OTLP never
+  see them.
 - ✅ Stream backpressure hotspots (where writes stall, by call site) for `Writable` subclasses,
   `fs.WriteStream`, `Duplex`, `Transform`, `PassThrough`, `net.Socket`, `tls.TLSSocket`,
   `http.ServerResponse` and `http.ClientRequest`. Collector windows keep the top 5 call sites by
   total stall (merged by site across the window's samples, sites cut to 256 characters, at most 64
-  distinct sites tracked per window).
+  distinct sites tracked per window), and the dashboard shows them; they are not an alert metric
+  and not exported over OTLP.
 - 🟡 Request tracing with an automatic `traceId` — **no user-code instrumentation**, powered by
   AsyncLocalStorage. Covers incoming requests to `node:http` and `node:https` servers, honouring
   an incoming W3C `traceparent`. A request aborted by the client or destroyed (a timeout) leaves a
@@ -105,13 +113,18 @@ Status legend:
 
 ## 6. Custom diagnostic rules (plugin runner)
 
-- ✅ User-supplied rules, e.g. "alert when the event loop lag goes over 50 ms" (rules run over
-  aggregated windows).
+- 🟡 User-supplied rules, e.g. "find windows where the event loop lag goes over 50 ms". Rules run
+  over aggregated windows that you pass in: `runner.run(source, windows)` or
+  `runRules(runner, rules, windows)` returns the findings to its caller. Nothing schedules rules
+  against the collector, and a finding does not become an alert; for alerts, use collector alert
+  rules (§8).
 - ✅ Rules execute in `isolated-vm` in a child process with a **hard memory limit and timeout**,
   and capped results (`maxFindings`, `maxResultBytes`).
 - ✅ A small bundled rule library (event loop lag, GC pause share, heap growth).
-- 🟡 Node Permission Model. The agent runs under `--permission` with file system grants only, and
-  the sandbox child inherits the host's permission flags. Phargus does not turn the permission model
+- 🟡 Node Permission Model. The agent runs under `--permission` with file system grants only, except
+  `sampleAllocations`, which uses `node:inspector` and is refused unless your Node release offers
+  `--allow-inspector` and you pass it (no Node 22 release does). The sandbox child inherits the
+  host's permission flags. Phargus does not turn the permission model
   on for you; you start Node with it. See `docs/PERMISSIONS.md`.
 
 ## 7. Analysis (Worker Threads)
