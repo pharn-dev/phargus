@@ -12,7 +12,7 @@ function expectNonNegativeInt(value: unknown, label: string): void {
 describe('agent backpressure probes — AC-3', () => {
   it('AC-3: the controller sample carries a backpressure part of non-negative integers, and stop() restores Writable.prototype.write', async () => {
     const original = Writable.prototype.write;
-    const agent = (await import('./index.js')) as unknown as Record<string, unknown>;
+    const agent = (await import('./sampler-controller.js')) as unknown as Record<string, unknown>;
     const createSamplerController = agent['createSamplerController'] as (
       onSample: (sample: unknown) => void,
     ) => ControllerUnderTest;

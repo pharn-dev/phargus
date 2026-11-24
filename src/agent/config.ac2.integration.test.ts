@@ -31,7 +31,10 @@ afterEach(async () => {
 
 describe('agent config — AC-2', () => {
   it('AC-2: a CommonJS phargus.config.js (module.exports) and an ESM phargus.config.js (export default) each supply their interval, queue bound and output', async () => {
-    const { loadAgentConfig } = (await import('./index.js')) as unknown as ConfigModuleUnderTest;
+    const { loadAgentConfig } = {
+      ...(await import('./config.js')),
+      ...(await import('./config-schema.js')),
+    } as unknown as ConfigModuleUnderTest;
 
     const cjsDir = await makeTempDir();
     const cjsOutput = path.join(cjsDir, 'cjs-out.ndjson');

@@ -11,7 +11,7 @@ function expectNonNegativeInt(value: unknown): void {
 
 describe('event loop baseline — AC-2', () => {
   it('AC-2: with { resolution: 20 } an idle loop reports p50 below that resolution and non-negative integers', async () => {
-    const { createEventLoopSampler } = await import('./index.js');
+    const { createEventLoopSampler } = await import('./event-loop-sampler.js');
 
     const sampler = createEventLoopSampler({ resolution: RESOLUTION_MS });
     sampler.enable();

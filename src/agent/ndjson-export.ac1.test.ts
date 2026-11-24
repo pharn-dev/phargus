@@ -21,7 +21,7 @@ function createRecordingWritable(): { destination: Writable; text: () => string 
 
 describe('agent NDJSON export — AC-1', () => {
   it('AC-1: three exported objects arrive as exactly three newline-terminated JSON lines, in order', async () => {
-    const { createNdjsonExporter } = await import('./index.js');
+    const { createNdjsonExporter } = await import('./ndjson-exporter.js');
 
     const { destination, text } = createRecordingWritable();
     const exporter = (createNdjsonExporter as (destination: Writable) => ExporterUnderTest)(

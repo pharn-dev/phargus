@@ -2,7 +2,7 @@ import { Readable, Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createCollector } from '../collector/index.js';
 import { createAgentExport } from './auto-start.js';
-import { sampleMemory } from './index.js';
+import { sampleMemory } from './memory-sampler.js';
 import type { AgentSample, AgentSampleLine, SpanRecord, TraceSpan } from './index.js';
 import { createSpanBuffer } from './span-buffer.js';
 import type { SpanDrain } from './span-buffer.js';

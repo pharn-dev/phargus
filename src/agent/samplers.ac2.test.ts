@@ -10,7 +10,7 @@ function busyWait(ms: number): void {
 
 describe('agent samplers — AC-2', () => {
   it('AC-2: a ~100 ms block raises one window max to >= 50 ms and the next window max is lower (histogram reset)', async () => {
-    const { createSamplerController } = await import('./index.js');
+    const { createSamplerController } = await import('./sampler-controller.js');
 
     const intervalMs = 250;
     const samples: AgentSample[] = [];

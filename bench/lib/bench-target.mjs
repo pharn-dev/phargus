@@ -2,10 +2,9 @@
 // bench/overhead.mjs; measures itself between the parent's 'start' and 'stop' requests.
 //
 // Variants that preload the agent (`idle`, `full`, `notrace`, `pipe`) get
-// `--import @pharn-dev/phargus/agent` from the parent. `tracing` and `samplers` load the library API
-// (no auto-start) here, from BENCH_AGENT_INDEX. The `tracing` variant also loads the HTTP tracing
-// and span export files built next to that index, because the public entry no longer re-exports
-// them.
+// `--import @pharn-dev/phargus/agent` from the parent. `tracing` and `samplers` load the agent's
+// built internal files (no auto-start) here, from the directory of BENCH_AGENT_INDEX: the public
+// entry does not export the exporter, the sampler controller or the HTTP tracing pieces.
 import http from 'node:http';
 import { performance, PerformanceObserver } from 'node:perf_hooks';
 import { describe } from './common.mjs';
@@ -20,8 +19,8 @@ const variant = process.env.BENCH_VARIANT ?? '';
  * NDJSON to stdout through the agent's own exporter, as the auto-started agent would do. The
  * harness points stdout at a file and counts what was written after the cell.
  */
-function stdoutExporter(agent) {
-  const exporter = agent.createNdjsonExporter(process.stdout);
+function stdoutExporter(createNdjsonExporter) {
+  const exporter = createNdjsonExporter(process.stdout);
   exporter.done.then(undefined, (err) => die(new Error(`exporter failed: ${describe(err)}`)));
   return exporter;
 }
@@ -30,18 +29,20 @@ async function setUpVariant() {
   if (variant !== 'tracing' && variant !== 'samplers') return;
   const indexUrl = process.env.BENCH_AGENT_INDEX;
   if (indexUrl === undefined) throw new Error('BENCH_AGENT_INDEX is not set');
-  const agent = await import(indexUrl);
-  const exporter = stdoutExporter(agent);
+  const internal = (file) => import(new URL(file, indexUrl).href);
+  const { createNdjsonExporter } = await internal('./ndjson-exporter.js');
+  const exporter = stdoutExporter(createNdjsonExporter);
   if (variant === 'tracing') {
     // HTTP tracing only: spans drained once per interval, like the auto-started agent does.
-    const tracing = await import(new URL('./http-tracing.js', indexUrl).href);
-    const { createSpanExport } = await import(new URL('./span-export.js', indexUrl).href);
+    const tracing = await internal('./http-tracing.js');
+    const { createSpanExport } = await internal('./span-export.js');
     tracing.enable();
     const spans = createSpanExport(tracing.drainSpans, (record) => exporter.export(record));
     setInterval(() => spans.flush(), SAMPLE_INTERVAL_MS).unref();
   } else {
     // Samplers and the backpressure probe only; HTTP tracing stays off.
-    agent.createSamplerController((sample) => exporter.export(sample)).start(SAMPLE_INTERVAL_MS);
+    const { createSamplerController } = await internal('./sampler-controller.js');
+    createSamplerController((sample) => exporter.export(sample)).start(SAMPLE_INTERVAL_MS);
   }
 }
 

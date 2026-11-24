@@ -15,7 +15,7 @@ function delay(ms: number): Promise<void> {
 
 describe('agent samplers — AC-3', () => {
   it('AC-3: start twice then stop gives at most one sample per interval and none after stop', async () => {
-    const { createSamplerController } = await import('./index.js');
+    const { createSamplerController } = await import('./sampler-controller.js');
 
     const intervalMs = 100;
     const samples: AgentSample[] = [];
@@ -68,12 +68,12 @@ describe('agent samplers — AC-3', () => {
           'false',
           '--sourceMap',
           'false',
-          join(agentDir, 'index.ts'),
+          join(agentDir, 'sampler-controller.ts'),
         ],
         { cwd: repoRoot, encoding: 'utf8', timeout: 120_000 },
       );
       expect(
-        existsSync(join(outDir, 'index.js')),
+        existsSync(join(outDir, 'sampler-controller.js')),
         `compiling the agent entrypoint failed:\n${compile.stdout}\n${compile.stderr}`,
       ).toBe(true);
 
@@ -81,7 +81,7 @@ describe('agent samplers — AC-3', () => {
       writeFileSync(
         join(outDir, 'child.mjs'),
         [
-          "import { createSamplerController } from './index.js';",
+          "import { createSamplerController } from './sampler-controller.js';",
           'const controller = createSamplerController(() => {});',
           'controller.start(50);',
           '',

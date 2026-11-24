@@ -32,8 +32,10 @@ afterEach(async () => {
 
 describe('agent config path env — AC-2', () => {
   it('AC-2: PHARGUS_CONFIG pins a .js file and resolves even though the cwd holds both phargus.config.json and phargus.config.js', async () => {
-    const { loadAgentConfig, defaultAgentConfig } =
-      (await import('./index.js')) as unknown as ConfigModuleUnderTest;
+    const { loadAgentConfig, defaultAgentConfig } = {
+      ...(await import('./config.js')),
+      ...(await import('./config-schema.js')),
+    } as unknown as ConfigModuleUnderTest;
 
     const cwd = await makeTempDir();
     await writeFile(path.join(cwd, 'package.json'), JSON.stringify({ type: 'commonjs' }), 'utf8');

@@ -42,12 +42,12 @@ function compileAgent(outDir: string): void {
       'false',
       '--sourceMap',
       'false',
-      join(agentDir, 'index.ts'),
+      join(agentDir, 'gc-sampler.ts'),
     ],
     { cwd: repoRoot, encoding: 'utf8', timeout: 120_000 },
   );
   expect(
-    existsSync(join(outDir, 'index.js')),
+    existsSync(join(outDir, 'gc-sampler.js')),
     `compiling the agent entrypoint failed:\n${compile.stdout}\n${compile.stderr}`,
   ).toBe(true);
   writeFileSync(join(outDir, 'package.json'), JSON.stringify({ type: 'module' }));
@@ -76,7 +76,7 @@ describe('agent GC events — AC-1', () => {
       writeFileSync(
         join(outDir, 'child.mjs'),
         [
-          "import { createGcSampler } from './index.js';",
+          "import { createGcSampler } from './gc-sampler.js';",
           'const sampler = createGcSampler();',
           'sampler.enable();',
           'const first = sampler.sample();',

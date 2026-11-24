@@ -30,8 +30,9 @@ export function resolveAgent() {
       },
     );
   }
-  // The library API without the auto-start side effect. It is not an `exports` subpath, so it is
-  // derived from the resolved entry: dist/esm/agent/index.js sits next to dist/esm/agent/auto.js.
+  // The entry without the auto-start side effect; bench-target loads the internal files next to it.
+  // It is not an `exports` subpath, so it is derived from the resolved entry:
+  // dist/esm/agent/index.js sits next to dist/esm/agent/auto.js.
   const indexUrl = new URL('./index.js', agentUrl).href;
   for (const url of [agentUrl, indexUrl]) {
     if (!existsSync(fileURLToPath(url))) {
