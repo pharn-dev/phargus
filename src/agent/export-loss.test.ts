@@ -2,7 +2,7 @@ import { Readable, Writable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { createCollector } from '../collector/index.js';
 import { createAgentExport } from './auto-start.js';
-import { sampleHeapSpaces, sampleMemory } from './index.js';
+import { sampleMemory } from './index.js';
 import type { AgentSample, AgentSampleLine, SpanRecord, TraceSpan } from './index.js';
 import { createSpanBuffer } from './span-buffer.js';
 import type { SpanDrain } from './span-buffer.js';
@@ -19,7 +19,6 @@ function makeSample(timestamp: number): AgentSample {
     timestamp,
     eventLoop: { min: 1, max: 5, mean: 2, p50: 2, p99: 4 },
     memory: sampleMemory(),
-    heapSpaces: sampleHeapSpaces(),
     gc: {
       count: 0,
       totalPause: 0,

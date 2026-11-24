@@ -51,7 +51,8 @@ Status legend:
 
 ## 3. V8 / memory deep-dive
 
-- ✅ `v8.getHeapSpaceStatistics()` exposure (in every sample).
+- ✅ `v8.getHeapSpaceStatistics()` exposure through `sampleHeapSpaces()` (library API; not on the
+  sample line).
 - ✅ On-demand heap snapshots (`takeHeapSnapshot`, library API).
 - ✅ Heap-snapshot summaries and diffing in the analyzer worker pool, with an input size cap; the
   task timeout scales with the snapshot size unless the caller sets one.

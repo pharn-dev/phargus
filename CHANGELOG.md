@@ -53,6 +53,11 @@ All notable changes to Phargus are recorded here. The format follows
 
 ### Changed
 
+- The agent's sample line no longer carries `heapSpaces` (V8 heap space statistics): nothing in
+  the collector, dashboard, OTLP export or CLI reads it, and it was about 1.6 KB of a 2 KB line. A
+  line with no backpressure hotspots is now about 450 bytes. `sampleHeapSpaces()` is still
+  exported with the same shape, and the collector still accepts lines from older agents that
+  carry the field.
 - A window persistence failure (restore, append or compaction) no longer rejects
   `collector.consume()` or stops the pipeline: it is counted in `collector.persistence.failed` and
   reported as one `PhargusPersistenceWarning` per run of consecutive failures, and windows and

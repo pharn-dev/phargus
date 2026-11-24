@@ -65,7 +65,7 @@ with an alert rule.
    `node:http` and `node:https`, so each request's handler runs inside an `AsyncLocalStorage`
    context holding its trace id. A sampler controller ticks every `intervalMs`: event loop delay
    (`monitorEventLoopDelay` at an explicit 10 ms resolution, which is subtracted so the values are
-   delay beyond the timer interval), `process.memoryUsage()`, `v8.getHeapSpaceStatistics()`, GC entries
+   delay beyond the timer interval), `process.memoryUsage()`, GC entries
    from a `PerformanceObserver`, and the backpressure probe, which wraps `write` on the
    `Writable`, `Duplex` and `http.OutgoingMessage` prototypes and records where writes return
    `false` and how long until `drain`. User code is never edited.

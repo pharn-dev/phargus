@@ -2,7 +2,7 @@ import { Server } from 'node:http';
 import { Writable } from 'node:stream';
 import { describe, expect, it, vi } from 'vitest';
 import { createAgentExport, startAgentOnce } from './auto-start.js';
-import { sampleHeapSpaces, sampleMemory } from './index.js';
+import { sampleMemory } from './index.js';
 import type { AgentSampleLine } from './span-record.js';
 
 // Run auto-start as if it had been preloaded into a worker thread.
@@ -39,7 +39,6 @@ describe('auto-start outside the main thread', () => {
       timestamp: 1,
       eventLoop: { min: 1, max: 5, mean: 2, p50: 2, p99: 4 },
       memory: sampleMemory(),
-      heapSpaces: sampleHeapSpaces(),
       gc: {
         count: 0,
         totalPause: 0,

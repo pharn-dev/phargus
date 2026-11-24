@@ -237,7 +237,7 @@ describe('agent span export over NDJSON — AC-1', () => {
     expect(samples.length, 'at least one sample line with no type field').toBeGreaterThanOrEqual(1);
     for (const sample of samples) {
       expect(Number.isInteger(sample['timestamp']), 'integer sample timestamp').toBe(true);
-      for (const part of ['eventLoop', 'memory', 'heapSpaces', 'gc', 'backpressure']) {
+      for (const part of ['eventLoop', 'memory', 'gc', 'backpressure']) {
         expect(sample, `sample has a ${part} part`).toHaveProperty(part);
         expect(sample[part], `sample ${part} part is present`).not.toBeUndefined();
       }
