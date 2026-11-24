@@ -1,7 +1,6 @@
 /// <reference types="node" />
 import { OutgoingMessage } from 'node:http';
 import { Duplex, Writable } from 'node:stream';
-import { isExcludedFromBackpressure } from './backpressure-exclusion.js';
 import { roundToNonNegativeInt } from './int.js';
 import { siteFromStack } from './stack-site.js';
 
@@ -59,7 +58,7 @@ function emptyWindow(): Window {
   return { events: 0, totalStall: 0, maxStall: 0, captures: 0, sites: new Map() };
 }
 
-// ---- Shared prototype wrap -------------------------------------------------------------------
+// ---- Prototype wrap --------------------------------------------------------------------------
 //
 // `write()` is patched on three prototypes, because Node copies the Writable methods onto
 // `Duplex.prototype` at bootstrap and `http.OutgoingMessage` has its own `write`:
@@ -67,62 +66,31 @@ function emptyWindow(): Window {
 //   - `Duplex.prototype`          → `net.Socket`, `tls.TLSSocket`, `Duplex`, `Transform`, `PassThrough`
 //   - `OutgoingMessage.prototype` → `http.ServerResponse`, `http.ClientRequest`
 //
-// Safety rules (the wrappers run inside every write of the host):
+// The wrappers run inside every write of the host:
+//   - They are installed once, by the first probe enabled, and never removed. While no probe is
+//     enabled they are inert: they call the original with the same `this` and arguments and return
+//     its result. A wrapper someone installs on top keeps working.
 //   - A wrapper never throws into the host: observers run under try/catch and failures are reported.
-//   - Each install captures its originals in a per-install record. Uninstalling marks the record
-//     inactive, which turns its wrapper into a transparent pass-through to the original it captured,
-//     so a third-party wrapper stacked on top keeps working.
-//   - A prototype is restored only while it still holds our wrapper (identity guard); a wrapper
-//     someone installed later is never removed.
-//   - The observer set and the active install live on `globalThis` under a `Symbol.for` key, with the
-//     same lifetime as the prototypes they patch. A second copy of Phargus (ESM + CJS) joins the
-//     existing install instead of wrapping again, and the last probe disabled in either copy
-//     restores the prototypes.
+//   - One copy of Phargus patches: the agent starts once per process (`auto-start.ts`), and only
+//     the agent creates a probe.
 
 /** The stream whose `write()` returned false: a Writable, a Duplex or an `http.OutgoingMessage`. */
 type Observable = NodeJS.EventEmitter;
 type WriteFn = (this: unknown, ...args: unknown[]) => unknown;
-/** Shared by every Phargus copy that uses the v1 registry; change `REGISTRY_KEY` if it changes. */
 type Observer = (stream: Observable, wrapper: WriteFn) => void;
-type Patch = {
-  readonly target: { write?: unknown };
-  readonly hadOwn: boolean;
-  readonly original: WriteFn;
-  wrapper: WriteFn | undefined;
-  active: boolean;
-};
-type Session = { readonly patches: Patch[]; suppress: number };
-type Registry = { readonly observers: Set<Observer>; session: Session | undefined };
 
-const REGISTRY_KEY = Symbol.for('phargus.backpressure.v1');
-/** Set on every wrapper; points at its install record so a later install can skip a dead layer. */
-const WRAPPER_KEY = Symbol.for('phargus.backpressure.write');
-const MAX_PEEL = 64;
-
-function isRegistry(value: unknown): value is Registry {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { observers?: unknown }).observers instanceof Set &&
-    'session' in value
-  );
-}
-
-function sharedRegistry(): Registry {
-  const host = globalThis as unknown as Record<symbol, unknown>;
-  const existing = host[REGISTRY_KEY];
-  if (isRegistry(existing)) {
-    return existing;
-  }
-  const created: Registry = { observers: new Set(), session: undefined };
-  if (existing === undefined) {
-    Object.defineProperty(host, REGISTRY_KEY, { value: created, configurable: true });
-  }
-  return created;
-}
-
-const registry = sharedRegistry();
+/** The enabled probes. Empty means every wrapper is a pass-through. */
+const observers = new Set<Observer>();
+/** Streams the probe ignores, such as the agent's own export destination. */
+const excluded = new WeakSet<object>();
+let installed = false;
+/** `OutgoingMessage.write` calls in progress; a socket stall inside one is the message's stall. */
+let suppress = 0;
 const reported = new Set<string>();
+
+export function excludeFromBackpressure(stream: object): void {
+  excluded.add(stream);
+}
 
 /** Report a probe failure once per kind, as a process warning. */
 function report(kind: string, error: unknown): void {
@@ -183,13 +151,13 @@ function isCoveredByOpenMessage(stream: Observable, open: WeakMap<object, OpenSt
 }
 
 function notify(stream: unknown, wrapper: WriteFn): void {
-  if (typeof stream !== 'object' || stream === null || registry.observers.size === 0) {
+  if (observers.size === 0 || typeof stream !== 'object' || stream === null) {
     return;
   }
-  if (isExcludedFromBackpressure(stream)) {
+  if (excluded.has(stream)) {
     return;
   }
-  for (const observer of registry.observers) {
+  for (const observer of observers) {
     try {
       observer(stream as Observable, wrapper);
     } catch (error) {
@@ -204,8 +172,7 @@ function notify(stream: unknown, wrapper: WriteFn): void {
  * `OutgoingMessage.write`, which writes to its socket synchronously: a socket stall inside it is
  * the message's stall, so it is counted once, on the message.
  */
-function createWrapper(patch: Patch, session: Session, nests: boolean): WriteFn {
-  const original = patch.original;
+function createWrapper(original: WriteFn, nests: boolean): WriteFn {
   /* eslint-disable @typescript-eslint/no-unused-vars, prefer-rest-params -- see the doc comment */
   const wrapper = nests
     ? function write(
@@ -214,14 +181,14 @@ function createWrapper(patch: Patch, session: Session, nests: boolean): WriteFn 
         encoding?: unknown,
         callback?: unknown,
       ): unknown {
-        session.suppress += 1;
+        suppress += 1;
         let result: unknown;
         try {
           result = Reflect.apply(original, this, arguments);
         } finally {
-          session.suppress -= 1;
+          suppress -= 1;
         }
-        if (result === false && patch.active && session.suppress === 0) {
+        if (result === false && suppress === 0) {
           notify(this, wrapper);
         }
         return result;
@@ -233,61 +200,23 @@ function createWrapper(patch: Patch, session: Session, nests: boolean): WriteFn 
         callback?: unknown,
       ): unknown {
         const result: unknown = Reflect.apply(original, this, arguments);
-        if (result === false && patch.active && session.suppress === 0) {
+        if (result === false && suppress === 0) {
           notify(this, wrapper);
         }
         return result;
       };
   /* eslint-enable @typescript-eslint/no-unused-vars, prefer-rest-params */
   Object.defineProperty(wrapper, 'length', { value: original.length, configurable: true });
-  Object.defineProperty(wrapper, WRAPPER_KEY, { value: patch });
   return wrapper;
 }
 
-function isDeadRecord(value: unknown): value is { active: false; original: WriteFn } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { active?: unknown }).active === false &&
-    typeof (value as { original?: unknown }).original === 'function'
-  );
-}
-
-/** Skip inactive Phargus wrappers left on top of the chain (a third party restored one of them). */
-function peel(fn: WriteFn): WriteFn {
-  let current = fn;
-  for (let i = 0; i < MAX_PEEL; i += 1) {
-    const record = (current as unknown as Record<symbol, unknown>)[WRAPPER_KEY];
-    if (!isDeadRecord(record)) {
-      return current;
-    }
-    current = record.original;
-  }
-  return current;
-}
-
-function patchTarget(session: Session, target: object, nests: boolean): void {
+function patchTarget(target: object, nests: boolean): void {
   const holder = target as { write?: unknown };
   try {
-    const current = holder.write;
-    if (typeof current !== 'function') {
-      return;
+    const original = holder.write;
+    if (typeof original === 'function') {
+      holder.write = createWrapper(original as WriteFn, nests);
     }
-    // A prototype that inherits a wrapper this install already placed is covered by it.
-    if (session.patches.some((patch) => patch.wrapper === current)) {
-      return;
-    }
-    const patch: Patch = {
-      target: holder,
-      hadOwn: Object.hasOwn(target, 'write'),
-      original: peel(current as WriteFn),
-      wrapper: undefined,
-      active: true,
-    };
-    const wrapper = createWrapper(patch, session, nests);
-    patch.wrapper = wrapper;
-    holder.write = wrapper;
-    session.patches.push(patch);
   } catch (error) {
     // A frozen prototype (for example under --frozen-intrinsics) cannot be patched; leave it alone.
     report('install', error);
@@ -295,38 +224,13 @@ function patchTarget(session: Session, target: object, nests: boolean): void {
 }
 
 function install(): void {
-  if (registry.session !== undefined) {
+  if (installed) {
     return;
   }
-  const session: Session = { patches: [], suppress: 0 };
-  registry.session = session;
-  patchTarget(session, Writable.prototype, false);
-  patchTarget(session, Duplex.prototype, false);
-  patchTarget(session, OutgoingMessage.prototype, true);
-}
-
-function uninstall(): void {
-  const session = registry.session;
-  if (session === undefined) {
-    return;
-  }
-  registry.session = undefined;
-  for (const patch of session.patches) {
-    // From here on the wrapper is a pass-through to `patch.original`, wherever it still sits.
-    patch.active = false;
-    try {
-      // Never clobber a wrapper someone else installed after ours.
-      if (patch.target.write === patch.wrapper) {
-        if (patch.hadOwn) {
-          patch.target.write = patch.original;
-        } else {
-          delete patch.target.write;
-        }
-      }
-    } catch (error) {
-      report('uninstall', error);
-    }
-  }
+  installed = true;
+  patchTarget(Writable.prototype, false);
+  patchTarget(Duplex.prototype, false);
+  patchTarget(OutgoingMessage.prototype, true);
 }
 
 // ---- Probe -----------------------------------------------------------------------------------
@@ -404,7 +308,7 @@ export function createBackpressureProbe(options: BackpressureProbeOptions = {}):
       }
       enabled = true;
       window = emptyWindow();
-      registry.observers.add(observe);
+      observers.add(observe);
       install();
     },
     disable(): void {
@@ -412,10 +316,7 @@ export function createBackpressureProbe(options: BackpressureProbeOptions = {}):
         return;
       }
       enabled = false;
-      registry.observers.delete(observe);
-      if (registry.observers.size === 0) {
-        uninstall();
-      }
+      observers.delete(observe);
     },
     sample(): BackpressureSample {
       const hotspots: BackpressureHotspot[] = [...window.sites.entries()]

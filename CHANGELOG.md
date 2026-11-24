@@ -100,6 +100,13 @@ All notable changes to Phargus are recorded here. The format follows
   window at a time. `release()` and `close()` close the file once a pending write finishes. The
   collector now validates `windowMs` and the alert rules once, in `createCollector`, instead of on
   every `consume()`.
+- The agent's prototype patches (`write` on `Writable`, `Duplex` and `OutgoingMessage`, `emit` on
+  the HTTP and HTTPS `Server`) are installed once and never removed. When the agent disables
+  itself they stay in place and are inert: they call the original with the same `this` and
+  arguments and return its result, so a wrapper another library installed on top keeps working.
+  The `globalThis` registries that let an ESM and a CJS copy share one set of wrappers, the
+  identity-guarded restore and the peeling of dead wrapper layers are gone: only the copy that
+  starts the agent patches, and the start-once flag is the agent's only `globalThis` entry.
 
 ### Removed
 

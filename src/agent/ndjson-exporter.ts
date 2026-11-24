@@ -1,6 +1,6 @@
 import type { Writable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { excludeFromBackpressure } from './backpressure-exclusion.js';
+import { excludeFromBackpressure } from './backpressure-probe.js';
 import { createBoundedQueue } from './bounded-queue.js';
 import { encodeNdjsonLine } from './ndjson-encoder.js';
 

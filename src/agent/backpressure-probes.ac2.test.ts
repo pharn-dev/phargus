@@ -75,7 +75,7 @@ function createStallableWritable(): { destination: Writable; resume: () => void 
 }
 
 describe('agent backpressure probes — AC-2', () => {
-  it('AC-2: enabling twice then disabling once restores the identical Writable.prototype.write and stops counting', async () => {
+  it('AC-2: enabling twice installs one write wrapper; disabling once stops counting and leaves it installed', async () => {
     const original = Writable.prototype.write;
     const agent = await loadAgent();
     const createBackpressureProbe = agent['createBackpressureProbe'] as () => ProbeUnderTest;
@@ -84,10 +84,13 @@ describe('agent backpressure probes — AC-2', () => {
     const probe = createBackpressureProbe();
     try {
       probe.enable();
+      const wrapped = Writable.prototype.write;
       probe.enable();
+      expect(Writable.prototype.write).toBe(wrapped);
       probe.disable();
 
-      expect(Writable.prototype.write === original).toBe(true);
+      expect(Writable.prototype.write).not.toBe(original);
+      expect(Writable.prototype.write).toBe(wrapped);
 
       const stream = createSlowWritable();
       await stallOnce(stream);
@@ -99,7 +102,6 @@ describe('agent backpressure probes — AC-2', () => {
       expect(reading.hotspots).toEqual([]);
     } finally {
       probe.disable();
-      Writable.prototype.write = original;
     }
   }, 10_000);
 
