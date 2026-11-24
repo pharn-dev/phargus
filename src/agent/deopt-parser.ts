@@ -15,9 +15,11 @@
  * Lines are matched with index arithmetic and anchored, linear-time checks only, never
  * a backtracking pattern over the line text.
  *
- * Memory is bounded: `events()` keeps the newest `maxEvents` events (older ones are counted
- * by `droppedEvents()`), and a line longer than `maxLineLength` is not parsed (counted as
- * unparseable when it starts like a deopt line, otherwise skipped).
+ * Retained events are bounded: `events()` keeps the newest `maxEvents` events (older ones are
+ * counted by `droppedEvents()`), and a line longer than `maxLineLength` is not parsed (counted as
+ * unparseable when it starts like a deopt line, otherwise skipped). `counts()` is not bounded: it
+ * keeps one entry per distinct function name seen, so its memory grows with the number of
+ * different functions in the input (docs/LIMITS.md, section 3).
  *
  * This is a parser only: nothing in the agent captures `--trace-deopt` output; the caller
  * feeds it lines.

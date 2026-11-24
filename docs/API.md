@@ -126,6 +126,104 @@ no config file is read. A worker thread never starts the agent.
 - `WindowPersistence` — the persistence hook the collector writes windows through
 - `WindowStore` — the window store
 
+### Options
+
+`createCollector(options)` takes:
+
+- `windowMs` (required) — window length in ms, a positive integer.
+- `capacity` (required) — how many windows, and separately how many alerts, the collector keeps in
+  memory; the oldest is dropped when full.
+- `spanCapacity` — how many spans it keeps (default `DEFAULT_SPAN_CAPACITY`, 1024).
+- `alerts` — alert rules, checked when the collector is created (a bad rule throws, naming its id).
+- `sinks` — where alerts go, besides `collector.alerts`.
+- `onSinkError(error, sink)` — called with each sink error, such as a failed delivery. Without it
+  the error becomes a process warning.
+- `persist` — opt-in disk persistence of windows.
+- `onIgnored` — called once for each record `consume()` skips.
+
+**Alert rules.** A rule is `{ id, metric, comparison, threshold, forWindows? }`:
+
+- `id` — a non-empty string, unique among the rules.
+- `metric` — one window field, by name:
+
+  | Metric                                             | Unit        |
+  | -------------------------------------------------- | ----------- |
+  | `eventLoop.max`, `eventLoop.p99`, `eventLoop.mean` | nanoseconds |
+  | `memory.heapUsedLast`, `memory.heapUsedMax`        | bytes       |
+  | `memory.rssLast`, `memory.rssMax`                  | bytes       |
+  | `gc.count`                                         | count       |
+  | `gc.totalPause`, `gc.maxPause`                     | nanoseconds |
+  | `backpressure.events`                              | count       |
+  | `backpressure.totalStall`, `backpressure.maxStall` | nanoseconds |
+
+- `comparison` — `'>'` or `'>='`.
+- `threshold` — a non-negative safe integer in the metric's unit: 50 ms is `50_000_000`, 512 MiB
+  is `536_870_912`. No floats and no unit suffixes.
+- `forWindows` — how many adjacent windows in a row must breach before the rule fires, an integer
+  of at least 1 (default 1). Windows are adjacent when one starts where the previous one ended; a
+  gap resets the count.
+
+A rule is edge-triggered: it raises one `firing` alert when it starts breaching and one `resolved`
+alert on the first window that does not breach, not one alert per window. Its state carries across
+`consume()` calls. `phargus serve --alert '<metric><op><threshold>[:<windows>]'` builds the same
+rule from the command line, with unit suffixes (see the README).
+
+**Sinks.** Each entry in `sinks` is a ready `AlertSink` (from `createStdoutSink`, `createFileSink`,
+`createWebhookSink` or your own) or a config object; every entry may carry a `name` for its error
+messages:
+
+- `{ type: 'stdout', stream? }` — one JSON line per alert to `stream` (default `process.stdout`).
+- `{ type: 'file', path }` — one JSON line per alert appended to `path` (created with mode `0600`).
+- `{ type: 'webhook', url, ... }` — a `POST` of each alert as JSON:
+  - `url` — `http:` or `https:`. A URL with a username or password is refused: put credentials in
+    `headers`.
+  - `headers` — extra request headers. `content-type` is reserved (always `application/json`).
+    Values never appear in logs or errors.
+  - `timeoutMs` — per-request timeout (default 5000).
+  - `retries` — extra attempts after a network error, a timeout or a 5xx (default 2). A 4xx or a
+    redirect is not retried, and redirects are never followed.
+  - `backoffMs` — wait before the first retry, doubled for each later one (default 100).
+  - `maxInFlight` — most alerts being delivered at once (default 100). Alerts beyond that are
+    dropped and reported.
+  - `closeTimeoutMs` — how long `close()` waits for in-flight requests before it aborts them
+    (default `timeoutMs`).
+
+An unknown sink type or a bad option throws when the collector is created. Every alert goes to every
+sink, and a failing sink never stops the others. A sink counts its losses in `failed` and `dropped`.
+
+**Persistence.** `persist: { path, maxBytes, maxQueueSize? }` appends each closed window as one JSON
+line to `path` (created with mode `0600`). `maxBytes` (required, a positive integer) caps the file.
+When the next line would pass it, the file is rewritten with the newest windows that fit in half of
+`maxBytes`. The first `consume()` restores the windows already in the file into `collector.windows`.
+`maxQueueSize` (default 1024) is how many windows may wait for the disk; when full, the oldest is
+dropped and counted in `collector.persistence.dropped`. A disk failure never stops the collector:
+it is counted in `collector.persistence.failed` and reported as a process warning.
+
+Example, from `src/collector/collector-alert-sinks.ac3.integration.test.ts` (here `stream` is any
+`Writable` and `server.url` a local HTTP endpoint):
+
+```js
+import { createCollector } from '@pharn-dev/phargus/collector';
+
+const rules = [{ id: 'loop-max', metric: 'eventLoop.max', comparison: '>', threshold: 100 }];
+
+const collector = createCollector({
+  windowMs: 1000,
+  capacity: 10,
+  alerts: rules,
+  sinks: [
+    { type: 'stdout', stream },
+    { type: 'webhook', url: server.url, retries: 0, timeoutMs: 2000 },
+  ],
+  onSinkError: (error) => {
+    sinkErrors.push(error);
+  },
+});
+```
+
+The threshold `100` there is 100 nanoseconds, a test value. To persist windows too, add for example
+`persist: { path, maxBytes: 1_000_000 }` (from `src/collector/collector-bounds.integration.test.ts`).
+
 ## `@pharn-dev/phargus/analyzer`
 
 **Runtime exports**
@@ -201,6 +299,73 @@ no config file is read. A worker thread never starts the agent.
 - `RuleResults` — the results of `runRules`
 - `RuleRunResult` — the result of one rule
 - `RulesDirectoryResult` — the result of `loadRulesDirectory`
+
+### Writing a rule
+
+The plugin runner needs `isolated-vm` 6.x, an optional peer dependency: `npm install isolated-vm`.
+Without it every run fails with `PHARGUS_ISOLATED_VM_MISSING`.
+
+A rule is the **body of a function** that receives `windows`, an array of collector windows
+(`AggregatedWindow`, in the order you pass them). It returns an array of findings,
+`[{ windowStart, message }]`, where `windowStart` is the `start` of the window the finding is about
+(an integer) and `message` is a string. An empty array means nothing was found.
+
+- The body runs synchronously in strict mode, in a fresh `isolated-vm` isolate inside a child
+  process. It sees a JSON copy of the windows and plain JavaScript only: no `require`, no
+  `process`, no Node APIs. A returned promise is not awaited.
+- Window values use the units of the alert metrics above: nanoseconds for lag, pauses and stalls,
+  bytes for memory, all integers.
+- Findings are **returned to the caller, not raised as alerts**: `runner.run()` resolves to
+  `{ ok: true, findings }` or `{ ok: false, error: { code, message } }`, and never rejects. Nothing
+  goes to the collector's alerts or sinks.
+
+Limits for one run, set through `createPluginRunner(options)`:
+
+| Option           | Default | Exceeding it fails with                           |
+| ---------------- | ------- | ------------------------------------------------- |
+| `timeoutMs`      | 1000    | `PHARGUS_RULE_TIMEOUT`                            |
+| `memoryLimitMb`  | 64      | `PHARGUS_RULE_MEMORY_LIMIT` (the minimum is 8)    |
+| `maxFindings`    | 10 000  | `PHARGUS_RULE_INVALID_RESULT`                     |
+| `maxResultBytes` | 1 MiB   | `PHARGUS_RULE_INVALID_RESULT` (the result's JSON) |
+
+A rule that throws fails with `PHARGUS_RULE_THREW`, one that does not compile with
+`PHARGUS_RULE_COMPILE_ERROR`, and a result that is not an array of `{ windowStart, message }` with
+`PHARGUS_RULE_INVALID_RESULT`. A failing rule is not disabled; you decide whether to run it again.
+
+**Rule files.** `loadRulesDirectory(dir)` reads every `.js` file directly inside `dir`
+(subdirectories are not read) as rule text, sorted by name. The rule's id is the file name without
+`.js`. The host process never imports or evaluates the text; only the sandbox runs it. A file over
+1 MiB is not read and is reported in `failures` with `PHARGUS_RULE_FILE_UNREADABLE`; so is a file
+that cannot be read. A directory that cannot be listed gives
+`{ ok: false, error: { code: 'PHARGUS_RULES_DIR_UNREADABLE' } }`.
+`runRules(runner, rules, windows)` runs the loaded rules (and the built-ins, if you add them) one
+after another and returns one result per rule id. A duplicate id fails every copy with
+`PHARGUS_RULE_DUPLICATE_ID`. You create and close the runner.
+
+Example, from `src/plugin-runner/plugin-runner-sandbox.ac1.integration.test.ts`. Saved as a `.js`
+file, `RULE_SOURCE` is also a rule file `loadRulesDirectory` can load:
+
+```js
+import { createPluginRunner } from '@pharn-dev/phargus/plugin-runner';
+
+const RULE_SOURCE = `
+const findings = [];
+for (const w of windows) {
+  if (w.eventLoop.max > 100) {
+    findings.push({ windowStart: w.start, message: 'event-loop max ' + w.eventLoop.max });
+  }
+}
+return findings;
+`;
+
+const runner = createPluginRunner();
+const windows = [windowAt(1_000, 50), windowAt(2_000, 500), windowAt(3_000, 50)];
+const result = await runner.run(RULE_SOURCE, windows);
+// result: { ok: true, findings: [{ windowStart: 2000, message: 'event-loop max 500' }] }
+await runner.close();
+```
+
+`windowAt(start, eventLoopMax)` is the test's helper that builds a full window.
 
 ## `@pharn-dev/phargus/otel`
 
