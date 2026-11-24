@@ -262,10 +262,11 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   the agent's next write blocks the whole process, event loop included, until the reader reads
   again. So on Windows a slow consumer can slow your app, against what the README says. On Linux
   and macOS the agent's lines wait in Node, its bounded lanes drop the oldest, and the app runs
-  on. `stdout-stalled-reader.integration.test.ts` measures this on every platform and prints what
-  it saw; on the Windows smoke job the app sent no report for the whole 3 s window once the pipe
-  had filled. Set `PHARGUS_OUTPUT` to a file on Windows when stdout may go to a reader that
-  stalls.
+  on. `stdout-stalled-reader.integration.test.ts` measures this on every platform: on the Windows
+  smoke job (Node 22.18) the app's 100 ms timer stopped about 2 s after start, once the agent had
+  filled the pipe, and Node buffered no bytes, because every write was synchronous; on Linux and
+  macOS the timer kept firing with about 64 KiB queued in Node. Set `PHARGUS_OUTPUT` to a file on
+  Windows when stdout may go to a reader that stalls.
 - **Windows does not apply POSIX directory modes.** A directory made read-only with `chmod` stays
   writable on Windows, so the test that a heap snapshot into a non-writable directory is refused is
   skipped there.

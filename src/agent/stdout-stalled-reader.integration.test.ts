@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 // event loop keeps turning. Node writes pipes synchronously on Windows, so there a full pipe blocks
 // the whole process (docs/LIMITS.md, "With output on stdout, a stalled reader stops the app on
 // Windows"). The test prints what it observed on every platform, so the platform-smoke job's log
-// is the evidence for that limit.
+// is the evidence for that limit, and it fails if either platform's behaviour changes.
 
 const repoRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), '..', '..');
 const srcDir = join(repoRoot, 'src');
@@ -22,8 +22,11 @@ const LOCK_WAIT_MS = 170_000;
 const LOCK_STALE_MS = 300_000;
 const LOCK_POLL_MS = 250;
 const STARTUP_TIMEOUT_MS = 15_000;
-/** How long the app runs with nobody reading its stdout. */
-const OBSERVE_MS = 3_000;
+/**
+ * How long the app runs with nobody reading its stdout. Windows timers fire about every 15 ms, so
+ * the 2 ms sampler fills the pipe only after about 2 s there (Node 22.18, windows-latest).
+ */
+const OBSERVE_MS = 5_000;
 /** A gap between two app reports at least this long counts as the app being blocked. */
 const BLOCKED_GAP_MS = 1_000;
 const REPORT_EVERY_MS = 100;
@@ -141,7 +144,7 @@ describe('agent output on stdout, reader stalled', () => {
     await ensureFreshDist();
   }, 180_000);
 
-  it('reports whether the app keeps running when nobody reads its stdout; on Linux and macOS it does', async () => {
+  it('reports whether the app keeps running when nobody reads its stdout: it does on Linux and macOS, it stops on Windows', async () => {
     workDir = mkdtempSync(join(tmpdir(), 'phargus-stdout-stall-'));
     const appFile = join(workDir, 'app.mjs');
     writeFileSync(appFile, APP_SOURCE);
@@ -225,7 +228,11 @@ describe('agent output on stdout, reader stalled', () => {
       console.log(`[stdout-stall] observed ${JSON.stringify(observed)}`);
 
       expect(exited, `the app exited; stderr:\n${stderrText}`).toBeUndefined();
-      if (process.platform !== 'win32') {
+      if (process.platform === 'win32') {
+        // Each write is synchronous, so nothing queues in Node and a full pipe stops the process.
+        expect(maxBufferedBytes, JSON.stringify(observed)).toBe(0);
+        expect(blocked, JSON.stringify(observed)).toBe(true);
+      } else {
         // Node queued the agent's lines (the pipe was full) and the event loop kept turning.
         expect(maxBufferedBytes, JSON.stringify(observed)).toBeGreaterThan(0);
         expect(blocked, JSON.stringify(observed)).toBe(false);
