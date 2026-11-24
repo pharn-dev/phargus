@@ -37,10 +37,10 @@ source or test file you create or edit, before running any gate. CI fails on unf
 - `CONTRIBUTING.md`: the rules PRs are checked against.
 
 Phargus is a runtime diagnostics agent for Node.js processes. You drop in a single
-`require('@pharn-dev/phargus/agent')` (or `import '@pharn-dev/phargus/agent'`) and get a dashboard with
-event loop lag, memory pressure, stream backpressure hotspots, GC events, and
-request tracing — **with zero external dependencies**, no Datadog, no collector
-service. Works locally and in production.
+`require('@pharn-dev/phargus/agent')` (or `import '@pharn-dev/phargus/agent'`) and the process writes
+NDJSON with event loop lag, memory pressure, stream backpressure hotspots, GC events, and
+request traces; pipe it into `phargus serve` (`src/cli`) for the dashboard — **with zero external
+dependencies in the agent**, no Datadog, no hosted account. Works locally and in production.
 
 This is an open-source product, treated as one from day one — not a learning toy.
 
@@ -62,8 +62,9 @@ the agent" constraint is the killer adoption feature — never compromise it.**
 
 ## Architecture
 
-One npm package (`phargus`) with six modules under `src/`, each exposed as a subpath
-export (`@pharn-dev/phargus/agent`, `@pharn-dev/phargus/collector`, …):
+One npm package (`@pharn-dev/phargus`) with six modules under `src/`, each exposed as a subpath
+export (`@pharn-dev/phargus/agent`, `@pharn-dev/phargus/collector`, …), plus the CLI (`src/cli`, the
+`phargus` executable via `package.json` `bin`, ESM-only and not an `exports` subpath):
 
 ```
 phargus/
@@ -73,18 +74,24 @@ phargus/
 │   ├── analyzer/       # @pharn-dev/phargus/analyzer — Worker Threads, heap analysis
 │   ├── dashboard/      # @pharn-dev/phargus/dashboard — lightweight UI (SSE + vanilla JS)
 │   ├── plugin-runner/  # @pharn-dev/phargus/plugin-runner — isolated-vm sandbox for user rules
-│   └── otel/           # @pharn-dev/phargus/otel — opt-in OTLP/HTTP JSON export (Node core only)
-├── scripts/            # build (dual ESM + CJS) and exports smoke test
+│   ├── otel/           # @pharn-dev/phargus/otel — opt-in OTLP/HTTP JSON export (Node core only)
+│   ├── cli/            # `phargus serve`: collector + dashboard reading the agent's stdout
+│   ├── shared/         # Node-core helpers for more than one module (not an exports subpath)
+│   └── release/        # release-pipeline tests (public API surface, publish workflow)
+├── scripts/            # dual ESM + CJS build, exports/package/install checks, release tooling
+├── bench/              # overhead benchmark and soak test (run nightly)
+├── docs/               # LIMITS, THREAT-MODEL, RELEASING and other docs
 ├── examples/
-│   ├── express-app/    # example with full instrumentation
-│   └── worker-pool/    # example with Worker Threads
+│   ├── express-app/    # a node:http app with the agent, wired to collector, dashboard, alert
+│   └── worker-pool/    # Worker Threads, a heap snapshot analysed on the analyzer pool
 ```
 
 ### Module responsibilities
 
 - **agent** — runs inside the monitored process. Collects raw signals (event loop
-  lag, memory, GC, stream backpressure, traces). Must stay dependency-free and add
-  near-zero overhead. This is the module users install.
+  lag, memory, GC, stream backpressure, traces). Must stay dependency-free and keep its
+  overhead measured and within the benchmark budget (see "Technical constraints"). This is the
+  module users load.
 - **collector** — aggregates raw metrics. Owns the stream pipeline: raw metrics →
   aggregated time windows → alerts (Transform streams).
 - **analyzer** — CPU-heavy work (heap snapshot analysis, stack-trace
@@ -109,6 +116,7 @@ phargus/
   output. `src/plugin-runner` reads aggregated data only.
 - `src/analyzer` is pure CPU work in Worker Threads with no app coupling.
 - OTel export lives in an opt-in adapter outside the agent core.
+- `src/cli` imports Node core plus the collector and dashboard entrypoints only; nothing imports it.
 
 ---
 
@@ -116,9 +124,10 @@ phargus/
 
 These aren't bolted on — each is load-bearing in the design:
 
-- **AsyncLocalStorage + async_hooks** → core tracing mechanism. Every async
-  context automatically gets a `traceId` with **no instrumentation of user code**.
-  The agent uses `async_hooks` to track context propagation across the call stack.
+- **AsyncLocalStorage** → core tracing mechanism. Each incoming HTTP request's handler
+  runs inside an `AsyncLocalStorage` context holding its `traceId`, so the id follows the
+  request's async work with **no instrumentation of user code**. The agent uses no
+  `async_hooks` hooks (`createHook`); `AsyncLocalStorage` does the propagation.
 - **Streams + backpressure** → the agent exports data as an NDJSON stream with
   backpressure. The dashboard consumes it over SSE. Transform streams turn raw
   metrics into aggregated windows and then alerts.
@@ -126,9 +135,9 @@ These aren't bolted on — each is load-bearing in the design:
   symbolization happen in a Worker Thread, never on the monitored event loop. A
   worker pool processes profiles in parallel.
 - **Security / sandboxing** → the plugin runner executes user-supplied rules in
-  `isolated-vm` with a hard memory limit and timeout. The Node Permission Model
-  (`--permission`, stable since Node 22.13; older 22.x used
-  `--experimental-permission`) constrains what the agent itself may do.
+  `isolated-vm`, in a child process, with a hard memory limit and timeout. When the host runs
+  under the Node Permission Model (`--permission`, stable since Node 22.13; older 22.x used
+  `--experimental-permission`), the plugin runner's child inherits those flags.
 - **V8 performance / memory** → exposes `v8.getHeapSpaceStatistics()`, surfaces GC
   events through a `PerformanceObserver` on `'gc'` entries, supports on-demand heap
   snapshots, and ships a parser for `--trace-deopt` output (nothing captures that
@@ -142,20 +151,23 @@ These aren't bolted on — each is load-bearing in the design:
   point. Anything the agent needs comes from Node core. No exceptions.
 - **Dual package: ESM + CJS.** Every module has a correct `exports` subpath with
   `import` and `require` conditions, each with its own types.
-- Use the `imports` field for internal aliases.
 - **TypeScript strict mode throughout.** No `any` without an explicit comment
   explaining why.
 - Dashboard UI: vanilla JS, no framework, no bundler. Keep it tiny.
-- Agent overhead on the monitored process must be negligible — benchmark it,
-  don't assume it.
+- Agent overhead on the monitored process is measured, not assumed. The measured costs
+  (tracing is where the per-request cost is) are in `docs/LIMITS.md` §1; the benchmark is
+  `bench/overhead.mjs`, its budget is in `bench/README.md` ("Budget", `bench/lib/budget.mjs`),
+  and the nightly workflow (`.github/workflows/nightly.yml`) runs it as a soft check. A change
+  that adds per-request or per-write work in the agent must not exceed that budget.
 
 ---
 
 ## Coding conventions
 
-- `async_hooks` usage is isolated to `src/agent/context.ts`. **Nowhere else
-  imports from `async_hooks` directly.**
-- All Worker Thread files live in a `*/src/workers/` subdirectory. Never inline,
+- `node:async_hooks` is imported in exactly one file, `src/agent/context.ts`, and only for
+  `AsyncLocalStorage`. **Nowhere else imports from `async_hooks` directly.**
+- Every Worker Thread or sandbox child file under `src/` lives in a `src/<module>/workers/`
+  subdirectory (`src/analyzer/workers/`, `src/plugin-runner/workers/`). Never inline,
   `eval`-based workers.
 - Stream pipelines always use `stream/promises` `pipeline()` — **never `.pipe()`**.
 - Error handling: every stream, every worker, every plugin execution is wrapped
@@ -182,17 +194,6 @@ These aren't bolted on — each is load-bearing in the design:
 
 ---
 
-## First task for a fresh repo
-
-> We are building Phargus from scratch. Start by scaffolding the package: a single
-> npm `package.json`, `tsconfig.base.json` with strict mode, a shared eslint
-> config, and the skeleton of the 5 modules (`agent`, `collector`, `analyzer`,
-> `dashboard`, `plugin-runner`) under `src/` with correct `package.json`
-> `exports` subpaths (dual CJS+ESM). **No implementation yet — just the structure
-> that compiles cleanly with `npm run build`.**
-
----
-
 ## Architecture decisions (full build — locked, override if you disagree)
 
 We're building the full version, so these forks are decided up front rather than
@@ -206,7 +207,7 @@ deliberately, but don't leave them implicit.
   permission flag name/stability for the version you pin before relying on it in
   the plugin runner.
 - **Persistence: in-memory ring buffer always, plus opt-in disk persistence** of
-  recent windows/snapshots (append-only file, no external DB — keeps the
+  recent windows (append-only file, no external DB — keeps the
   dependency-free, local-first identity).
 - **Dashboard exposure in production: token-gated by default.** The SSE endpoint
   and UI require a token when not bound to localhost; never exposed unauthenticated
