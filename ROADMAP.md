@@ -8,12 +8,13 @@ dashboard has anything to show. That's all the ordering means.
 
 Calendar is yours to set; the ordering is the point.
 
-**Status:** S0 to S7 are implemented on `main`. S8 is in progress: version 0.1.0, the first release, was published on npm on 2026-10-12, and later releases are listed in `CHANGELOG.md`; the launch material (blog post, Show HN) is still pending.
+**Status:** S0 to S7 are implemented on `main`. S8 is in progress: version 0.1.0, the first release, was published on npm on 2026-10-12, and later releases are listed in `CHANGELOG.md`; the launch material (blog post, Show HN) is still pending, and no issue carries `good-first-issue` yet.
 Where the built code differs from a step's wording below:
 
 - S1: GC events come from a `PerformanceObserver`, not a `--trace-gc` hook.
-- S3: the dashboard has no backpressure view and no time-range scrubbing yet (see `FEATURES.md`).
-- S5: `--trace-deopt` support is a parser; nothing captures that output.
+- S3: the dashboard has no time-range scrubbing yet (see `FEATURES.md`).
+- S5: `--trace-deopt` support is a parser; nothing captures that output. Allocations: sampling
+  only, no allocation timeline.
 
 ---
 
@@ -79,8 +80,8 @@ Where the built code differs from a step's wording below:
 ## S8 — Launch
 
 - ✅ First npm release: 0.1.0, published 2026-10-12; later releases are in `CHANGELOG.md` (process: `docs/RELEASING.md`).
-- `README` with a GIF/asciinema of one-liner → dashboard.
-- `CONTRIBUTING.md`, labeled `good-first-issue`s.
+- ✅ `README` with a GIF of one-liner → dashboard (`docs/assets/dashboard.gif`).
+- ✅ `CONTRIBUTING.md`; labeled `good-first-issue`s still to come.
 - Technical blog post + "Show HN".
 - Outcome: public v0.x launch.
 

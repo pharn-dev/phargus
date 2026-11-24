@@ -58,15 +58,15 @@ drain) on every request. The `bp events` column shows it; in the other workloads
 
 **Variants**
 
-| Variant    | What is loaded                                                                                              |
-| ---------- | ----------------------------------------------------------------------------------------------------------- |
-| `none`     | nothing: the baseline                                                                                       |
-| `idle`     | `--import @pharn-dev/phargus/agent` with `PHARGUS_ENABLED=false`: installed, switched off by config         |
-| `full`     | `--import @pharn-dev/phargus/agent` with its defaults: tracing and every sampler, NDJSON to stdout (a file) |
-| `notrace`  | `--import @pharn-dev/phargus/agent` with `PHARGUS_SPAN_BUFFER=0`: every sampler, no HTTP tracing            |
-| `pipe`     | as `full`, but stdout is a pipe read by a reader process (the documented `\| phargus serve` topology)       |
-| `tracing`  | library API only: HTTP tracing on, spans flushed once a second to stdout (a file); no samplers              |
-| `samplers` | library API only: samplers and the backpressure probe at 1 s, to stdout (a file); tracing off               |
+| Variant    | What is loaded                                                                                                             |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `none`     | nothing: the baseline                                                                                                      |
+| `idle`     | `--import @pharn-dev/phargus/agent` with `PHARGUS_ENABLED=false`: installed, switched off by config                        |
+| `full`     | `--import @pharn-dev/phargus/agent` with its defaults: tracing and every sampler, NDJSON to stdout (a file)                |
+| `notrace`  | `--import @pharn-dev/phargus/agent` with `PHARGUS_SPAN_BUFFER=0`: every sampler, no HTTP tracing                           |
+| `pipe`     | as `full`, but stdout is a pipe read by a reader process (the documented `\| phargus serve` topology)                      |
+| `tracing`  | agent internals from `dist/` (no auto-start): HTTP tracing on, spans flushed once a second to stdout (a file); no samplers |
+| `samplers` | agent internals from `dist/` (no auto-start): samplers and the backpressure probe at 1 s, to stdout (a file); tracing off  |
 
 The target's stdout is a file in the cell's temporary directory for every variant but `pipe`. For
 `pipe` the harness forks a reader process (`lib/pipe-reader.mjs`) and hands its stdin to the

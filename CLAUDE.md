@@ -17,7 +17,7 @@ Commands (run from the repo root):
 npm install
 npm run build           # dual build into dist/: ESM (dist/esm) + CJS (dist/cjs)
 npm run check:exports   # after build: every `exports` subpath loads via import and require
-npm run typecheck       # tsc --noEmit over src/ and the repo's own scripts and configs
+npm run typecheck       # tsc --noEmit over src/, test/ and the repo's own scripts and configs
 npm test
 npm run lint
 npm run format:check
@@ -31,7 +31,7 @@ source or test file you create or edit, before running any gate. CI fails on unf
 ## Companion docs
 
 - `ARCHITECTURE.md`: data flow, in-process diagram, **who may import what**.
-- `FEATURES.md`: full feature scope (everything is in scope; ⚙️ = design fork).
+- `FEATURES.md`: full feature scope (everything is in scope; ✅ implemented, 🟡 partly, ⬜ not built yet).
 - `ROADMAP.md`: build order S0–S8 (dependency order, not scope cuts). Each
   step must leave `main` compiling and runnable.
 - `CONTRIBUTING.md`: the rules PRs are checked against.
@@ -78,6 +78,7 @@ phargus/
 │   ├── cli/            # `phargus serve`: collector + dashboard reading the agent's stdout
 │   ├── shared/         # Node-core helpers for more than one module (not an exports subpath)
 │   └── release/        # release-pipeline tests (public API surface, publish workflow)
+├── test/               # Vitest global setup (builds dist/ once when stale), test/support.ts helpers
 ├── scripts/            # dual ESM + CJS build, exports/package/install checks, release tooling
 ├── bench/              # overhead benchmark and soak test (run nightly)
 ├── docs/               # LIMITS, THREAT-MODEL, RELEASING and other docs
@@ -96,11 +97,11 @@ phargus/
   aggregated time windows → alerts (Transform streams).
 - **analyzer** — CPU-heavy work (heap snapshot analysis, stack-trace
   symbolization) runs here in Worker Threads so the monitored process's event loop
-  is never blocked. Worker pool for parallel profile processing.
+  is never blocked. Worker pools for heap snapshot analysis and stack-frame symbolization.
 - **dashboard** — lightweight UI. Vanilla JS, no framework, no bundler. Receives
   data over SSE (Server-Sent Events).
 - **plugin-runner** — optional. Users can write custom diagnostic rules (e.g.
-  "alert when function X takes > 50ms"). Rules execute inside `isolated-vm` with a
+  "flag event loop p99 above 50 ms for 3 windows in a row"). Rules execute inside `isolated-vm` with a
   hard memory limit and timeout.
 - **otel** — optional. OTLP/HTTP JSON export of collector windows (metrics) and
   spans (traces), Node core only, outside the agent.
@@ -128,12 +129,13 @@ These aren't bolted on — each is load-bearing in the design:
   runs inside an `AsyncLocalStorage` context holding its `traceId`, so the id follows the
   request's async work with **no instrumentation of user code**. The agent uses no
   `async_hooks` hooks (`createHook`); `AsyncLocalStorage` does the propagation.
-- **Streams + backpressure** → the agent exports data as an NDJSON stream with
-  backpressure. The dashboard consumes it over SSE. Transform streams turn raw
-  metrics into aggregated windows and then alerts.
+- **Streams + backpressure** → the agent writes NDJSON through bounded drop-oldest
+  queues and never waits on a slow reader. Collector Transform streams turn raw
+  metrics into aggregated windows and then alerts; the dashboard pushes those to the
+  browser over SSE.
 - **Worker Threads / CPU parallelism** → heap-snapshot analysis and stack-trace
-  symbolization happen in a Worker Thread, never on the monitored event loop. A
-  worker pool processes profiles in parallel.
+  symbolization happen in a Worker Thread, never on the monitored event loop. Worker
+  pools run them in parallel.
 - **Security / sandboxing** → the plugin runner executes user-supplied rules in
   `isolated-vm`, in a child process, with a hard memory limit and timeout. When the host runs
   under the Node Permission Model (`--permission`, stable since Node 22.13; older 22.x used
@@ -204,14 +206,13 @@ deliberately, but don't leave them implicit.
 - **Minimum Node.js version: Node 22.18.0 as the floor** (`engines.node` `>=22.18.0`,
   `.nvmrc` `22.18.0`; 24 fine too). 22.18 is the lowest version the full test suite
   passes on (it loads `.ts` workers through type stripping). This is
-  the lever for the Permission Model and `node:` imports — confirm the exact
-  permission flag name/stability for the version you pin before relying on it in
-  the plugin runner.
+  the lever for the Permission Model and `node:` imports.
 - **Persistence: in-memory ring buffer always, plus opt-in disk persistence** of
   recent windows (append-only file, no external DB — keeps the
   dependency-free, local-first identity).
 - **Dashboard exposure in production: token-gated by default.** The SSE endpoint
-  and UI require a token when not bound to localhost; never exposed unauthenticated
+  and UI require a token when not bound to localhost or when `allowedHosts` names a
+  non-loopback host; never exposed unauthenticated
   in prod.
 - **Pin the toolchain:** `.nvmrc` matching the Node floor, plus `engines` (`node` and `npm`) in the
   root `package.json`. CI uses `npm ci` against the committed `package-lock.json`.

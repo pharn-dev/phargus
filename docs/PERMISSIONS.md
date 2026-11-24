@@ -12,31 +12,30 @@ for `sampleAllocations` (below); the analyzer and the plugin runner also start t
 ```bash
 node --permission \
   --allow-fs-read=<app dir> \
-  --allow-fs-read=<path to node_modules/phargus> \
+  --allow-fs-read=<path to node_modules/@pharn-dev/phargus> \
   --allow-fs-write=<NDJSON output file and <file>.1, or their directory> \
   --allow-fs-read=<NDJSON output file> \
   --allow-fs-write=<heap snapshot dir> \
   --require @pharn-dev/phargus/agent app.js
 ```
 
-| Grant                                    | Needed for                                                                     |
-| ---------------------------------------- | ------------------------------------------------------------------------------ |
-| `--allow-fs-read=<app dir>`              | Loading your app, and reading `phargus.config.json` from the cwd               |
-| `--allow-fs-read=<node_modules/phargus>` | Loading the agent itself                                                       |
-| `--allow-fs-read=<PHARGUS_CONFIG file>`  | Reading the config file that `PHARGUS_CONFIG` pins                             |
-| `--allow-fs-write=<output path>`         | The NDJSON export to a file (`output` other than `'stdout'` or `'none'`)       |
-| `--allow-fs-write=<output path>.1`       | Renaming a full output file to `<file>.1` (unless `outputMaxBytes` is `0`)     |
-| `--allow-fs-read=<output path>`          | The same rename: Node checks read access on the file it moves                  |
-| `--allow-fs-write=<snapshot dir>`        | `takeHeapSnapshot({ dir })`, which also needs `--allow-fs-read=<snapshot dir>` |
+| Grant                                               | Needed for                                                                     |
+| --------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `--allow-fs-read=<app dir>`                         | Loading your app, and reading `phargus.config.json` from the cwd               |
+| `--allow-fs-read=<node_modules/@pharn-dev/phargus>` | Loading the agent itself                                                       |
+| `--allow-fs-read=<PHARGUS_CONFIG file>`             | Reading the config file that `PHARGUS_CONFIG` pins                             |
+| `--allow-fs-write=<output path>`                    | The NDJSON export to a file (`output` other than `'stdout'` or `'none'`)       |
+| `--allow-fs-write=<output path>.1`                  | Renaming a full output file to `<file>.1` (unless `outputMaxBytes` is `0`)     |
+| `--allow-fs-read=<output path>`                     | The same rename: Node checks read access on the file it moves                  |
+| `--allow-fs-write=<snapshot dir>`                   | `takeHeapSnapshot({ dir })`, which also needs `--allow-fs-read=<snapshot dir>` |
 
 `output: 'stdout'` needs no write grant. With the default size bound, a file output missing either
 rotation grant disables the agent at start, before any file is opened; one
 `--allow-fs-write=<directory>` covers both write paths. Leave out the write grants for features you
 do not use.
 
-With `PHARGUS_CONFIG` set, the agent reads only that file for its config. A `.js` config is
-executed with only a read grant, so prefer a pinned `.json` file, or a directory only the operator
-can write.
+With `PHARGUS_CONFIG` set, the agent reads only that `.json` file for its config. A config file is
+parsed, never executed; a `phargus.config.js` is only warned about.
 
 The agent spawns no worker threads and no child processes, so none of `--allow-worker`,
 `--allow-child-process`, `--allow-addons` or `--allow-wasi` is needed for it.
@@ -52,11 +51,11 @@ nothing else in the agent is affected.
 
 Heap-snapshot summaries and diffs and stack-trace symbolization run in Worker Threads:
 
-| Grant                                     | Needed for                                  |
-| ----------------------------------------- | ------------------------------------------- |
-| `--allow-worker`                          | Starting the worker pool                    |
-| `--allow-fs-read=<node_modules/phargus>`  | Loading the worker files                    |
-| `--allow-fs-read=<snapshot or build dir>` | Reading the snapshots, built files and maps |
+| Grant                                               | Needed for                                  |
+| --------------------------------------------------- | ------------------------------------------- |
+| `--allow-worker`                                    | Starting the worker pool                    |
+| `--allow-fs-read=<node_modules/@pharn-dev/phargus>` | Loading the worker files                    |
+| `--allow-fs-read=<snapshot or build dir>`           | Reading the snapshots, built files and maps |
 
 Analyzer workers inherit the host's flags, except entry-point and tooling flags such as
 `--input-type`, `-e`, `-p`, `--test*`, `--watch*` and `--inspect*`, which are dropped. A preloaded
@@ -67,13 +66,13 @@ only, so pool workers write no sample lines.
 
 Rules run in `isolated-vm` inside a forked child process:
 
-| Grant                                        | Needed for                                          |
-| -------------------------------------------- | --------------------------------------------------- |
-| `--allow-child-process`                      | Forking the sandbox process                         |
-| `--allow-addons`                             | Loading `isolated-vm` (a native addon) in the child |
-| `--allow-fs-read=<node_modules/phargus>`     | Loading the sandbox child script                    |
-| `--allow-fs-read=<node_modules/isolated-vm>` | Loading `isolated-vm`                               |
-| `--allow-fs-read=<rules dir>`                | `loadRulesDirectory(dir)`                           |
+| Grant                                               | Needed for                                          |
+| --------------------------------------------------- | --------------------------------------------------- |
+| `--allow-child-process`                             | Forking the sandbox process                         |
+| `--allow-addons`                                    | Loading `isolated-vm` (a native addon) in the child |
+| `--allow-fs-read=<node_modules/@pharn-dev/phargus>` | Loading the sandbox child script                    |
+| `--allow-fs-read=<node_modules/isolated-vm>`        | Loading `isolated-vm`                               |
+| `--allow-fs-read=<rules dir>`                       | `loadRulesDirectory(dir)`                           |
 
 The sandbox child is forked with `--no-node-snapshot` (which `isolated-vm` needs) plus every
 `--permission`, `--experimental-permission` and `--allow-*` flag from the host's `execArgv`, so it
@@ -89,7 +88,7 @@ ignored; it reports on stderr only.
 
 | Grant                                                                                          | Needed for                          |
 | ---------------------------------------------------------------------------------------------- | ----------------------------------- |
-| `--allow-fs-read=<node_modules/phargus>`                                                       | Loading the modules                 |
+| `--allow-fs-read=<node_modules/@pharn-dev/phargus>`                                            | Loading the modules                 |
 | `--allow-fs-read`, `--allow-fs-write=<the file>` and `--allow-fs-write=<the file>.compact.tmp` | Window persistence (`persist.path`) |
 | `--allow-fs-write=<the file>`                                                                  | The file alert sink                 |
 

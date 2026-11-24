@@ -19,8 +19,8 @@ npm run build           # dual build into dist/: ESM (dist/esm) + CJS (dist/cjs)
 npm run check:exports   # after build: every `exports` subpath loads via import and require
 npm run check:package   # after build: tarball contents, source maps, and engines.node == .nvmrc
 node scripts/pack-release.mjs /tmp/phargus-package
-npm run check:install -- /tmp/phargus-package/pharn-dev-phargus-0.2.0.tgz
-npm run typecheck       # tsc --noEmit over src/ and the repo's own scripts and configs
+npm run check:install -- /tmp/phargus-package/pharn-dev-phargus-<version>.tgz
+npm run typecheck       # tsc --noEmit over every .ts/.mts file: src/, test/, scripts/check-package.mts, configs
 npm test
 npm run lint
 npm run format:check
@@ -50,18 +50,19 @@ loop lag show up live. Stop it with Ctrl-C.
 
 Every PR runs these as separate jobs, and all of them are required status checks on `main`:
 
-| Job          | Command                                                                          |
-| ------------ | -------------------------------------------------------------------------------- |
-| Format check | `npm run format:check`                                                           |
-| Lint         | `npm run lint`                                                                   |
-| Typecheck    | `npm run typecheck`                                                              |
-| Test         | `npm test`                                                                       |
-| Build        | build, exports, package contents, and `check:install` against the packed tarball |
-| Action pins  | `npm run check:pins` (every Action pinned to a SHA)                              |
+| Job          | Command                                                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------------------- |
+| Format check | `npm run format:check`                                                                                   |
+| Lint         | `npm run lint`                                                                                           |
+| Typecheck    | `npm run typecheck`                                                                                      |
+| Test         | `npm run test:coverage`; on PRs, pharn-ci checks diff coverage (80%, `.pharn/ci.yml`) and test integrity |
+| Build        | build, exports, package contents, and `check:install` against the packed tarball                         |
+| Action pins  | `npm run check:pins` (every Action pinned to a SHA)                                                      |
 
-Every required job runs on the Node version in `.nvmrc`, which is the `engines` floor.
+Every job in `ci.yml` runs on the Node version in `.nvmrc`, which is the `engines` floor.
 
-CodeQL (`Analyze (javascript-typescript)`) and `gitleaks` run as well. A separate, non-required
+CodeQL (`Analyze (javascript-typescript)`) and `gitleaks` run in their own workflows and are
+required checks too. A separate, non-required
 `node-latest` workflow tests Node 24, including installation of the packed package. The same
 workflow's `Platform smoke` jobs run `npm ci`, build, `check:exports` and `npm test` on
 `windows-latest` and `macos-latest` on the `.nvmrc` floor; they are not required, and their names
@@ -97,7 +98,7 @@ names and configuration are documented in `README.md`.
   dependency to the agent will not be merged. Use Node core.
 - TypeScript strict mode. No `any` without a comment explaining why.
 - Streams use `stream/promises` `pipeline()`, never `.pipe()`.
-- Worker Thread files live in `*/src/workers/`; no inline `eval`-based workers. A worker used only
+- Worker Thread and sandbox child files live in `src/<module>/workers/`; no inline `eval`-based workers. A worker used only
   by tests lives in a `fixtures/` directory, which the build excludes.
 - `async_hooks` is imported only in `src/agent/context.ts`.
 - Every stream / worker / plugin execution has explicit error handling. No silent
@@ -127,7 +128,7 @@ open an issue first so we can align on approach before you write code.
 
 New behavior needs tests. Bug fixes should include a regression test.
 
-Integration tests take their scaffolding from `test/support.ts` (spawning the built CLI or any node
+Integration tests that spawn processes or use temporary directories take their scaffolding from `test/support.ts` (spawning the built CLI or any node
 process, raw HTTP and SSE helpers, temporary directories, the CLI's `counts:` line) and call
 `afterAll(cleanup)`. `npm test` builds `dist/` once, in a Vitest global setup
 (`test/global-setup.ts`), when it is missing or older than `src/`; a test never builds it itself.

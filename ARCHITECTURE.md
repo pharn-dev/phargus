@@ -10,7 +10,7 @@ This document is the "how it fits together" companion to `CLAUDE.md`. Read
 Only the agent runs **inside** the process you want to observe. It samples, traces and writes
 NDJSON to stdout or a file; it starts no server. Everything else is a library you wire to that
 stream: the collector aggregates it, the dashboard serves the collector's output to a browser, and
-the OpenTelemetry exporter reads the collector's windows, and the plugin runner runs rules over
+the OpenTelemetry exporters receive the collector's windows and spans once your code subscribes them, and the plugin runner runs rules over
 windows your code hands it. You can run those in the
 monitored process, but the usual setup runs them in a second process that reads the app's stdout,
 so aggregation and serving never use the app's event loop. `phargus serve` (`src/cli`) is that second
@@ -71,7 +71,7 @@ with an alert rule.
    delay beyond the timer interval), `process.memoryUsage()`, GC entries
    from a `PerformanceObserver`, and the backpressure probe, which wraps `write` on the
    `Writable`, `Duplex` and `http.OutgoingMessage` prototypes and records where writes return
-   `false` and how long until `drain`. User code is never edited.
+   `false` and how long until `drain`, `finish` or `close`. User code is never edited.
 2. **Transport out of the agent.** Each tick drains the span buffer (`spanBuffer`, default 1024 spans) into the span
    lane, then queues one sample line in the sample lane. Both lanes are bounded by `queueBound`
    and drop their oldest line when full; sample lines are always written before span lines, so
@@ -103,8 +103,9 @@ with an alert rule.
 4. **Delivery (dashboard).** `createDashboardServer({ collector, host, port })` subscribes to the
    collector and serves the UI and an SSE endpoint. Each SSE client has its own bounded queue; a
    stalled client loses its oldest events, never the server's memory.
-5. **Export and rules (optional).** `@pharn-dev/phargus/otel` exporters subscribe to the collector and send
-   windows as OTLP metrics and spans as OTLP traces. `@pharn-dev/phargus/plugin-runner` does not
+5. **Export and rules (optional).** `@pharn-dev/phargus/otel` exporters do not subscribe themselves: your code
+   calls `collector.subscribe(exporter.listener)`, and they send windows as OTLP metrics and spans
+   as OTLP traces. `@pharn-dev/phargus/plugin-runner` does not
    subscribe: your code calls `runner.run(source, windows)` or `runRules(runner, rules, windows)`
    with windows it chose (for example `collector.windows.snapshot()`), the rules run in a sandboxed
    child process, and the results come back to that caller. Nothing schedules rules, and a finding
@@ -136,6 +137,9 @@ with an alert rule.
 the plugin runner use `module-directory.ts` to find their bundled worker and child files). It is not
 an `exports` subpath, and the agent never imports it.
 
+Other modules may import agent files directly (the collector, dashboard and otel share
+`src/agent/bounded-queue.ts`); the agent never imports theirs.
+
 ---
 
 ## Performance contract
@@ -160,7 +164,7 @@ an `exports` subpath, and the agent never imports it.
 
 ## Build & module setup
 
-- One npm package (`phargus`); the six modules live under `src/` and are exposed as subpath
+- One npm package (`@pharn-dev/phargus`); the six modules live under `src/` and are exposed as subpath
   exports (`@pharn-dev/phargus/agent`, `@pharn-dev/phargus/collector`, `@pharn-dev/phargus/analyzer`, `@pharn-dev/phargus/dashboard`,
   `@pharn-dev/phargus/plugin-runner`, `@pharn-dev/phargus/otel`).
 - `tsconfig.base.json` (strict) shared by two builds: `tsconfig.esm.json` →

@@ -7,8 +7,8 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
 ## 1. Cost and overhead
 
 - **Overhead is measured, never zero.** `bench/overhead.mjs` compares agent-off with the agent
-  loaded but disabled, the full agent, the agent with tracing off (`notrace`), tracing only and
-  samplers only, on HTTP workloads
+  loaded but disabled, the full agent, the agent with tracing off (`notrace`), the full agent
+  writing into a pipe (`pipe`), tracing only and samplers only, on HTTP workloads
   (`trivial`, `promise`, `cpu`, `stream`, `large`). A nightly workflow runs it against one soft
   budget, in `bench/lib/budget.mjs`: the full agent may cost at most 25% more CPU per request than
   agent-off on `trivial`. A run over the budget fails the nightly workflow (exit 2) only when it
@@ -53,7 +53,7 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   1024, and 16 ms for 4096, with single ticks up to tens of milliseconds when a GC lands in them.
   A smaller `PHARGUS_SPAN_BUFFER` shortens that burst in proportion and drops (and counts) the
   spans above it.
-- **Memory: a few MiB at steady state.** The span buffer preallocates about 280 KiB for its 1024
+- **Memory: a few MiB at steady state.** The span buffer preallocates about 320 KiB for its 1024
   spans. With tracing on, heap after GC is unchanged and RSS after a minute of load matches the
   agent-off process within run-to-run noise. In short benchmark cells RSS can still read up to
   about 25% higher on `promise`: V8 grows its young generation to the same maximum either way,
@@ -147,7 +147,7 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   and records the whole interval on every tick, so the agent subtracts 10 ms from min, max, mean, p50
   and p99 and clamps at 0. An idle loop therefore reads close to 0, not exactly 0: the remainder is
   real timer and scheduling overhead. Delays shorter than the interval are not resolved, and the
-  subtracted amount is the configured interval, not a measured idle baseline. On Windows, an idle
+  subtracted amount is the fixed 10 ms timer interval, not a measured idle baseline. On Windows, an idle
   loop reads a few milliseconds (about 5 ms on CI runners) rather than close to 0, because Windows
   timers are coarser.
 - **Phargus cannot protect itself from the host.** Code running in the same process can read or alter
@@ -257,8 +257,8 @@ security design see [`THREAT-MODEL.md`](./THREAT-MODEL.md).
   copy still keeps its own trace context. Pick one format per process.
 - **Platform.** Phargus is developed on Linux and macOS. The required CI checks run on Linux; a
   non-required smoke job runs the build, the exports check and the test suite on Windows and macOS.
-  The packed-package install check and the release-workflow check run on Linux only, and releases
-  are packed on Linux: a tarball packed on Windows has no execute bit on the `phargus` bin.
+  The packed-package install check runs on Linux only, the release-workflow check is skipped only on
+  Windows (it also runs in the macOS smoke job), and releases are packed on Linux: a tarball packed on Windows has no execute bit on the `phargus` bin.
 - **No graceful shutdown from a signal on Windows.** On Windows, `process.kill()` with `SIGTERM` or
   `SIGINT` ends the process without running its signal handlers. So `phargus serve` and
   `examples/express-app` stop without closing the dashboard, flushing the collector or printing the

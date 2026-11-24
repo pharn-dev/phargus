@@ -1,8 +1,9 @@
 # Security Policy
 
 Phargus runs **inside** the Node.js process it observes, and its dashboard exposes runtime internals
-(request paths, timings, memory, and optionally heap snapshots). Both facts make security part of
-the product, not an afterthought. We welcome coordinated disclosure of any vulnerability in this
+(request paths, timings, memory, GC and backpressure call sites). Heap snapshots, written by
+`takeHeapSnapshot` to a file the caller picks, can contain anything in memory. Both facts make
+security part of the product, not an afterthought. We welcome coordinated disclosure of any vulnerability in this
 repository.
 
 > **Status:** Published on npm (0.1.0 was the first release; see `CHANGELOG.md`). Roadmap steps S0
