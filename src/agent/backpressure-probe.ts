@@ -37,12 +37,16 @@ const DEFAULT_MAX_HOTSPOTS = 10;
 const MAX_SITES_PER_WINDOW = 256;
 const OTHER_SITE = '<other>';
 const STACK_LIMIT = 32;
+/** Stack captures per window; later stalls in the window are named by the stream's constructor. */
+const MAX_CAPTURES_PER_WINDOW = 32;
 
 type SiteStats = { events: number; totalStall: number; maxStall: number };
 type Window = {
   events: number;
   totalStall: number;
   maxStall: number;
+  /** Stack captures made in this window, up to `MAX_CAPTURES_PER_WINDOW`. */
+  captures: number;
   sites: Map<string, SiteStats>;
 };
 type OpenStall = { start: bigint; site: string };
@@ -52,7 +56,7 @@ function saturatingAdd(a: number, b: number): number {
 }
 
 function emptyWindow(): Window {
-  return { events: 0, totalStall: 0, maxStall: 0, sites: new Map() };
+  return { events: 0, totalStall: 0, maxStall: 0, captures: 0, sites: new Map() };
 }
 
 // ---- Shared prototype wrap -------------------------------------------------------------------
@@ -118,7 +122,6 @@ function sharedRegistry(): Registry {
 }
 
 const registry = sharedRegistry();
-const siteCache = new WeakMap<object, string>();
 const reported = new Set<string>();
 
 /** Report a probe failure once per kind, as a process warning. */
@@ -148,12 +151,11 @@ function fallbackSite(stream: Observable): string {
   return name === '' ? 'Writable' : name;
 }
 
-/** Capture the call site of a stream's first stall. Runs once per stream. */
-function siteOf(stream: Observable, wrapper: WriteFn): string {
-  const cached = siteCache.get(stream);
-  if (cached !== undefined) {
-    return cached;
-  }
+/**
+ * Capture the call site of one stall. Not cached per stream: a keep-alive socket or a shared log
+ * stream is written by many call sites, and each stall is named by its own.
+ */
+function captureSite(stream: Observable, wrapper: WriteFn): string {
   let site: string | undefined;
   const previousLimit = Error.stackTraceLimit;
   try {
@@ -167,9 +169,7 @@ function siteOf(stream: Observable, wrapper: WriteFn): string {
   } finally {
     Error.stackTraceLimit = previousLimit;
   }
-  const resolved = site ?? fallbackSite(stream);
-  siteCache.set(stream, resolved);
-  return resolved;
+  return site ?? fallbackSite(stream);
 }
 
 /**
@@ -361,7 +361,14 @@ export function createBackpressureProbe(options: BackpressureProbeOptions = {}):
     if (open.has(stream) || isCoveredByOpenMessage(stream, open)) {
       return;
     }
-    const site = siteOf(stream, wrapper);
+    // A stack capture costs microseconds, so a window pays for at most MAX_CAPTURES_PER_WINDOW.
+    let site: string;
+    if (window.captures < MAX_CAPTURES_PER_WINDOW) {
+      window.captures += 1;
+      site = captureSite(stream, wrapper);
+    } else {
+      site = fallbackSite(stream);
+    }
     open.set(stream, { start: process.hrtime.bigint(), site });
     window.events = saturatingAdd(window.events, 1);
     const stats = statsFor(site);
