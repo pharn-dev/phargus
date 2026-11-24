@@ -2,8 +2,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import type { AggregatedWindow, SpanRecord } from '../collector/index.js';
-import { createOtlpMetricsExporter } from './otlp-exporter.js';
-import { createOtlpTraceExporter } from './otlp-trace-exporter.js';
+import { createOtlpMetricsExporter, createOtlpTraceExporter } from './otlp-exporter.js';
 
 // Generous for a loaded CI runner, far below what the unbounded behaviour took (batches × timeout).
 const EPSILON_MS = 400;
@@ -150,7 +149,6 @@ describe('OTLP bounded close (F-08)', () => {
         url: server.url,
         timeoutMs: 10_000,
         closeTimeoutMs: 200,
-        queueCapacity: 16,
         onError: (error) => errors.push(error),
       });
       exporter.export(makeWindow(0));
@@ -190,7 +188,6 @@ describe('OTLP bounded close (F-08)', () => {
       const exporter = createOtlpTraceExporter({
         url: server.url,
         timeoutMs: 400,
-        queueCapacity: 16,
         onError: () => undefined,
       });
       const span: SpanRecord = {
@@ -225,7 +222,7 @@ describe('OTLP bounded close (F-08)', () => {
       request.on('end', () => response.end('{}'));
     });
     try {
-      const exporter = createOtlpMetricsExporter({ url: server.url, queueCapacity: 16 });
+      const exporter = createOtlpMetricsExporter({ url: server.url });
       for (let i = 0; i < 8; i += 1) exporter.export(makeWindow(i * 1000));
       await exporter.close();
       // The 8 windows pending at close() travel in one coalesced request.

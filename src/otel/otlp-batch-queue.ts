@@ -1,5 +1,4 @@
 import { createBoundedQueue } from '../agent/bounded-queue.js';
-import { createDropReporter } from './otlp-drop-reporter.js';
 import { postOtlpJson, type OtlpTarget } from './otlp-transport.js';
 
 /**
@@ -18,7 +17,7 @@ export type OtlpBatchQueueOptions<T> = {
   maxQueueSize: number;
   /** How long the oldest pending items wait for a full batch before they are sent anyway. */
   flushIntervalMs: number;
-  /** Serialises one batch to an OTLP JSON body. May throw: the throwing items are isolated. */
+  /** Serialises one batch to an OTLP JSON body. A throw fails the whole batch. */
   encode: (batch: readonly T[]) => string;
   target: OtlpTarget;
   /** How long `close()` waits for pending items before dropping them and aborting the request. */
@@ -106,14 +105,44 @@ export function createOtlpBatchQueue<T>(options: OtlpBatchQueueOptions<T>): Otlp
     process.emitWarning(error);
   }
 
-  const dropReporter = createDropReporter({
-    intervalMs: DROP_REPORT_INTERVAL_MS,
-    report,
-    describe: (count) =>
+  /** Drops not yet reported: the first is reported at once, later ones once per interval. */
+  let unreportedDrops = 0;
+  let lastDropReportAt = Number.NEGATIVE_INFINITY;
+  let dropReportTimer: NodeJS.Timeout | undefined;
+
+  /** Reports the unreported drops as one error now, and cancels the pending drop report. */
+  function reportDropsNow(): void {
+    if (dropReportTimer !== undefined) {
+      clearTimeout(dropReportTimer);
+      dropReportTimer = undefined;
+    }
+    if (unreportedDrops === 0) return;
+    const count = unreportedDrops;
+    unreportedDrops = 0;
+    lastDropReportAt = performance.now();
+    report(
       new Error(
         `OTLP export to ${target.origin}: dropped ${String(count)} item(s); the export queue was full or the exporter was closed`,
       ),
-  });
+    );
+  }
+
+  /**
+   * Records `count` dropped items. A burst of drops yields a handful of aggregated reports, never
+   * one per item and never none; the only timer is `unref()`ed.
+   */
+  function reportDrops(count: number): void {
+    if (count <= 0) return;
+    unreportedDrops += count;
+    if (dropReportTimer !== undefined) return;
+    const remaining = DROP_REPORT_INTERVAL_MS - (performance.now() - lastDropReportAt);
+    if (remaining <= 0) {
+      reportDropsNow();
+      return;
+    }
+    dropReportTimer = setTimeout(reportDropsNow, Math.ceil(remaining));
+    dropReportTimer.unref();
+  }
 
   function countDropped(entries: readonly PendingEntry<T>[]): void {
     droppedItems += entries.length;
@@ -172,48 +201,12 @@ export function createOtlpBatchQueue<T>(options: OtlpBatchQueueOptions<T>): Otlp
     startDrain();
   }
 
-  /**
-   * Encodes `items`. When the batch cannot be encoded, each item is tried alone: the items that
-   * throw are counted failed and reported (the error names the field, never the value), and the
-   * rest still go out in one body, so a malformed record costs only itself.
-   */
-  function encodeBatch(items: readonly T[]): { body: string; count: number } | undefined {
-    try {
-      return { body: encode(items), count: items.length };
-    } catch (cause) {
-      const batchError = toError(cause);
-      const survivors: T[] = [];
-      let firstError: Error | undefined;
-      for (const item of items) {
-        try {
-          encode([item]);
-          survivors.push(item);
-        } catch (itemCause) {
-          firstError ??= toError(itemCause);
-        }
-      }
-      if (firstError === undefined) {
-        // Each item encodes alone; only the combination fails.
-        failRequest(items.length, batchError);
-        return undefined;
-      }
-      failRequest(items.length - survivors.length, firstError);
-      if (survivors.length === 0) return undefined;
-      try {
-        return { body: encode(survivors), count: survivors.length };
-      } catch (survivorsCause) {
-        failRequest(survivors.length, toError(survivorsCause));
-        return undefined;
-      }
-    }
-  }
-
+  /** A batch that cannot be encoded throws here; the drain loop counts it as one failed request. */
   async function sendBatch(entries: readonly PendingEntry<T>[]): Promise<void> {
-    const encoded = encodeBatch(entries.map((entry) => entry.item));
-    if (encoded === undefined) return;
-    const error = await postOtlpJson(target, encoded.body, abortOnClose.signal);
-    if (error === undefined) exportedItems += encoded.count;
-    else failRequest(encoded.count, error);
+    const body = encode(entries.map((entry) => entry.item));
+    const error = await postOtlpJson(target, body, abortOnClose.signal);
+    if (error === undefined) exportedItems += entries.length;
+    else failRequest(entries.length, error);
   }
 
   /**
@@ -256,7 +249,7 @@ export function createOtlpBatchQueue<T>(options: OtlpBatchQueueOptions<T>): Otlp
     if (closed) {
       droppedItems += items.length;
       droppedBatches += 1;
-      dropReporter.add(items.length);
+      reportDrops(items.length);
       return;
     }
     let evictedCount = 0;
@@ -267,7 +260,7 @@ export function createOtlpBatchQueue<T>(options: OtlpBatchQueueOptions<T>): Otlp
       due = Math.max(0, due - 1);
       evictedCount += 1;
     }
-    dropReporter.add(evictedCount);
+    reportDrops(evictedCount);
     startDrain();
     armTimer();
   }
@@ -276,7 +269,7 @@ export function createOtlpBatchQueue<T>(options: OtlpBatchQueueOptions<T>): Otlp
     due = pending.size;
     startDrain();
     await whenSettled();
-    dropReporter.flushNow();
+    reportDropsNow();
   }
 
   function dropPending(): void {
@@ -310,7 +303,7 @@ export function createOtlpBatchQueue<T>(options: OtlpBatchQueueOptions<T>): Otlp
         if (drain !== undefined) await drain;
       }
     }
-    dropReporter.flushNow();
+    reportDropsNow();
   }
 
   function close(): Promise<void> {

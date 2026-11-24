@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { SpanRecord } from '../collector/index.js';
-import { STATUS_CODE_ERROR, STATUS_CODE_UNSET } from './otlp-trace-types.js';
+import { STATUS_CODE_ERROR, STATUS_CODE_UNSET } from './otlp-types.js';
 import { toOtlpTraces } from './otlp-traces.js';
 
 function record(spanId: string, statusCode: number, aborted: boolean): SpanRecord {

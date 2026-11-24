@@ -3,10 +3,10 @@ import {
   SPAN_KIND_SERVER,
   STATUS_CODE_ERROR,
   STATUS_CODE_UNSET,
+  type OtlpKeyValue,
   type OtlpSpan,
-  type OtlpTraceKeyValue,
   type OtlpTracesRequest,
-} from './otlp-trace-types.js';
+} from './otlp-types.js';
 
 const DEFAULT_SERVICE_NAME = 'phargus';
 const SCOPE_NAME = 'phargus';
@@ -46,7 +46,7 @@ function toOtlpSpan(record: SpanRecord): OtlpSpan {
 
   const start = BigInt(record.startTimeMs) * NANOS_PER_MS;
   const end = start + BigInt(record.durationNs);
-  const attributes: OtlpTraceKeyValue[] = [
+  const attributes: OtlpKeyValue[] = [
     { key: 'http.request.method', value: { stringValue: record.method } },
     { key: 'url.path', value: { stringValue: record.path } },
     { key: 'http.response.status_code', value: { intValue: String(record.statusCode) } },

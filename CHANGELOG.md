@@ -90,6 +90,11 @@ All notable changes to Phargus are recorded here. The format follows
   shape of their worker's reply; the inputs are still checked before any worker runs. The `pool`
   option is meant for a pool from `createHeapSnapshotPool()` or `createSymbolizationPool()`: a pool
   running some other worker now gets that worker's reply back as is.
+- An OTLP batch that cannot be encoded now fails as a whole: it counts as one failed batch and all
+  its items in `failedItems`, reported once through `onError`. The exporters no longer re-encode
+  item by item to send the rest, since the collector already rejects malformed spans. The metrics
+  and trace exporters now share one implementation; their options, counters and types are
+  unchanged.
 
 ### Removed
 
@@ -119,6 +124,10 @@ All notable changes to Phargus are recorded here. The format follows
   `phargus.config.json`, and `PHARGUS_CONFIG=settings.js` disables the agent with the
   "unsupported extension" message. The unknown-variable warning lists the valid `PHARGUS_*` names
   instead of guessing one ("did you mean").
+- **Breaking:** the deprecated OTLP exporter option `queueCapacity` is gone from
+  `OtlpExporterOptions` (and so from `createOtlpMetricsExporter` and `createOtlpTraceExporter`).
+  It bounded nothing; use `maxQueueSize`, counted in items. An untyped caller that still passes it
+  is not refused: the value is ignored.
 
 ### Fixed
 
