@@ -1,8 +1,8 @@
 {
-  "pharnVersion": "0.21.1",
-  "skillsVersion": "7.22.0",
+  "pharnVersion": "0.22.0",
+  "skillsVersion": "7.25.6",
   "repo": "pharn-dev/pharn-oss",
-  "commit": "606e3b366606f96b12be57f0a5353b5c53ee6e90",
+  "commit": "94347bc8c0d82e4ead431d0bb5d8f4ff12e895bd",
   "installedAt": "2026-11-04T12:12:43.208Z",
   "models": {
     "stages": {
@@ -216,5 +216,5 @@
   "testResults": {
     "test": "vitest-json"
   },
-  "updatedAt": "2026-11-17T13:53:47.588Z"
+  "updatedAt": "2026-11-25T19:21:37.325Z"
 }

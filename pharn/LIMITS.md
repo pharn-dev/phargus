@@ -298,8 +298,8 @@ scanners; there is no `scan-code-*` counterpart, and no lens in `pharn/pharn-rev
 telemetry wiring.
 
 The consequence, stated plainly: **a plan may declare telemetry, pass the grill, and the diff that
-results may wire none — with every floor green.** Under `/pharn-loop --quick` the grill runs only
-the observability scanner, not the griller's judgment, so there the plan's telemetry is not judged at all. A full
+results may wire none — with every floor green.** Under `/pharn-loop --quick` the grill runs neither
+the observability scanner nor the griller's judgment, so there the plan's telemetry is not judged at all. A full
 `/pharn-loop` (7.7.0) runs the griller again, and its findings reach the run only through triage's dispositions, the re-plan rounds those dispositions start
 (7.8.0) and the supervisor's decision on an escalation (7.9.0).
 Nothing downstream re-checks the promise against the code. `/pharn-verify` runs the project's own discovered gates,
@@ -407,14 +407,15 @@ either hook. Probed rather than read off the wiring — §1d's quantifier is pre
   sharing a tree share `pharn/.run/`, so a second session's writes can surface as this one's escape —
   [[L38]], which this inherits and cannot fix — and the tree holds ONE baseline, so a second run's build anchor
   replaces the first run's window and erases the escapes recorded in it; since 7.3.0 `--anchor` refuses to do that
-  while the other feature's `/pharn-loop` or `/pharn-ship` marker is open, but a marker closed early or older than
+  while the other feature's `/pharn-loop` or `/pharn-ship` marker is open (since 7.24.0 `--check-epoch` asks the same at
+  `/pharn-loop`'s entry and after `/pharn-ship`'s GATE 1), but a marker closed early or older than
   24 h, runs that open no marker, and two runs of one feature still erase each other's window,
   `reconciliation-record.md` §1); and there is **no attribution** — it reports *what*,
   never *who*.
 - **DELETING it is loud; FORGING it is silent — and that bounds the whole claim.** The baseline lives
   under `pharn/.run/`, which `Bash` reaches, and nothing authenticates it. Deleting it does not yield a quiet
   green: `/pharn-*verify` passes `--require-baseline`, which makes an absent baseline `INCONCLUSIVE`, and
-  the always-reconciled control surface (`.claude/hooks/*`, `.claude/settings*.json`, `pharn/floor/*`,
+  the always-reconciled control surface (the four `.claude/hooks/` guards, `.claude/settings*.json`, `pharn/floor/*`,
   `.dev/floor/*`, since 6.53.0 the four trusted docs, `CODEOWNERS`, `pharn/spec-template.md` and memory-bank canon, and
   since 7.3.0 the CI exec-config `.github/workflows/*` and `.github/actions/*`, an added untracked file included) is
   compared against **committed blob ids** rather than against the baseline, so that
@@ -614,7 +615,8 @@ read off the wiring:
   markers are written and removed through `Bash` (§6). `/pharn-ship`, `/pharn-review` and `/pharn-loop`
   stop when opening their marker fails (the loop also when its pre-run snapshot does), but a run that
   skips the step is unguarded between its stages, a crashed run's marker
-  keeps every session in the tree fail-closed for up to 24 h unless it is closed, and `touch` extends it.
+  keeps every session in the tree fail-closed until 24 h after the last write the guard judged without a scope
+  (each such write refreshes the marker, 6.31.2) unless it is closed, and `touch` extends it.
   The posture needs `skillsVersion` at the root the guard judges. A malformed `pharn/.run/writes-scope.json`
   denies every write in an installed project.
 - **Every write is judged at every target it can reach (6.24.0), in every posture.** The guard resolves a
@@ -636,7 +638,7 @@ read off the wiring:
   judged by `check-bash-reconcile.mjs` against the build's recorded scope**, and reads as an escape, as an
   editor edit does.
 - **The `/pharn-loop` Stop guard acts only when Claude Code starts it, and it fails OPEN.**
-  `require-loop-record.cjs` refuses a turn end, at most three times per run, while an unattended loop
+  `require-loop-record.cjs` refuses a turn end, at most three times per run by default (`PHARN_STOP_GUARD_MAX`, 1 to 7), while an unattended loop
   run open in this session has no `LOOP.md`. It cannot make a model do work, cannot judge the record,
   and is satisfied by any non-empty file. A hook that cannot start, times out, or crashes lets the turn
   end, which is the safe direction for a guard that ends turns. Its wiring is exec form, so the
@@ -821,11 +823,12 @@ that points elsewhere.
 - **True statement:** every merge reaches the `main` channel; a merge that bumps `SKILLS_VERSION` also becomes a
   release once its required checks are green on `main`; an `[Unreleased]` merge releases nothing new.
 - **Bounds.** The gate is a property of a GitHub Actions workflow, not a PHARN floor primitive.
-  - Since 2026-10-26 the ruleset that holds the required checks (25907495) has no bypass actor, so no account, the
-    owner's included, merges a tree whose required checks failed. The owner's bypass of the other `main` ruleset
-    (18045407) and of classic branch protection (`enforce_admins` off) still skips the review and classic protection's
-    own required `gitleaks` check, so a commit whose secret scan failed can reach `main`, and the `main` channel
-    installs it. The release job waits for `gitleaks` since 7.3.0, so that commit is not tagged.
+  - The ruleset that holds the required checks (25907495) had no bypass actor from 2026-10-26; since 2026-11-04 the
+    owner's account is its bypass actor (`always`), as it is of the other `main` ruleset (18045407) and of classic
+    branch protection (`enforce_admins` off). So a merge made with the owner's credentials can skip the review, the
+    required checks and classic protection's own required `gitleaks` check, and the `main` channel installs what
+    lands. The release job waits for every check it lists, `gitleaks` included since 7.3.0, so such a commit is not
+    tagged.
   - Tag ruleset 25907484 refuses deleting or moving a `v*` tag for every account. Creating a new `v*` tag by hand is
     not refused.
   - The workflow's check list is a copy of ruleset 25907495's plus classic protection's `gitleaks`. A check added to
