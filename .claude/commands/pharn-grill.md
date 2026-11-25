@@ -108,8 +108,8 @@ two floor checkers). Proceed directly from a GREEN Step 2b to Step 4's **quick**
 
 ## `--floor-only` mode (6.45.0) — `/pharn-grill <name> --floor-only`
 
-`/pharn-loop` invokes this form (inline) in its full mode: unattended, no stage reads the interrogation before the
-build. It is **`--quick` without Step 1b**: any SPEC kind; recognized only as the second argument, under the same
+No orchestrator invokes this form since 7.7.0: a full `/pharn-loop` routes the full grill, and a `--quick` run invokes
+`/pharn-grill <name> --quick` inline. It remains for a direct call. It is **`--quick` without Step 1b**: any SPEC kind; recognized only as the second argument, under the same
 ADVISORY rule as `--quick`; Steps 2 and 2b run exactly as written (a RED still writes the RED grill-log, whose header
 also records `mode: floor-only (/pharn-grill --floor-only)`); the interrogation (Step 3) and the model-driven grillers
 (Step 3b) are skipped. **On GREEN at both stops, run the five deterministic `scan-plan-*` scanners** — the grillers'
@@ -124,7 +124,7 @@ nothing). Any other exit → write the line `scans: NOT run (grill-scan.mjs exit
 `GRILL.md` then takes Step 4's quick shape with these substitutions: the mode line is
 `mode: floor-only (/pharn-grill --floor-only)`, the pinned line is
 `interrogation NOT performed — skipped by mode (floor-only)`, and the scan section follows it. Step 0's scope and
-the Final step are unchanged. Run inside an orchestrator, Step 4's "end your turn" does not apply: return to it.
+the Final step are unchanged.
 
 ## Step 2 — The hash-chain re-verification (FLOOR — refuse-or-proceed; the FIRST of two deterministic stops)
 
@@ -186,7 +186,8 @@ the plan **omits, assumes, or overstates** — do not restate what it got right.
   and no `advisory` label is the disease — flag it.
 - **Acceptance-criteria coverage → P1.** Does the plan's approach satisfy **every** SPEC Acceptance
   Criterion, with the evidence/tests that would show it? Flag any criterion the plan leaves uncovered or
-  hand-waved.
+  hand-waved, and, in a templated `feature` or `quick` SPEC, any whose Then already holds before the build: its test
+  cannot fail first, so it belongs in the SPEC's Constraints (`pharn/pharn-contracts/spec-template.md`, "The acceptance-criteria grammar"; advisory).
 - **Trust propagation → P2.** If the increment ingests any untrusted artifact, does the plan state how
   taint flows through its outputs (`pharn/ARCHITECTURE.md §8`, `finding-shape.md`)? A missing or hand-wavy trust
   audit is a finding.
